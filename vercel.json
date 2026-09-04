@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/cron/domain-sync", "schedule": "17 * * * *" },
-    { "path": "/api/cron/renewal-reminders", "schedule": "23 6 * * *" }
+    { "path": "/api/cron/renewal-reminders", "schedule": "23 6 * * *" },
+    { "path": "/api/cron/auction-close", "schedule": "*/5 * * * *" }
   ]
 }
