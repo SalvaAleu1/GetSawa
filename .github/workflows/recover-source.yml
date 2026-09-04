@@ -1,0 +1,64 @@
+name: Recover uploaded GetSawa source
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  recover:
+    if: ${{ github.event.head_commit.message != 'Recover source from uploaded archive' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract uploaded archive when present
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f getsawa.zip ]; then
+            echo 'No archive found; nothing to recover.'
+            exit 0
+          fi
+
+          rm -rf /tmp/getsawa-src
+          mkdir -p /tmp/getsawa-src
+          unzip -q getsawa.zip -d /tmp/getsawa-src
+
+          package_file="$(find /tmp/getsawa-src -type f -name package.json -print -quit || true)"
+          if [ -z "$package_file" ]; then
+            echo 'Archive does not contain package.json; leaving repository unchanged.'
+            exit 0
+          fi
+
+          project_root="$(dirname "$package_file")"
+          echo "Detected project root: $project_root"
+
+          rsync -a --exclude='.git' --exclude='getsawa.zip' "$project_root/" ./
+          rm -rf .next node_modules
+
+          if [ -f package.json ]; then
+            echo 'Recovered package.json and project source.'
+          else
+            echo 'Recovery did not produce package.json.'
+            exit 1
+          fi
+
+      - name: Commit recovered source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'GetSawa Recovery Bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Recover source from uploaded archive'
+          git push
