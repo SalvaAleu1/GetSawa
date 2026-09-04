@@ -1,0 +1,2 @@
+# GetSawa
+Domain reseller platform 
