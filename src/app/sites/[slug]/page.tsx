@@ -26,7 +26,8 @@ export default async function PublicSitePage({ params }: { params: { slug: strin
   if (!data) notFound();
 
   const { content } = data;
-  const home: WebsitePage = content.pages.find((p) => p.slug === "home") ?? content.pages[0];
+  const home = content.pages.find((page) => page.slug === "home") ?? content.pages[0];
+  if (!home) notFound();
   const primary = content.colors?.primary || "#2A57E8";
 
   return (
