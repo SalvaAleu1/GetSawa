@@ -9,7 +9,7 @@ export function DomainSearchBox() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const clean = query.trim().replace(/^https?:\/\//, "").split("/")[0].split(".")[0];
+    const clean = (query.trim().replace(/^https?:\/\//, "").split("/")[0] ?? "").split(".")[0] ?? "";
     if (!clean) return;
     router.push(`/domains/search?q=${encodeURIComponent(clean)}`);
   }
