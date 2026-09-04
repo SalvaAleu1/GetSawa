@@ -6,7 +6,8 @@ const REFERRAL_COOKIE = "gs_ref";
 const REFERRAL_COOKIE_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 export async function setReferralCookie(affiliateId: string) {
-  cookies().set(REFERRAL_COOKIE, affiliateId, {
+  const cookieStore = await cookies();
+  cookieStore.set(REFERRAL_COOKIE, affiliateId, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -24,7 +25,8 @@ export async function setReferralCookie(affiliateId: string) {
  * happen separately (spec: commissions have PENDING/APPROVED/PAID states).
  */
 export async function recordCommissionForOrder(orderId: string, userId: string) {
-  const affiliateId = cookies().get("gs_ref")?.value;
+  const cookieStore = await cookies();
+  const affiliateId = cookieStore.get("gs_ref")?.value;
   if (!affiliateId) return;
 
   const affiliate = await prisma.affiliate.findUnique({ where: { id: affiliateId } });
