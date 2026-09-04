@@ -1,72 +1,31 @@
 # GetSawa — Phase 2
 
-Phase 1 is now closed at the code level: the critical customer path is backed
-by real server-side business logic, provider adapters, PostgreSQL persistence,
-security controls, payment idempotency, provisioning recovery, admin controls,
-and substantive legal-policy pages.
+Phase 2 hardening is active. The repository is being expanded without mock provider behavior or client-only business logic.
 
-Phase 2 builds on that foundation rather than creating parallel or mock
-systems.
+## Eight workstreams
 
-## Phase 2 objectives
+1. **Production hosting** — provider contract is present and product activation fails closed until a real vendor API and credentials are configured. No simulated accounts are created.
+2. **Business email** — provider contract is present and activation fails closed until a real mailbox provider is configured. Transactional SMTP remains separate from customer mailbox hosting.
+3. **Provisioning lifecycle** — domain, auction and existing provisioning jobs use server-side state and idempotent operations; provider errors are persisted rather than silently swallowed.
+4. **Customer service dashboards** — domains, orders, websites, support, referrals and developer APIs remain first-class database-backed services.
+5. **Billing and renewal lifecycle** — PayPal payment state, invoices, refunds, commissions and scheduled renewal processing are persisted and reconciled server-side.
+6. **Monitoring and failure handling** — cron jobs, provider configuration, database health and deployment version are exposed through the operational health endpoint without revealing secrets.
+7. **Security and access control** — TOTP MFA enrollment/verification is implemented; login enforces MFA for enrolled users; administrators can require MFA globally; session revocation and audit events are available.
+8. **Integration verification** — MFA behavior has automated tests; quality gates remain the required final build/typecheck/test authority before release.
 
-### 1. Production operations
+## Provider policy
 
-- Keep domain state synchronized with the registrar.
-- Send renewal reminders through the configured transactional-email transport.
-- Automatically settle expired auctions instead of relying only on page views.
-- Preserve idempotency and safe retry behavior for every scheduled operation.
-- Keep provider failures visible to administrators and customers.
+GetSawa will not pretend to provision hosting or business email. A real vendor must be selected and its API contract mapped into the existing provider interfaces before those products can become active. This is intentionally a deployment/business dependency rather than fabricated code.
 
-The auction-close job is now scheduled every five minutes through `vercel.json`
-and protected by `CRON_SECRET`.
+## Operational acceptance
 
-### 2. Customer platform expansion
-
-Already present in the repository and treated as first-class platform services:
-
-- Domain transfers with encrypted EPP/auth codes.
-- AI website generation, editing, version history and publishing.
-- Domain-to-website connection through a real DNS record.
-- Premium-domain marketplace and auctions.
-- Support tickets and internal admin notes.
-- Affiliate/referral tracking and PayPal payouts.
-- Scoped developer API keys and authenticated domain APIs.
-- Public blog/CMS and database-backed SEO pages.
-
-### 3. Provider-backed digital services
-
-The next provider work must be real, not simulated:
-
-- Select and integrate a production hosting vendor through `HostingProvider`.
-- Select and integrate a production business-email vendor through `EmailProvider`.
-- Add provider health checks, provisioning, suspension, renewal and failure
-  recovery for each vendor.
-- Do not allow a product to become active unless its provider dependency is
-  configured and tested.
-
-### 4. Security and scale hardening
-
-The Phase 2 security track will progressively add:
-
-- Stronger multi-factor authentication for privileged accounts.
-- Distributed rate limiting suitable for multiple application instances.
-- More granular administrative permissions and audit visibility.
-- Strict validation for future file uploads and support attachments.
-- Operational monitoring for failed payments, provisioning failures and cron
-  failures.
-
-## Acceptance rule
-
-A feature is complete only when the UI, API route, business logic, database
-model, provider adapter, failure path and tests agree. A button that merely
-changes local state does not count as implementation.
+A feature is complete only when UI, API route, business logic, database persistence, provider adapter, failure path and tests agree. A button that merely changes local state does not count.
 
 ## Current checkpoint
 
-- Phase 1: **closed at the implementation level**.
-- Phase 2: **started**.
-- Phase 2 first hardening item: **scheduled auction settlement implemented**.
-- Live vendor credentials, registrar/payment configuration and legal counsel
-  review remain deployment/business configuration tasks rather than fake code
-  to be embedded in the repository.
+- Phase 1: **closed at implementation level**.
+- Phase 2: **active**.
+- Scheduled auction settlement: **implemented**.
+- TOTP MFA and session revocation: **implemented**.
+- Health/provider readiness reporting: **implemented**.
+- Real hosting/email vendor provisioning: **blocked only by vendor selection/account credentials**, not by a missing mock implementation.
