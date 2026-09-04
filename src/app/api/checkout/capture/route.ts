@@ -10,101 +10,106 @@ import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
 import { sendEmail, emailTemplates } from "@/lib/email";
 
-const schema = z.object({ orderId: z.string() });
+const schema = z.object({ orderId: z.string().min(1) });
+
+function captureDetails(payload: any) {
+  const node = payload?.purchase_units?.[0]?.payments?.captures?.[0];
+  const amount = Number(node?.amount?.value);
+  return {
+    node,
+    completed: payload?.status === "COMPLETED" && node?.status === "COMPLETED",
+    cents: Number.isFinite(amount) ? Math.round(amount * 100) : -1,
+    currency: typeof node?.amount?.currency_code === "string" ? node.amount.currency_code.toUpperCase() : "",
+  };
+}
+
+async function reconcilePayPalOrder(providerOrderId: string) {
+  try {
+    return await PayPalProvider.getOrder(providerOrderId);
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
     const user = await requireUser();
     const { orderId } = schema.parse(await req.json());
-
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-      include: { payments: true, user: true },
-    });
+    const order = await prisma.order.findUnique({ where: { id: orderId }, include: { payments: true, user: true } });
     if (!order || order.userId !== user.id) return jsonError("Order not found.", 404);
-
-    // Idempotent: if this order has already moved past PENDING_PAYMENT,
-    // return its current state instead of capturing PayPal again. This is
-    // what stops a double-click on "Pay" from double-charging or
-    // double-registering (spec section 147).
-    if (order.status !== "PENDING_PAYMENT") {
-      return jsonOk({ orderId: order.id, status: order.status });
-    }
+    if (order.status !== "PENDING_PAYMENT") return jsonOk({ orderId: order.id, status: order.status });
 
     const payment = order.payments.find((p) => p.status === "PENDING");
     if (!payment?.providerOrderId) return jsonError("No pending payment found for this order.", 400);
 
-    const capture = await PayPalProvider.captureOrder(payment.providerOrderId, `capture-${order.id}`);
-    const captureNode = capture?.purchase_units?.[0]?.payments?.captures?.[0];
-    const captureStatus = captureNode?.status;
-    const capturedAmount = Number(captureNode?.amount?.value ?? 0) * 100;
-
-    if (capture.status !== "COMPLETED" || captureStatus !== "COMPLETED") {
-      await prisma.payment.update({
-        where: { id: payment.id },
-        data: { status: "FAILED", failureReason: `PayPal status: ${capture.status}` },
-      });
-      const template = emailTemplates.paymentFailed(order.orderNumber);
-      await sendEmail({ to: order.user.email, ...template });
-      return jsonError("Payment was not completed. Your order has not been charged.", 402);
+    let capture: any = null;
+    try {
+      capture = await PayPalProvider.captureOrder(payment.providerOrderId, `capture-${order.id}`);
+    } catch {
+      // A network timeout can happen after PayPal has captured the payment.
+      // Reconcile before telling the customer that they were not charged.
+      capture = await reconcilePayPalOrder(payment.providerOrderId);
     }
 
-    // Defense in depth: the captured amount must match what we calculated
-    // server-side at order creation. Never trust PayPal's echoed amount
-    // alone without this check.
-    if (Math.round(capturedAmount) !== order.totalCents) {
-      await prisma.payment.update({
-        where: { id: payment.id },
-        data: { status: "DISPUTED", failureReason: "Captured amount did not match order total." },
-      });
-      return jsonError("Payment amount mismatch detected. Please contact support.", 409);
+    const details = captureDetails(capture);
+    if (!details.completed) {
+      const status = typeof capture?.status === "string" ? capture.status : "UNKNOWN";
+      if (["VOIDED", "CANCELLED", "DENIED"].includes(status)) {
+        await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED", failureReason: `PayPal status: ${status}` } });
+        try { await sendEmail({ to: order.user.email, ...emailTemplates.paymentFailed(order.orderNumber) }); } catch { /* notification is independent */ }
+        return jsonError("Payment was not completed. Your order has not been charged.", 402);
+      }
+      return jsonError("Payment is still being confirmed by PayPal. Please refresh your order shortly.", 202);
     }
 
-    await prisma.$transaction([
-      prisma.payment.update({
-        where: { id: payment.id },
-        data: { status: "PAID", providerCaptureId: captureNode.id },
-      }),
-      prisma.order.update({ where: { id: order.id }, data: { status: "PAYMENT_CONFIRMED" } }),
-      prisma.invoice.create({
-        data: {
-          invoiceNumber: generateInvoiceNumber((await prisma.invoice.count()) + 1),
-          orderId: order.id,
-          userId: order.userId,
-          subtotalCents: order.subtotalCents,
-          discountCents: order.discountCents,
-          taxCents: order.taxCents,
-          totalCents: order.totalCents,
-          currency: order.currency,
-          status: "PAID",
-          paidAt: new Date(),
-          billingName: `${order.user.firstName} ${order.user.lastName}`,
-          billingEmail: order.user.email,
-          billingCountry: order.user.country ?? undefined,
-        },
-      }),
-      prisma.ledgerEntry.create({
-        data: {
-          userId: order.userId,
-          creditCents: order.totalCents,
-          source: "order",
-          reference: order.id,
-          description: `Payment received for order ${order.orderNumber}`,
-        },
-      }),
-    ]);
+    if (details.cents !== order.totalCents || details.currency !== order.currency.toUpperCase()) {
+      await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "DISPUTED", failureReason: "Captured amount or currency did not match order total." } });
+      return jsonError("Payment verification failed. Please contact support.", 409);
+    }
 
-    await logAudit({ actorId: user.id, action: "order.paid", resource: "order", resourceId: order.id });
+    const captureId = typeof details.node?.id === "string" ? details.node.id : null;
+    if (!captureId) return jsonError("PayPal returned a completed capture without a capture ID.", 502);
 
-    await recordCommissionForOrder(order.id, user.id).catch((err) => console.error("[affiliates] commission recording failed:", err));
+    const committed = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.payment.updateMany({
+        where: { id: payment.id, status: "PENDING" },
+        data: { status: "PAID", providerCaptureId: captureId, failureReason: null },
+      });
+      if (claimed.count !== 1) return false;
 
-    // Provision synchronously so the customer sees the result immediately.
-    // If this were moved to a background job queue, the trigger point would
-    // be exactly here.
+      await tx.order.updateMany({ where: { id: order.id, status: "PENDING_PAYMENT" }, data: { status: "PAYMENT_CONFIRMED" } });
+      const existingInvoice = await tx.invoice.findUnique({ where: { orderId: order.id } });
+      if (!existingInvoice) {
+        const invoiceCount = await tx.invoice.count();
+        await tx.invoice.create({
+          data: {
+            invoiceNumber: generateInvoiceNumber(invoiceCount + 1),
+            orderId: order.id,
+            userId: order.userId,
+            subtotalCents: order.subtotalCents,
+            discountCents: order.discountCents,
+            taxCents: order.taxCents,
+            totalCents: order.totalCents,
+            currency: order.currency,
+            status: "PAID",
+            paidAt: new Date(),
+            billingName: `${order.user.firstName} ${order.user.lastName}`,
+            billingEmail: order.user.email,
+            billingCountry: order.user.country ?? undefined,
+          },
+        });
+      }
+      await tx.ledgerEntry.create({ data: { userId: order.userId, creditCents: order.totalCents, source: "order", reference: order.id, description: `Payment received for order ${order.orderNumber}` } });
+      return true;
+    });
+
+    if (committed) {
+      await logAudit({ actorId: user.id, action: "order.paid", resource: "order", resourceId: order.id });
+      await recordCommissionForOrder(order.id, user.id).catch((err) => console.error("[affiliates] commission recording failed:", err));
+    }
+
     await provisionOrder(order.id);
-
     const finalOrder = await prisma.order.findUnique({ where: { id: order.id } });
-
     return jsonOk({ orderId: order.id, status: finalOrder?.status, orderNumber: order.orderNumber });
   } catch (err) {
     return handleError(err);
