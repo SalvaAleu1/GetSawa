@@ -7,8 +7,8 @@ import { formatCents } from "@/lib/money";
 
 /**
  * Provisions every item on a PAYMENT_CONFIRMED order. Idempotent: items
- * already marked PROVISIONED are skipped, so a retried webhook cannot
- * intentionally provision the same item twice.
+ * already marked PROVISIONED are skipped, so retried payment events do not
+ * intentionally repeat completed provider operations.
  */
 export async function provisionOrder(orderId: string): Promise<void> {
   const order = await prisma.order.findUnique({ where: { id: orderId }, include: { items: true, user: true } });
@@ -21,42 +21,23 @@ export async function provisionOrder(orderId: string): Promise<void> {
   for (const item of order.items) {
     if (item.provisioningStatus === "PROVISIONED") continue;
     try {
-      if (!item.productId && !item.domainId && !item.domainTransferId && item.years) {
-        await provisionDomainRegistration(order, item);
-      } else if (!item.productId && item.domainId && item.years) {
-        await provisionDomainRenewal(order, item);
-      } else if (item.domainTransferId) {
-        await provisionDomainTransfer(order, item);
-      } else {
-        await prisma.orderItem.update({
-          where: { id: item.id },
-          data: {
-            provisioningStatus: "FAILED",
-            provisioningNote: "No provider is configured for this product. An administrator must configure provisioning before it can be fulfilled.",
-          },
-        });
+      if (!item.productId && !item.domainId && !item.domainTransferId && item.years) await provisionDomainRegistration(order, item);
+      else if (!item.productId && item.domainId && item.years) await provisionDomainRenewal(order, item);
+      else if (item.domainTransferId) await provisionDomainTransfer(order, item);
+      else {
+        await prisma.orderItem.update({ where: { id: item.id }, data: { provisioningStatus: "FAILED", provisioningNote: "No provider is configured for this product. An administrator must configure provisioning before it can be fulfilled." } });
         anyFailed = true;
       }
     } catch (err: unknown) {
       anyFailed = true;
       const message = err instanceof Error ? err.message : "Unknown provisioning error.";
-      await prisma.orderItem.update({
-        where: { id: item.id },
-        data: { provisioningStatus: "FAILED", provisioningNote: message.slice(0, 500) },
-      });
+      await prisma.orderItem.update({ where: { id: item.id }, data: { provisioningStatus: "FAILED", provisioningNote: message.slice(0, 500) } });
     }
   }
 
   const refreshed = await prisma.orderItem.findMany({ where: { orderId: order.id } });
   const allProvisioned = refreshed.length > 0 && refreshed.every((i) => i.provisioningStatus === "PROVISIONED");
-
-  await prisma.order.update({
-    where: { id: order.id },
-    data: {
-      status: allProvisioned ? "ACTIVE" : "PROVISIONING",
-      provisioningError: anyFailed ? "One or more items could not be provisioned automatically. See order items for details." : null,
-    },
-  });
+  await prisma.order.update({ where: { id: order.id }, data: { status: allProvisioned ? "ACTIVE" : "PROVISIONING", provisioningError: anyFailed ? "One or more items could not be provisioned automatically. See order items for details." : null } });
 
   if (allProvisioned) {
     const template = emailTemplates.orderConfirmation(order.orderNumber, formatCents(order.totalCents, order.currency));
@@ -67,7 +48,6 @@ export async function provisionOrder(orderId: string): Promise<void> {
 async function provisionDomainRegistration(order: Order, item: OrderItem) {
   const domainName = item.description.split(" registration")[0]?.trim();
   if (!domainName) throw new Error("Registration item is missing its domain name.");
-
   const tld = domainName.split(".").slice(1).join(".");
   const tldRecord = await prisma.tld.findUnique({ where: { extension: tld } });
   if (!tldRecord) throw new Error(`Unknown TLD .${tld}`);
@@ -77,50 +57,32 @@ async function provisionDomainRegistration(order: Order, item: OrderItem) {
   if (!availability?.available) throw new Error(`${domainName} is no longer available for registration.`);
 
   const user = await prisma.user.findUniqueOrThrow({ where: { id: order.userId } });
+  const phone = user.phone?.trim() || "";
+  const country = user.country?.trim().toUpperCase() || "";
+
+  // Never send fabricated registrar contact information. NameSilo may fall
+  // back to an account profile when optional contacts are omitted, but a
+  // reseller should not silently register a customer's domain against an
+  // unrelated default profile. Until the customer has a complete verified
+  // contact profile, provisioning must stop safely and remain retryable.
+  if (!phone || !country) throw new Error("Complete domain contact information is required before registration. Add a valid phone number and country to your profile.");
+
   const result = await provider.registerDomain({
     domain: domainName,
     years: item.years ?? 1,
-    registrant: {
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      phone: user.phone || "",
-      address1: "",
-      city: "",
-      zip: "",
-      country: user.country || "US",
-    },
+    registrant: { firstName: user.firstName, lastName: user.lastName, email: user.email, phone, address1: "", city: "", zip: "", country },
     idempotencyKey: item.id,
   });
   if (!result.success) throw new Error(result.errorMessage || "Domain registration failed.");
 
   const domain = await prisma.domain.upsert({
     where: { name: domainName },
-    create: {
-      userId: order.userId,
-      tldId: tldRecord.id,
-      name: domainName,
-      status: "ACTIVE",
-      isPremium: Boolean(await prisma.premiumDomain.findUnique({ where: { domainName } }).then((p) => p?.status === "LISTED")),
-      providerName: provider.name,
-      providerOrderId: result.providerOrderId,
-      registeredAt: new Date(),
-      expiresAt: result.expiresAt ? new Date(result.expiresAt) : undefined,
-      autoRenew: true,
-      isLocked: true,
-    },
-    update: {
-      status: "ACTIVE",
-      registeredAt: new Date(),
-      expiresAt: result.expiresAt ? new Date(result.expiresAt) : undefined,
-      providerName: provider.name,
-      providerOrderId: result.providerOrderId,
-    },
+    create: { userId: order.userId, tldId: tldRecord.id, name: domainName, status: "ACTIVE", isPremium: Boolean(await prisma.premiumDomain.findUnique({ where: { domainName } }).then((p) => p?.status === "LISTED")), providerName: provider.name, providerOrderId: result.providerOrderId, registeredAt: new Date(), expiresAt: result.expiresAt ? new Date(result.expiresAt) : undefined, autoRenew: true, isLocked: true },
+    update: { status: "ACTIVE", registeredAt: new Date(), expiresAt: result.expiresAt ? new Date(result.expiresAt) : undefined, providerName: provider.name, providerOrderId: result.providerOrderId },
   });
 
   await prisma.premiumDomain.updateMany({ where: { domainName, status: "LISTED" }, data: { status: "SOLD" } });
   await prisma.orderItem.update({ where: { id: item.id }, data: { domainId: domain.id, provisioningStatus: "PROVISIONED" } });
-
   const template = emailTemplates.domainRegistered(domainName, domain.expiresAt?.toDateString() || "");
   await sendEmail({ to: user.email, ...template });
 }
@@ -131,34 +93,18 @@ async function provisionDomainRenewal(order: Order, item: OrderItem) {
   const provider = getDomainProvider();
   const result = await provider.renewDomain({ domain: domain.name, years: item.years ?? 1, idempotencyKey: item.id });
   if (!result.success) throw new Error(result.errorMessage || "Domain renewal failed.");
-
-  await prisma.domain.update({
-    where: { id: domain.id },
-    data: { expiresAt: result.newExpiresAt ? new Date(result.newExpiresAt) : domain.expiresAt, status: "ACTIVE" },
-  });
+  await prisma.domain.update({ where: { id: domain.id }, data: { expiresAt: result.newExpiresAt ? new Date(result.newExpiresAt) : domain.expiresAt, status: "ACTIVE" } });
   await prisma.orderItem.update({ where: { id: item.id }, data: { provisioningStatus: "PROVISIONED" } });
 }
 
-/** Submits a domain transfer. Registry completion is asynchronous and is tracked by DomainTransfer.status. */
 async function provisionDomainTransfer(order: Order, item: OrderItem) {
   if (!item.domainTransferId) throw new Error("Transfer item is missing a transfer reference.");
   const transfer = await prisma.domainTransfer.findUniqueOrThrow({ where: { id: item.domainTransferId } });
-  if (transfer.status !== "AWAITING_PAYMENT") {
-    await prisma.orderItem.update({ where: { id: item.id }, data: { provisioningStatus: "PROVISIONED" } });
-    return;
-  }
-
+  if (transfer.status !== "AWAITING_PAYMENT") { await prisma.orderItem.update({ where: { id: item.id }, data: { provisioningStatus: "PROVISIONED" } }); return; }
   const provider = getDomainProvider();
   const authCode = decryptSecret(transfer.authCodeEncrypted);
   const result = await provider.transferDomain({ domain: transfer.domainName, authCode, idempotencyKey: item.id });
-  if (!result.success) {
-    await prisma.domainTransfer.update({ where: { id: transfer.id }, data: { status: "FAILED", failureReason: result.errorMessage } });
-    throw new Error(result.errorMessage || "Domain transfer could not be submitted.");
-  }
-
-  await prisma.domainTransfer.update({
-    where: { id: transfer.id },
-    data: { status: "SUBMITTED", providerTransferId: result.providerTransferId },
-  });
+  if (!result.success) { await prisma.domainTransfer.update({ where: { id: transfer.id }, data: { status: "FAILED", failureReason: result.errorMessage } }); throw new Error(result.errorMessage || "Domain transfer could not be submitted."); }
+  await prisma.domainTransfer.update({ where: { id: transfer.id }, data: { status: "SUBMITTED", providerTransferId: result.providerTransferId } });
   await prisma.orderItem.update({ where: { id: item.id }, data: { provisioningStatus: "PROVISIONED" } });
 }
