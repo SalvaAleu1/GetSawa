@@ -5,14 +5,13 @@ import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 
 const SESSION_COOKIE = "getsawa_session";
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14; // 14 days
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
+const SESSION_SECRET_MIN_LENGTH = 32;
 
 function getSecretKey() {
   const secret = process.env.SESSION_SECRET;
-  if (!secret || secret.length < 16) {
-    throw new Error(
-      "SESSION_SECRET is not configured. Set a long random value in your environment before starting the app."
-    );
+  if (!secret || secret.length < SESSION_SECRET_MIN_LENGTH) {
+    throw new Error(`SESSION_SECRET must be configured with at least ${SESSION_SECRET_MIN_LENGTH} characters.`);
   }
   return new TextEncoder().encode(secret);
 }
@@ -29,11 +28,6 @@ function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-/**
- * Creates a durable session row (so sessions can be revoked/audited server-side)
- * and returns a signed JWT referencing it. The JWT itself carries no
- * authorization data beyond the session id — the DB row is the source of truth.
- */
 export async function createSession(userId: string, ip?: string, userAgent?: string) {
   const rawToken = crypto.randomBytes(32).toString("hex");
   const tokenHash = hashToken(rawToken);
@@ -44,7 +38,7 @@ export async function createSession(userId: string, ip?: string, userAgent?: str
   });
 
   const jwt = await new SignJWT({ sid: session.id })
-    .setProtectedHeader({ alg: "HS256" })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setIssuedAt()
     .setExpirationTime(expiresAt)
     .sign(getSecretKey());
@@ -71,8 +65,10 @@ export async function getCurrentUser() {
   if (!jwt) return null;
 
   try {
-    const { payload } = await jwtVerify(jwt, getSecretKey());
-    const sessionId = payload.sid as string;
+    const { payload } = await jwtVerify(jwt, getSecretKey(), { algorithms: ["HS256"] });
+    const sessionId = typeof payload.sid === "string" ? payload.sid : null;
+    if (!sessionId) return null;
+
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
       include: { user: true },
@@ -87,17 +83,13 @@ export async function getCurrentUser() {
 
 export async function requireUser() {
   const user = await getCurrentUser();
-  if (!user) {
-    throw new AuthError("Sign in required.", 401);
-  }
+  if (!user) throw new AuthError("Sign in required.", 401);
   return user;
 }
 
 export async function requireAdmin(allowedRoles?: string[]) {
   const user = await requireUser();
-  if (!user.adminRole) {
-    throw new AuthError("Admin access required.", 403);
-  }
+  if (!user.adminRole) throw new AuthError("Admin access required.", 403);
   if (allowedRoles && !allowedRoles.includes(user.adminRole)) {
     throw new AuthError("You do not have permission to perform this action.", 403);
   }
