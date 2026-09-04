@@ -6,13 +6,14 @@ import { jsonError, jsonOk } from "@/lib/api";
 import { provisionOrder } from "@/lib/provisioning";
 
 /**
- * PayPal webhook receiver. Reference: https://developer.paypal.com/api/rest/webhooks/
+ * PayPal webhook receiver.
  *
- * This endpoint is a safety net, not the primary payment-confirmation path
- * (that's /api/checkout/capture, which runs synchronously in the customer's
- * browser flow). The webhook exists to catch cases the synchronous flow can
- * miss — refunds, disputes, delayed captures, or a customer closing the tab
- * mid-flow — and to make sure every event is processed exactly once.
+ * Security properties:
+ * - raw request body is hashed before parsing
+ * - PayPal transmission headers are verified server-side
+ * - event IDs are persisted for idempotency
+ * - payment/order mutations are derived from our database, not client data
+ * - processing failures return 5xx so PayPal can retry
  */
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
@@ -25,28 +26,35 @@ export async function POST(req: NextRequest) {
 
   const webhookId = process.env.PAYPAL_WEBHOOK_ID;
   if (!webhookId || !PayPalProvider.isConfigured()) {
-    // Fail safe: never process an unverifiable webhook as if it were real.
     return jsonError("Webhook receiver is not configured.", 503);
   }
 
+  const eventId = typeof event?.id === "string" ? event.id : "";
+  const eventType = typeof event?.event_type === "string" ? event.event_type : "";
+  if (!eventId || !eventType) return jsonError("Invalid webhook event.", 400);
+
   const payloadHash = crypto.createHash("sha256").update(rawBody).digest("hex");
 
-  const existing = await prisma.webhookEvent.findUnique({ where: { eventId: event.id } });
-  if (existing && existing.processingStatus === "PROCESSED") {
-    // Already handled — PayPal retries are expected; do nothing twice.
+  const existing = await prisma.webhookEvent.findUnique({ where: { eventId } });
+  if (existing?.processingStatus === "PROCESSED") {
     return jsonOk({ received: true, duplicate: true });
   }
 
-  const webhookEventRow = await prisma.webhookEvent.upsert({
-    where: { eventId: event.id },
+  const row = await prisma.webhookEvent.upsert({
+    where: { eventId },
     create: {
       provider: "paypal",
-      eventId: event.id,
-      eventType: event.event_type,
+      eventId,
+      eventType,
       payloadHash,
       processingStatus: "RECEIVED",
     },
-    update: { processingStatus: "RECEIVED", payloadHash },
+    update: {
+      eventType,
+      payloadHash,
+      processingStatus: "RECEIVED",
+      errorMessage: null,
+    },
   });
 
   try {
@@ -62,7 +70,7 @@ export async function POST(req: NextRequest) {
 
     if (!verified) {
       await prisma.webhookEvent.update({
-        where: { id: webhookEventRow.id },
+        where: { id: row.id },
         data: { processingStatus: "FAILED", errorMessage: "Signature verification failed" },
       });
       return jsonError("Webhook signature verification failed.", 400);
@@ -71,48 +79,79 @@ export async function POST(req: NextRequest) {
     await handleVerifiedEvent(event);
 
     await prisma.webhookEvent.update({
-      where: { id: webhookEventRow.id },
-      data: { processingStatus: "PROCESSED", processedAt: new Date() },
+      where: { id: row.id },
+      data: { processingStatus: "PROCESSED", processedAt: new Date(), errorMessage: null },
     });
 
     return jsonOk({ received: true });
   } catch (err: any) {
     await prisma.webhookEvent.update({
-      where: { id: webhookEventRow.id },
-      data: { processingStatus: "FAILED", errorMessage: err.message?.slice(0, 500) },
+      where: { id: row.id },
+      data: {
+        processingStatus: "FAILED",
+        errorMessage: String(err?.message || "Webhook processing failed").slice(0, 500),
+      },
     });
-    // Return 200 so PayPal doesn't hammer retries for an error on our side
-    // that a human needs to look at; the FAILED row is what surfaces it to
-    // the admin health dashboard.
-    return jsonOk({ received: true, error: true });
+    // A 5xx response is intentional. PayPal can retry transient failures;
+    // the persisted event ID prevents duplicate side effects after recovery.
+    return jsonError("Webhook processing failed.", 500);
   }
 }
 
 async function handleVerifiedEvent(event: any) {
   const type = event.event_type as string;
-  const resource = event.resource;
+  const resource = event.resource || {};
 
   switch (type) {
     case "PAYMENT.CAPTURE.COMPLETED": {
-      const captureId = resource.id;
-      const payment = await prisma.payment.findFirst({ where: { providerCaptureId: captureId } });
-      if (payment && payment.status !== "PAID") {
-        await prisma.payment.update({ where: { id: payment.id }, data: { status: "PAID" } });
-        await prisma.order.update({ where: { id: payment.orderId }, data: { status: "PAYMENT_CONFIRMED" } });
-        await provisionOrder(payment.orderId);
+      const captureId = resource.id as string | undefined;
+      const orderId = resource?.supplementary_data?.related_ids?.order_id as string | undefined;
+
+      let payment = captureId
+        ? await prisma.payment.findFirst({ where: { providerCaptureId: captureId } })
+        : null;
+
+      if (!payment && orderId) {
+        payment = await prisma.payment.findFirst({ where: { providerOrderId: orderId } });
       }
+
+      if (!payment) return;
+
+      if (payment.status !== "PAID") {
+        const amount = Number(resource?.amount?.value ?? 0);
+        const capturedCents = Math.round(amount * 100);
+        if (capturedCents !== payment.amountCents) {
+          await prisma.payment.update({
+            where: { id: payment.id },
+            data: { status: "DISPUTED", failureReason: "Webhook capture amount did not match recorded payment." },
+          });
+          return;
+        }
+
+        await prisma.payment.update({
+          where: { id: payment.id },
+          data: { status: "PAID", providerCaptureId: captureId || payment.providerCaptureId },
+        });
+        await prisma.order.update({ where: { id: payment.orderId }, data: { status: "PAYMENT_CONFIRMED" } });
+      }
+
+      await provisionOrder(payment.orderId);
       break;
     }
+
     case "PAYMENT.CAPTURE.DENIED": {
-      const captureId = resource.id;
+      const captureId = resource.id as string | undefined;
+      if (!captureId) return;
       const payment = await prisma.payment.findFirst({ where: { providerCaptureId: captureId } });
-      if (payment) {
+      if (payment && payment.status !== "PAID") {
         await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED", failureReason: "Denied by PayPal" } });
       }
       break;
     }
+
     case "PAYMENT.CAPTURE.REFUNDED": {
-      const captureId = resource.id;
+      const captureId = resource.id as string | undefined;
+      if (!captureId) return;
       const payment = await prisma.payment.findFirst({ where: { providerCaptureId: captureId } });
       if (payment) {
         await prisma.payment.update({ where: { id: payment.id }, data: { status: "REFUNDED" } });
@@ -120,18 +159,18 @@ async function handleVerifiedEvent(event: any) {
       }
       break;
     }
+
     case "CUSTOMER.DISPUTE.CREATED": {
-      const captureId = resource?.disputed_transactions?.[0]?.seller_transaction_id;
-      if (captureId) {
-        const payment = await prisma.payment.findFirst({ where: { providerCaptureId: captureId } });
-        if (payment) await prisma.payment.update({ where: { id: payment.id }, data: { status: "DISPUTED" } });
-      }
+      const captureId = resource?.disputed_transactions?.[0]?.seller_transaction_id as string | undefined;
+      if (!captureId) return;
+      const payment = await prisma.payment.findFirst({ where: { providerCaptureId: captureId } });
+      if (payment) await prisma.payment.update({ where: { id: payment.id }, data: { status: "DISPUTED" } });
       break;
     }
+
     default:
-      // Unhandled event types are recorded (status PROCESSED, no side
-      // effect) rather than silently dropped, so admins can see the full
-      // event history.
+      // The event is still recorded as processed. Unknown events have no
+      // financial side effect until explicitly supported.
       break;
   }
 }
