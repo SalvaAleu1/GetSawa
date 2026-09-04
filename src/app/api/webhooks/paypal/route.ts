@@ -5,24 +5,10 @@ import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
 import { jsonError, jsonOk } from "@/lib/api";
 import { provisionOrder } from "@/lib/provisioning";
 
-/**
- * PayPal webhook receiver.
- *
- * Security properties:
- * - raw request body is hashed before parsing
- * - PayPal transmission headers are verified server-side
- * - event IDs are persisted and atomically claimed for idempotency
- * - payment/order mutations are derived from our database, not client data
- * - processing failures return 5xx so PayPal can retry
- */
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
   let event: any;
-  try {
-    event = JSON.parse(rawBody);
-  } catch {
-    return jsonError("Invalid payload.", 400);
-  }
+  try { event = JSON.parse(rawBody); } catch { return jsonError("Invalid payload.", 400); }
 
   const webhookId = process.env.PAYPAL_WEBHOOK_ID;
   if (!webhookId || !PayPalProvider.isConfigured()) return jsonError("Webhook receiver is not configured.", 503);
@@ -32,14 +18,33 @@ export async function POST(req: NextRequest) {
   if (!eventId || !eventType) return jsonError("Invalid webhook event.", 400);
 
   const payloadHash = crypto.createHash("sha256").update(rawBody).digest("hex");
-  const existing = await prisma.webhookEvent.findUnique({ where: { eventId } });
-  if (existing?.processingStatus === "PROCESSED") return jsonOk({ received: true, duplicate: true });
+  let row = await prisma.webhookEvent.findUnique({ where: { eventId } });
+  if (row?.processingStatus === "PROCESSED" || row?.processingStatus === "PROCESSING") {
+    return jsonOk({ received: true, duplicate: true });
+  }
 
-  const row = await prisma.webhookEvent.upsert({
-    where: { eventId },
-    create: { provider: "paypal", eventId, eventType, payloadHash, processingStatus: "RECEIVED" },
-    update: { eventType, payloadHash, processingStatus: "RECEIVED", errorMessage: null },
-  });
+  if (!row) {
+    try {
+      row = await prisma.webhookEvent.create({
+        data: { provider: "paypal", eventId, eventType, payloadHash, processingStatus: "RECEIVED" },
+      });
+    } catch (error: any) {
+      // Another request may have created the unique event between our read
+      // and create. Never overwrite its processing state.
+      if (error?.code !== "P2002") throw error;
+      row = await prisma.webhookEvent.findUnique({ where: { eventId } });
+      if (!row || row.processingStatus === "PROCESSED" || row.processingStatus === "PROCESSING") {
+        return jsonOk({ received: true, duplicate: true });
+      }
+    }
+  } else {
+    // A previously failed delivery may be retried. Keep the same event row,
+    // but refresh the payload metadata without touching an active claim.
+    row = await prisma.webhookEvent.update({
+      where: { id: row.id },
+      data: { eventType, payloadHash, processingStatus: "RECEIVED", errorMessage: null },
+    });
+  }
 
   try {
     const verified = await PayPalProvider.verifyWebhookSignature({
@@ -57,8 +62,6 @@ export async function POST(req: NextRequest) {
       return jsonError("Webhook signature verification failed.", 400);
     }
 
-    // Only one concurrent delivery may own processing. A second delivery
-    // returns successfully and will not execute financial side effects twice.
     const claim = await prisma.webhookEvent.updateMany({
       where: { id: row.id, processingStatus: "RECEIVED" },
       data: { processingStatus: "PROCESSING" },
@@ -84,17 +87,11 @@ async function handleVerifiedEvent(event: any) {
   switch (type) {
     case "PAYMENT.CAPTURE.COMPLETED": {
       const captureId = typeof resource.id === "string" ? resource.id : undefined;
-      const paypalOrderId = typeof resource?.supplementary_data?.related_ids?.order_id === "string"
-        ? resource.supplementary_data.related_ids.order_id
-        : undefined;
-
+      const paypalOrderId = typeof resource?.supplementary_data?.related_ids?.order_id === "string" ? resource.supplementary_data.related_ids.order_id : undefined;
       let payment = captureId ? await prisma.payment.findFirst({ where: { providerCaptureId: captureId } }) : null;
       if (!payment && paypalOrderId) payment = await prisma.payment.findFirst({ where: { providerOrderId: paypalOrderId } });
       if (!payment) return;
-
-      if (paypalOrderId && payment.providerOrderId && payment.providerOrderId !== paypalOrderId) {
-        throw new Error("PayPal webhook order ID does not match the recorded payment.");
-      }
+      if (paypalOrderId && payment.providerOrderId && payment.providerOrderId !== paypalOrderId) throw new Error("PayPal webhook order ID does not match the recorded payment.");
 
       if (payment.status !== "PAID") {
         const amount = Number(resource?.amount?.value);
@@ -104,31 +101,19 @@ async function handleVerifiedEvent(event: any) {
           await prisma.payment.update({ where: { id: payment.id }, data: { status: "DISPUTED", failureReason: "Webhook capture amount or currency did not match the recorded payment." } });
           return;
         }
-
-        await prisma.payment.updateMany({
-          where: { id: payment.id, status: { not: "PAID" } },
-          data: { status: "PAID", providerCaptureId: captureId || payment.providerCaptureId },
-        });
-        await prisma.order.updateMany({
-          where: { id: payment.orderId, status: "PENDING_PAYMENT" },
-          data: { status: "PAYMENT_CONFIRMED" },
-        });
+        await prisma.payment.updateMany({ where: { id: payment.id, status: { not: "PAID" } }, data: { status: "PAID", providerCaptureId: captureId || payment.providerCaptureId } });
+        await prisma.order.updateMany({ where: { id: payment.orderId, status: "PENDING_PAYMENT" }, data: { status: "PAYMENT_CONFIRMED" } });
       }
-
       await provisionOrder(payment.orderId);
       break;
     }
-
     case "PAYMENT.CAPTURE.DENIED": {
       const captureId = typeof resource.id === "string" ? resource.id : undefined;
       if (!captureId) return;
       const payment = await prisma.payment.findFirst({ where: { providerCaptureId: captureId } });
-      if (payment && payment.status !== "PAID") {
-        await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED", failureReason: "Denied by PayPal" } });
-      }
+      if (payment && payment.status !== "PAID") await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED", failureReason: "Denied by PayPal" } });
       break;
     }
-
     case "PAYMENT.CAPTURE.REFUNDED": {
       const captureId = typeof resource.id === "string" ? resource.id : undefined;
       if (!captureId) return;
@@ -139,7 +124,6 @@ async function handleVerifiedEvent(event: any) {
       }
       break;
     }
-
     case "CUSTOMER.DISPUTE.CREATED": {
       const captureId = resource?.disputed_transactions?.[0]?.seller_transaction_id as string | undefined;
       if (!captureId) return;
@@ -147,8 +131,6 @@ async function handleVerifiedEvent(event: any) {
       if (payment) await prisma.payment.update({ where: { id: payment.id }, data: { status: "DISPUTED" } });
       break;
     }
-
-    default:
-      break;
+    default: return;
   }
 }
