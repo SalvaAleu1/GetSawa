@@ -47,7 +47,8 @@ export async function createSession(userId: string, ip?: string, userAgent?: str
 }
 
 export async function setSessionCookie(jwt: string) {
-  cookies().set(SESSION_COOKIE, jwt, {
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE, jwt, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -56,12 +57,14 @@ export async function setSessionCookie(jwt: string) {
   });
 }
 
-export function clearSessionCookie() {
-  cookies().delete(SESSION_COOKIE);
+export async function clearSessionCookie() {
+  const cookieStore = await cookies();
+  cookieStore.delete(SESSION_COOKIE);
 }
 
 export async function getCurrentUser() {
-  const jwt = cookies().get(SESSION_COOKIE)?.value;
+  const cookieStore = await cookies();
+  const jwt = cookieStore.get(SESSION_COOKIE)?.value;
   if (!jwt) return null;
 
   try {
