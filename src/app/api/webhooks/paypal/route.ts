@@ -11,7 +11,7 @@ import { provisionOrder } from "@/lib/provisioning";
  * Security properties:
  * - raw request body is hashed before parsing
  * - PayPal transmission headers are verified server-side
- * - event IDs are persisted for idempotency
+ * - event IDs are persisted and atomically claimed for idempotency
  * - payment/order mutations are derived from our database, not client data
  * - processing failures return 5xx so PayPal can retry
  */
@@ -25,36 +25,20 @@ export async function POST(req: NextRequest) {
   }
 
   const webhookId = process.env.PAYPAL_WEBHOOK_ID;
-  if (!webhookId || !PayPalProvider.isConfigured()) {
-    return jsonError("Webhook receiver is not configured.", 503);
-  }
+  if (!webhookId || !PayPalProvider.isConfigured()) return jsonError("Webhook receiver is not configured.", 503);
 
   const eventId = typeof event?.id === "string" ? event.id : "";
   const eventType = typeof event?.event_type === "string" ? event.event_type : "";
   if (!eventId || !eventType) return jsonError("Invalid webhook event.", 400);
 
   const payloadHash = crypto.createHash("sha256").update(rawBody).digest("hex");
-
   const existing = await prisma.webhookEvent.findUnique({ where: { eventId } });
-  if (existing?.processingStatus === "PROCESSED") {
-    return jsonOk({ received: true, duplicate: true });
-  }
+  if (existing?.processingStatus === "PROCESSED") return jsonOk({ received: true, duplicate: true });
 
   const row = await prisma.webhookEvent.upsert({
     where: { eventId },
-    create: {
-      provider: "paypal",
-      eventId,
-      eventType,
-      payloadHash,
-      processingStatus: "RECEIVED",
-    },
-    update: {
-      eventType,
-      payloadHash,
-      processingStatus: "RECEIVED",
-      errorMessage: null,
-    },
+    create: { provider: "paypal", eventId, eventType, payloadHash, processingStatus: "RECEIVED" },
+    update: { eventType, payloadHash, processingStatus: "RECEIVED", errorMessage: null },
   });
 
   try {
@@ -69,31 +53,26 @@ export async function POST(req: NextRequest) {
     });
 
     if (!verified) {
-      await prisma.webhookEvent.update({
-        where: { id: row.id },
-        data: { processingStatus: "FAILED", errorMessage: "Signature verification failed" },
-      });
+      await prisma.webhookEvent.update({ where: { id: row.id }, data: { processingStatus: "FAILED", errorMessage: "Signature verification failed" } });
       return jsonError("Webhook signature verification failed.", 400);
     }
 
-    await handleVerifiedEvent(event);
-
-    await prisma.webhookEvent.update({
-      where: { id: row.id },
-      data: { processingStatus: "PROCESSED", processedAt: new Date(), errorMessage: null },
+    // Only one concurrent delivery may own processing. A second delivery
+    // returns successfully and will not execute financial side effects twice.
+    const claim = await prisma.webhookEvent.updateMany({
+      where: { id: row.id, processingStatus: "RECEIVED" },
+      data: { processingStatus: "PROCESSING" },
     });
+    if (claim.count !== 1) return jsonOk({ received: true, duplicate: true });
 
+    await handleVerifiedEvent(event);
+    await prisma.webhookEvent.update({ where: { id: row.id }, data: { processingStatus: "PROCESSED", processedAt: new Date(), errorMessage: null } });
     return jsonOk({ received: true });
   } catch (err: any) {
     await prisma.webhookEvent.update({
       where: { id: row.id },
-      data: {
-        processingStatus: "FAILED",
-        errorMessage: String(err?.message || "Webhook processing failed").slice(0, 500),
-      },
+      data: { processingStatus: "FAILED", errorMessage: String(err?.message || "Webhook processing failed").slice(0, 500) },
     });
-    // A 5xx response is intentional. PayPal can retry transient failures;
-    // the persisted event ID prevents duplicate side effects after recovery.
     return jsonError("Webhook processing failed.", 500);
   }
 }
@@ -104,35 +83,36 @@ async function handleVerifiedEvent(event: any) {
 
   switch (type) {
     case "PAYMENT.CAPTURE.COMPLETED": {
-      const captureId = resource.id as string | undefined;
-      const orderId = resource?.supplementary_data?.related_ids?.order_id as string | undefined;
+      const captureId = typeof resource.id === "string" ? resource.id : undefined;
+      const paypalOrderId = typeof resource?.supplementary_data?.related_ids?.order_id === "string"
+        ? resource.supplementary_data.related_ids.order_id
+        : undefined;
 
-      let payment = captureId
-        ? await prisma.payment.findFirst({ where: { providerCaptureId: captureId } })
-        : null;
-
-      if (!payment && orderId) {
-        payment = await prisma.payment.findFirst({ where: { providerOrderId: orderId } });
-      }
-
+      let payment = captureId ? await prisma.payment.findFirst({ where: { providerCaptureId: captureId } }) : null;
+      if (!payment && paypalOrderId) payment = await prisma.payment.findFirst({ where: { providerOrderId: paypalOrderId } });
       if (!payment) return;
 
+      if (paypalOrderId && payment.providerOrderId && payment.providerOrderId !== paypalOrderId) {
+        throw new Error("PayPal webhook order ID does not match the recorded payment.");
+      }
+
       if (payment.status !== "PAID") {
-        const amount = Number(resource?.amount?.value ?? 0);
-        const capturedCents = Math.round(amount * 100);
-        if (capturedCents !== payment.amountCents) {
-          await prisma.payment.update({
-            where: { id: payment.id },
-            data: { status: "DISPUTED", failureReason: "Webhook capture amount did not match recorded payment." },
-          });
+        const amount = Number(resource?.amount?.value);
+        const capturedCents = Number.isFinite(amount) ? Math.round(amount * 100) : -1;
+        const capturedCurrency = typeof resource?.amount?.currency_code === "string" ? resource.amount.currency_code.toUpperCase() : "";
+        if (capturedCents !== payment.amountCents || capturedCurrency !== payment.currency.toUpperCase()) {
+          await prisma.payment.update({ where: { id: payment.id }, data: { status: "DISPUTED", failureReason: "Webhook capture amount or currency did not match the recorded payment." } });
           return;
         }
 
-        await prisma.payment.update({
-          where: { id: payment.id },
+        await prisma.payment.updateMany({
+          where: { id: payment.id, status: { not: "PAID" } },
           data: { status: "PAID", providerCaptureId: captureId || payment.providerCaptureId },
         });
-        await prisma.order.update({ where: { id: payment.orderId }, data: { status: "PAYMENT_CONFIRMED" } });
+        await prisma.order.updateMany({
+          where: { id: payment.orderId, status: "PENDING_PAYMENT" },
+          data: { status: "PAYMENT_CONFIRMED" },
+        });
       }
 
       await provisionOrder(payment.orderId);
@@ -140,7 +120,7 @@ async function handleVerifiedEvent(event: any) {
     }
 
     case "PAYMENT.CAPTURE.DENIED": {
-      const captureId = resource.id as string | undefined;
+      const captureId = typeof resource.id === "string" ? resource.id : undefined;
       if (!captureId) return;
       const payment = await prisma.payment.findFirst({ where: { providerCaptureId: captureId } });
       if (payment && payment.status !== "PAID") {
@@ -150,7 +130,7 @@ async function handleVerifiedEvent(event: any) {
     }
 
     case "PAYMENT.CAPTURE.REFUNDED": {
-      const captureId = resource.id as string | undefined;
+      const captureId = typeof resource.id === "string" ? resource.id : undefined;
       if (!captureId) return;
       const payment = await prisma.payment.findFirst({ where: { providerCaptureId: captureId } });
       if (payment) {
@@ -169,8 +149,6 @@ async function handleVerifiedEvent(event: any) {
     }
 
     default:
-      // The event is still recorded as processed. Unknown events have no
-      // financial side effect until explicitly supported.
       break;
   }
 }
