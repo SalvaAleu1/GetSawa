@@ -1,0 +1,900 @@
+// GetSawa — Phase 1 database schema
+// Money is always stored as integer minor units (cents) — never floats.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity & Access
+// ---------------------------------------------------------------------------
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  SUPPORT
+  FINANCE
+  CONTENT_MANAGER
+  PRODUCT_MANAGER
+}
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
+  phone             String?
+  company           String?
+  country           String?
+  emailVerifiedAt   DateTime?
+  isSuspended       Boolean   @default(false)
+  suspendedReason   String?
+  mfaEnabled        Boolean   @default(false)
+  mfaSecret         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  adminRole         AdminRole?          // null => not an admin
+  referralCode      String?             @unique
+
+  domains           Domain[]
+  orders            Order[]
+  invoices          Invoice[]
+  payments          Payment[]
+  supportTickets    SupportTicket[]
+  notifications     Notification[]
+  sessions          Session[]
+  credits           CustomerCredit[]
+  ledgerEntries     LedgerEntry[]
+  auditLogs         AuditLog[]          @relation("AuditActor")
+  emailVerifications EmailVerificationToken[]
+  passwordResets    PasswordResetToken[]
+  loginEvents       LoginEvent[]
+  websiteProjects   WebsiteProject[]
+  domainTransfers   DomainTransfer[]
+  auctionBids       AuctionBid[]
+  blogPosts         BlogPost[]
+  affiliate         Affiliate?
+  apiClients        ApiClient[]
+
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+}
+
+model LoginEvent {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  success    Boolean
+  ipAddress  String?
+  userAgent  String?
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// TLDs & Domain Pricing Engine
+// ---------------------------------------------------------------------------
+
+enum PricingMethod {
+  FIXED
+  WHOLESALE_PLUS_FIXED
+  WHOLESALE_PLUS_PERCENT
+  CUSTOM
+}
+
+model Tld {
+  id                    String   @id @default(cuid())
+  extension             String   @unique // "com", "africa", "co.ke"
+  isActive              Boolean  @default(false)
+  isFeatured            Boolean  @default(false)
+  supportsPrivacy       Boolean  @default(false)
+  supportsPremium       Boolean  @default(true)
+  minYears              Int      @default(1)
+  maxYears              Int      @default(10)
+  promotionEligible     Boolean  @default(true)
+
+  pricingMethod         PricingMethod @default(WHOLESALE_PLUS_PERCENT)
+  wholesaleRegisterCents Int?    // last known cost from provider, minor units
+  wholesaleRenewCents   Int?
+  wholesaleTransferCents Int?
+
+  fixedRegisterCents    Int?     // used when pricingMethod = FIXED or CUSTOM
+  fixedRenewCents       Int?
+  fixedTransferCents    Int?
+
+  markupFixedCents      Int?     // used when WHOLESALE_PLUS_FIXED
+  markupPercent         Decimal? @db.Decimal(6, 3) // used when WHOLESALE_PLUS_PERCENT
+
+  currency              String   @default("USD")
+
+  wholesaleUpdatedAt    DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  domains               Domain[]
+  premiumDomains        PremiumDomain[]
+
+  @@index([isActive])
+}
+
+model PremiumDomain {
+  id               String   @id @default(cuid())
+  domainName       String   @unique
+  tldId            String
+  tld              Tld      @relation(fields: [tldId], references: [id])
+  purchasePriceCents Int
+  renewalPriceCents Int
+  currency         String   @default("USD")
+  category         String?
+  isFeatured       Boolean  @default(false)
+  isAuction        Boolean  @default(false)
+  status           String   @default("LISTED") // LISTED, SOLD, DELISTED
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Domains
+// ---------------------------------------------------------------------------
+
+enum DomainStatus {
+  PENDING_REGISTRATION
+  ACTIVE
+  EXPIRING
+  EXPIRED
+  TRANSFER_PENDING
+  TRANSFERRED_AWAY
+  REGISTRATION_FAILED
+  CANCELLED
+}
+
+model Domain {
+  id               String       @id @default(cuid())
+  userId           String
+  user             User         @relation(fields: [userId], references: [id])
+  tldId            String
+  tld              Tld          @relation(fields: [tldId], references: [id])
+  name             String       // full domain, e.g. "example.com"
+  status           DomainStatus @default(PENDING_REGISTRATION)
+  isPremium        Boolean      @default(false)
+
+  providerName     String       // "namesilo"
+  providerOrderId  String?      // registrar-side order/reference id
+
+  registeredAt     DateTime?
+  expiresAt        DateTime?
+  autoRenew        Boolean      @default(true)
+  isLocked         Boolean      @default(true)
+  privacyEnabled   Boolean      @default(false)
+
+  nameservers      String[]     @default([])
+
+  dnsRecords       DnsRecord[]
+  transfers        DomainTransfer[]
+  orderItems       OrderItem[]
+  websiteProjects  WebsiteProject[]
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([name])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model DnsRecord {
+  id        String   @id @default(cuid())
+  domainId  String
+  domain    Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  type      String   // A, AAAA, CNAME, MX, TXT, NS, SRV, CAA
+  host      String
+  value     String
+  ttl       Int      @default(3600)
+  priority  Int?     // for MX/SRV
+  providerRecordId String? // upstream record id at NameSilo, needed for update/delete
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([domainId])
+}
+
+enum TransferStatus {
+  AWAITING_PAYMENT
+  SUBMITTED
+  PENDING_AUTH
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model DomainTransfer {
+  id           String         @id @default(cuid())
+  domainId     String?
+  domain       Domain?        @relation(fields: [domainId], references: [id])
+  userId       String
+  user         User           @relation(fields: [userId], references: [id])
+  domainName   String
+  authCodeEncrypted String    // AES-256-GCM ciphertext; see lib/crypto.ts — never stored in plaintext
+  status       TransferStatus @default(AWAITING_PAYMENT)
+  providerTransferId String?
+  failureReason String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  orderItems   OrderItem[]
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Product Catalog
+// ---------------------------------------------------------------------------
+
+enum ProductCategory {
+  DOMAIN_REGISTRATION
+  DOMAIN_TRANSFER
+  DOMAIN_RENEWAL
+  PREMIUM_DOMAIN
+  HOSTING
+  EMAIL
+  WEBSITE
+  SECURITY
+  AI
+  MARKETING
+  ADD_ON
+}
+
+enum ProductStatus {
+  DRAFT
+  CONFIGURED
+  READY
+  ACTIVE
+  PAUSED
+  DISABLED
+  PROVIDER_ERROR
+}
+
+model Product {
+  id              String          @id @default(cuid())
+  sku             String          @unique
+  name            String
+  description     String?
+  category        ProductCategory
+  imageUrl        String?
+
+  retailPriceCents Int
+  renewalPriceCents Int?
+  setupFeeCents   Int             @default(0)
+  currency        String          @default("USD")
+  billingCycle    String          @default("ONE_TIME") // ONE_TIME, MONTHLY, YEARLY
+
+  providerName    String?         // which ProviderCredential this depends on
+  providerProductId String?
+  provisioningMethod String?      // "manual" | "namesilo" | "hosting" | "email" | "ai" | ...
+
+  status          ProductStatus   @default(DRAFT)
+  isFeatured      Boolean         @default(false)
+  isPromotionEligible Boolean     @default(true)
+  sortOrder       Int             @default(0)
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  orderItems      OrderItem[]
+
+  @@index([category, status])
+}
+
+// ---------------------------------------------------------------------------
+// Orders, Invoices, Payments
+// ---------------------------------------------------------------------------
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAYMENT_CONFIRMED
+  PROVISIONING
+  ACTIVE
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+model Order {
+  id             String      @id @default(cuid())
+  orderNumber    String      @unique // e.g. GS-2026-000001
+  userId         String
+  user           User        @relation(fields: [userId], references: [id])
+  status         OrderStatus @default(PENDING_PAYMENT)
+
+  subtotalCents  Int
+  discountCents  Int         @default(0)
+  taxCents       Int         @default(0)
+  totalCents     Int
+  currency       String      @default("USD")
+
+  couponCode     String?
+  promotionId    String?
+  promotion      Promotion?  @relation(fields: [promotionId], references: [id])
+
+  idempotencyKey String      @unique
+
+  items          OrderItem[]
+  invoice        Invoice?
+  payments       Payment[]
+  commissions    Commission[]
+
+  provisioningError String?
+
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model OrderItem {
+  id               String   @id @default(cuid())
+  orderId          String
+  order            Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId        String?
+  product          Product? @relation(fields: [productId], references: [id])
+  domainId         String?
+  domain           Domain?  @relation(fields: [domainId], references: [id])
+  domainTransferId String?
+  domainTransfer   DomainTransfer? @relation(fields: [domainTransferId], references: [id])
+
+  description      String   // human-readable snapshot, e.g. "example.com registration — 1 year"
+  quantity         Int      @default(1)
+  years            Int?     // for domain items
+  unitPriceCents   Int
+  discountCents    Int      @default(0)
+  totalCents       Int
+
+  provisioningStatus String @default("PENDING") // PENDING, PROVISIONED, FAILED
+  provisioningNote   String?
+
+  createdAt        DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model Invoice {
+  id             String   @id @default(cuid())
+  invoiceNumber  String   @unique
+  orderId        String   @unique
+  order          Order    @relation(fields: [orderId], references: [id])
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+
+  subtotalCents  Int
+  discountCents  Int      @default(0)
+  taxCents       Int      @default(0)
+  totalCents     Int
+  currency       String   @default("USD")
+
+  status         String   @default("UNPAID") // UNPAID, PAID, VOID, REFUNDED
+  paidAt         DateTime?
+
+  billingName    String
+  billingEmail   String
+  billingAddress String?
+  billingCountry String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId])
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  DISPUTED
+  EXPIRED
+}
+
+model Payment {
+  id                  String        @id @default(cuid())
+  orderId             String
+  order               Order         @relation(fields: [orderId], references: [id])
+  userId              String
+  user                User          @relation(fields: [userId], references: [id])
+
+  provider            String        @default("paypal")
+  providerOrderId     String?       // PayPal order id
+  providerCaptureId   String?       // PayPal capture id
+  amountCents         Int
+  currency            String        @default("USD")
+  status              PaymentStatus @default(PENDING)
+  failureReason        String?
+
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  refunds             Refund[]
+
+  @@index([orderId])
+  @@index([providerOrderId])
+  @@index([providerCaptureId])
+}
+
+model Refund {
+  id                String   @id @default(cuid())
+  paymentId         String
+  payment           Payment  @relation(fields: [paymentId], references: [id])
+  amountCents       Int
+  reason            String?
+  providerRefundId  String?
+  status            String   @default("PENDING")
+  createdAt         DateTime @default(now())
+}
+
+model WebhookEvent {
+  id               String   @id @default(cuid())
+  provider         String   // "paypal"
+  eventId          String   @unique
+  eventType        String
+  processingStatus String   @default("RECEIVED") // RECEIVED, PROCESSED, FAILED, IGNORED
+  payloadHash      String
+  errorMessage     String?
+  receivedAt       DateTime @default(now())
+  processedAt      DateTime?
+}
+
+// ---------------------------------------------------------------------------
+// Promotions, Coupons, Bundles
+// ---------------------------------------------------------------------------
+
+model Promotion {
+  id               String   @id @default(cuid())
+  name             String
+  description      String?
+  isActive         Boolean  @default(false)
+
+  // JSON-encoded rule tree evaluated server-side by lib/promotions.ts
+  rules            Json
+
+  priority         Int      @default(0)
+  isStackable      Boolean  @default(false)
+  isExclusive      Boolean  @default(false)
+  maxDiscountCents Int?
+
+  startsAt         DateTime?
+  endsAt           DateTime?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  orders           Order[]
+}
+
+model Coupon {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  discountType      String   // PERCENT, FIXED, FREE_PRODUCT
+  discountValue     Int      // percent (0-100) or cents, depending on discountType
+  startsAt          DateTime?
+  endsAt            DateTime?
+  usageLimit        Int?
+  perCustomerLimit  Int      @default(1)
+  minOrderCents     Int?
+  maxDiscountCents  Int?
+  newCustomerOnly   Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  timesUsed         Int      @default(0)
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Bundle {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  productSkus    String[]
+  bundlePriceCents Int
+  renewalPriceCents Int?
+  isActive       Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Content: ads, announcements, CMS
+// ---------------------------------------------------------------------------
+
+model Advertisement {
+  id          String   @id @default(cuid())
+  placement   String   // homepage_banner, dashboard_banner, checkout, sidebar, popup
+  title       String
+  subtitle    String?
+  imageUrl    String?
+  ctaLabel    String?
+  ctaUrl      String?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  priority    Int      @default(0)
+  isActive    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  audience  String   @default("ALL")
+  isActive  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model CmsSection {
+  id        String   @id @default(cuid())
+  key       String   @unique // e.g. "homepage.hero"
+  content   Json
+  isActive  Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// AI Website Builder (Phase 2)
+// ---------------------------------------------------------------------------
+
+enum WebsiteStatus {
+  DRAFT
+  GENERATING
+  READY
+  PUBLISHED
+  UNPUBLISHED
+}
+
+model WebsiteProject {
+  id           String        @id @default(cuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id])
+  slug         String        @unique // served at /sites/{slug} on the platform domain
+  name         String
+  businessDescription String?
+  category     String?
+  tone         String?
+  status       WebsiteStatus @default(DRAFT)
+
+  domainId     String?       // optional: a registered Domain connected to this project
+  domain       Domain?       @relation(fields: [domainId], references: [id])
+  domainConnectionStatus String? // PENDING_DNS, CONFIGURING, LIVE, ERROR
+
+  content      Json?         // generated/edited page content (see lib/ai/website-schema.ts)
+  aiModel      String?       // which AI model generated the current content
+  publishedAt  DateTime?
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  versions     WebsiteVersion[]
+
+  @@index([userId])
+}
+
+model WebsiteVersion {
+  id        String   @id @default(cuid())
+  projectId String
+  project   WebsiteProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  content   Json
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+}
+
+
+
+// ---------------------------------------------------------------------------
+// Domain Auctions (Phase 3)
+// ---------------------------------------------------------------------------
+
+enum AuctionStatus {
+  DRAFT
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELLED
+  PAID
+  COMPLETED
+}
+
+model Auction {
+  id                String        @id @default(cuid())
+  title             String
+  domainName        String
+  startingBidCents  Int
+  reservePriceCents Int?
+  minIncrementCents Int           @default(500)
+  startAt           DateTime
+  endAt             DateTime
+  extensionSeconds  Int           @default(120) // anti-sniping: extend endAt if a bid lands in the closing window
+  isFeatured        Boolean       @default(false)
+  status            AuctionStatus @default(DRAFT)
+
+  winningBidId      String?       @unique
+  winningBid        AuctionBid?   @relation("WinningBid", fields: [winningBidId], references: [id])
+  paymentDeadline   DateTime?
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  bids              AuctionBid[]  @relation("AuctionBids")
+
+  @@index([status])
+}
+
+model AuctionBid {
+  id          String   @id @default(cuid())
+  auctionId   String
+  auction     Auction  @relation("AuctionBids", fields: [auctionId], references: [id])
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  amountCents Int
+  createdAt   DateTime @default(now())
+
+  winningFor  Auction? @relation("WinningBid")
+
+  @@index([auctionId, amountCents])
+}
+
+// ---------------------------------------------------------------------------
+// Blog / CMS (Phase 3)
+// ---------------------------------------------------------------------------
+
+model BlogPost {
+  id               String    @id @default(cuid())
+  slug             String    @unique
+  title            String
+  excerpt          String?
+  body             String    // markdown
+  featuredImageUrl String?
+  seoTitle         String?
+  metaDescription  String?
+  status           String    @default("DRAFT") // DRAFT, PUBLISHED
+  publishedAt      DateTime?
+  authorId         String?
+  author           User?     @relation(fields: [authorId], references: [id])
+  categories       String[]  @default([])
+  tags             String[]  @default([])
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([status, publishedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Referrals & Affiliates (Phase 3)
+// ---------------------------------------------------------------------------
+
+model Affiliate {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id])
+  payoutEmail       String?  // PayPal email for payouts, if different from account email
+  commissionPercent Decimal  @default(10) @db.Decimal(5, 2)
+  status            String   @default("ACTIVE") // ACTIVE, SUSPENDED
+  createdAt         DateTime @default(now())
+
+  clicks            AffiliateClick[]
+  commissions       Commission[]
+  payouts           Payout[]
+}
+
+model AffiliateClick {
+  id          String    @id @default(cuid())
+  affiliateId String
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id])
+  landingPath String?
+  createdAt   DateTime  @default(now())
+
+  @@index([affiliateId, createdAt])
+}
+
+model Commission {
+  id          String    @id @default(cuid())
+  affiliateId String
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id])
+  orderId     String?
+  order       Order?    @relation(fields: [orderId], references: [id])
+  amountCents Int
+  status      String    @default("PENDING") // PENDING, APPROVED, PAID, REVERSED
+  createdAt   DateTime  @default(now())
+
+  payoutId    String?
+  payout      Payout?   @relation(fields: [payoutId], references: [id])
+}
+
+model Payout {
+  id              String   @id @default(cuid())
+  affiliateId     String
+  affiliate       Affiliate @relation(fields: [affiliateId], references: [id])
+  amountCents     Int
+  currency        String   @default("USD")
+  status          String   @default("PENDING") // PENDING, SENT, FAILED
+  providerBatchId String?
+  failureReason   String?
+  createdAt       DateTime @default(now())
+
+  commissions     Commission[]
+}
+
+// ---------------------------------------------------------------------------
+// Developer API (Phase 3)
+// ---------------------------------------------------------------------------
+
+model ApiClient {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  name        String
+  keyHash     String   @unique // sha256 of the raw key — the raw key is shown once, at creation
+  keyPrefix   String   // first 8 chars, shown in the UI so a customer can tell keys apart
+  scopes      String[] @default(["domains:read"])
+  rateLimit   Int      @default(60) // requests per minute
+  isActive    Boolean  @default(true)
+  lastUsedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
+model SupportTicket {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  subject    String
+  category   String?
+  priority   String   @default("NORMAL")
+  status     String   @default("OPEN") // OPEN, PENDING, RESOLVED, CLOSED
+  assignedTo String?
+  messages   SupportMessage[]
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model SupportMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId  String
+  isInternalNote Boolean @default(false)
+  body      String
+  createdAt DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  title     String
+  body      String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+}
+
+// ---------------------------------------------------------------------------
+// Credits & Financial Ledger
+// ---------------------------------------------------------------------------
+
+model CustomerCredit {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  amountCents Int      // positive = credit issued, negative = credit consumed
+  reason      String
+  issuedByAdminId String?
+  createdAt   DateTime @default(now())
+}
+
+model LedgerEntry {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  debitCents  Int      @default(0)
+  creditCents Int      @default(0)
+  source      String   // "order", "refund", "payout", "credit"
+  reference   String   // related order/payment id
+  description String
+  createdAt   DateTime @default(now())
+}
+
+// ---------------------------------------------------------------------------
+// Providers & Settings
+// ---------------------------------------------------------------------------
+
+model ProviderCredential {
+  id           String   @id @default(cuid())
+  provider     String   @unique // "namesilo", "paypal", "smtp", "storage", ...
+  isConfigured Boolean  @default(false)
+  isEnabled    Boolean  @default(false)
+  lastTestedAt DateTime?
+  lastTestOk   Boolean?
+  lastTestMessage String?
+  // Actual secrets live in environment variables, never here.
+  // This table only tracks configuration/health status for the admin UI.
+  metadata     Json?
+  updatedAt    DateTime @updatedAt
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Audit Log
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id])
+  action     String
+  resource   String
+  resourceId String?
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([resource, resourceId])
+}
