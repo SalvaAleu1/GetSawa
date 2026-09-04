@@ -32,13 +32,10 @@ export async function POST(req: NextRequest) {
 
     const idempotencyKey = crypto.randomUUID();
 
-    // Domain transfer items carry an EPP/auth code that must survive the
-    // gap between now and PayPal capture — encrypt it and create the
-    // DomainTransfer row up front so the OrderItem can reference it. This
-    // never touches the database in plaintext (see lib/crypto.ts).
-    const transferRecords = new Map<number, string>(); // item index -> DomainTransfer.id
+    const transferRecords = new Map<number, string>();
     for (let i = 0; i < priced.items.length; i++) {
       const item = priced.items[i];
+      if (!item) continue;
       if (item.kind === "DOMAIN_TRANSFER" && item.authCode && item.domain) {
         const transfer = await prisma.domainTransfer.create({
           data: {
@@ -52,9 +49,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Create the durable order first — an order must exist before we ever
-    // talk to PayPal, so a failure calling PayPal never loses the record of
-    // what the customer tried to buy.
     let order;
     for (let attempt = 0; attempt < 3; attempt++) {
       const count = await prisma.order.count();
@@ -91,7 +85,7 @@ export async function POST(req: NextRequest) {
         });
         break;
       } catch (e: any) {
-        if (e.code === "P2002" && attempt < 2) continue; // orderNumber collision — retry
+        if (e.code === "P2002" && attempt < 2) continue;
         throw e;
       }
     }
