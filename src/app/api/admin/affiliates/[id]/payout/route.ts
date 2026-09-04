@@ -6,11 +6,12 @@ import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
 
-export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const admin = await requireAdmin(["SUPER_ADMIN", "ADMIN", "FINANCE"]);
+    const { id } = await params;
     const affiliate = await prisma.affiliate.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { user: true, commissions: { where: { status: "APPROVED" } } },
     });
     if (!affiliate) return jsonError("Affiliate not found.", 404);
