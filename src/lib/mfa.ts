@@ -12,11 +12,11 @@ function randomBase32(bytes = 20): string {
     value = (value << 8) | byte;
     bits += 8;
     while (bits >= 5) {
-      output += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
+      output += BASE32_ALPHABET[(value >>> (bits - 5)) & 31] ?? "";
       bits -= 5;
     }
   }
-  if (bits > 0) output += BASE32_ALPHABET[(value << (5 - bits)) & 31];
+  if (bits > 0) output += BASE32_ALPHABET[(value << (5 - bits)) & 31] ?? "";
   return output;
 }
 
@@ -43,11 +43,20 @@ function hotp(secret: string, counter: number): string {
   const data = Buffer.alloc(8);
   data.writeBigUInt64BE(BigInt(counter));
   const digest = crypto.createHmac("sha1", key).update(data).digest();
-  const offset = digest[digest.length - 1] & 0x0f;
-  const code = ((digest[offset] & 0x7f) << 24) |
-    ((digest[offset + 1] & 0xff) << 16) |
-    ((digest[offset + 2] & 0xff) << 8) |
-    (digest[offset + 3] & 0xff);
+  const lastByte = digest[digest.length - 1];
+  if (lastByte === undefined) throw new Error("Invalid MFA digest.");
+  const offset = lastByte & 0x0f;
+  const b0 = digest[offset];
+  const b1 = digest[offset + 1];
+  const b2 = digest[offset + 2];
+  const b3 = digest[offset + 3];
+  if (b0 === undefined || b1 === undefined || b2 === undefined || b3 === undefined) {
+    throw new Error("Invalid MFA digest.");
+  }
+  const code = ((b0 & 0x7f) << 24) |
+    ((b1 & 0xff) << 16) |
+    ((b2 & 0xff) << 8) |
+    (b3 & 0xff);
   return String(code % 1_000_000).padStart(6, "0");
 }
 
