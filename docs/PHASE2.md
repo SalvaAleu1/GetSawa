@@ -1,31 +1,32 @@
-# GetSawa — Phase 2
+# GetSawa Phase 2 — Production Readiness
 
-Phase 2 hardening is active. The repository is being expanded without mock provider behavior or client-only business logic.
+Phase 2 hardens the platform for production operation. The codebase must fail closed when external provider credentials are missing, expose operational health, protect privileged accounts with MFA, and automate recurring domain and auction lifecycle work.
 
-## Eight workstreams
+## Completed implementation
 
-1. **Production hosting** — provider contract is present and product activation fails closed until a real vendor API and credentials are configured. No simulated accounts are created.
-2. **Business email** — provider contract is present and activation fails closed until a real mailbox provider is configured. Transactional SMTP remains separate from customer mailbox hosting.
-3. **Provisioning lifecycle** — domain, auction and existing provisioning jobs use server-side state and idempotent operations; provider errors are persisted rather than silently swallowed.
-4. **Customer service dashboards** — domains, orders, websites, support, referrals and developer APIs remain first-class database-backed services.
-5. **Billing and renewal lifecycle** — PayPal payment state, invoices, refunds, commissions and scheduled renewal processing are persisted and reconciled server-side.
-6. **Monitoring and failure handling** — cron jobs, provider configuration, database health and deployment version are exposed through the operational health endpoint without revealing secrets.
-7. **Security and access control** — TOTP MFA enrollment/verification is implemented; login enforces MFA for enrolled users; administrators can require MFA globally; session revocation and audit events are available.
-8. **Integration verification** — MFA behavior has automated tests; quality gates remain the required final build/typecheck/test authority before release.
+- TOTP MFA with encrypted secrets and verification flows.
+- MFA enforcement for privileged/admin authentication when configured.
+- Session revocation and security audit events.
+- Provider abstraction boundaries for domains, hosting, email, payments and AI.
+- Authenticated cron jobs for domain synchronization, renewal reminders and auction closing.
+- Production legal pages for terms, privacy and refunds.
+- Strict TypeScript, unit-test and production-build quality gates.
 
-## Provider policy
+## Provider boundary
 
-GetSawa will not pretend to provision hosting or business email. A real vendor must be selected and its API contract mapped into the existing provider interfaces before those products can become active. This is intentionally a deployment/business dependency rather than fabricated code.
+Hosting and mailbox provisioning are deliberately not faked. A real provider account/API and credentials are required before GetSawa can advertise those services as live. Missing credentials must return an explicit unavailable/configuration state and never a successful provisioning result.
 
-## Operational acceptance
+## Definition of done
 
-A feature is complete only when UI, API route, business logic, database persistence, provider adapter, failure path and tests agree. A button that merely changes local state does not count.
+1. TypeScript passes.
+2. Unit tests pass.
+3. Production build passes.
+4. Production environment variables are configured.
+5. Cron jobs authenticate and execute successfully.
+6. Payment/domain webhooks are idempotent and auditable.
+7. Admin MFA and session revocation are operational.
+8. External hosting/email providers are configured and verified with real end-to-end tests before being marked LIVE.
 
-## Current checkpoint
+## Operational rule
 
-- Phase 1: **closed at implementation level**.
-- Phase 2: **active**.
-- Scheduled auction settlement: **implemented**.
-- TOTP MFA and session revocation: **implemented**.
-- Health/provider readiness reporting: **implemented**.
-- Real hosting/email vendor provisioning: **blocked only by vendor selection/account credentials**, not by a missing mock implementation.
+Never represent an unconfigured third-party provider as a successful service. Provider errors must be classified and surfaced without leaking credentials or sensitive upstream details.
