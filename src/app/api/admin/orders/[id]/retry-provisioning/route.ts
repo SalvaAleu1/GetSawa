@@ -16,21 +16,24 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     const admin = await requireAdmin(["SUPER_ADMIN", "ADMIN", "FINANCE"]);
     const { id } = await params;
 
-    const order = await prisma.order.findUnique({ where: { id }, include: { items: true } });
+    const order = await prisma.order.findUnique({ where: { id }, include: { items: true, payments: true } });
     if (!order) return NextResponse.json({ error: "Order not found." }, { status: 404 });
-    if (!["PAYMENT_CONFIRMED", "PROVISIONING"].includes(order.status)) {
-      return NextResponse.json({ error: "Only paid/provisioning orders can be retried." }, { status: 409 });
+    if (!["PAYMENT_CONFIRMED", "PROVISIONING", "FAILED"].includes(order.status)) {
+      return NextResponse.json({ error: "Only paid fulfilment orders can be retried." }, { status: 409 });
+    }
+    if (!order.payments.some((payment) => payment.status === "PAID")) {
+      return NextResponse.json({ error: "A confirmed payment is required before fulfilment can be retried." }, { status: 409 });
     }
 
-    const retryable = order.items.filter((item) => item.provisioningStatus === "FAILED");
-    if (retryable.length === 0) return NextResponse.json({ error: "There are no failed provisioning items to retry." }, { status: 409 });
+    const retryable = order.items.filter((item) => item.provisioningStatus === "FAILED" || item.provisioningStatus === "PROVISIONING");
+    if (retryable.length === 0) return NextResponse.json({ error: "There are no failed or recoverable provisioning items to retry." }, { status: 409 });
 
     await transitionOrderStatus({
       orderId: order.id,
       to: "PROVISIONING",
       actorId: admin.id,
-      reason: "Administrator requested retry of failed fulfilment items.",
-      metadata: { failedItemIds: retryable.map((item) => item.id) },
+      reason: "Administrator requested fulfilment recovery.",
+      metadata: { retryItemIds: retryable.map((item) => item.id) },
     });
 
     await prisma.order.update({ where: { id: order.id }, data: { provisioningError: null } });
@@ -40,7 +43,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       action: "PROVISIONING_RETRY_REQUESTED",
       resource: "order",
       resourceId: order.id,
-      metadata: { failedItemIds: retryable.map((item) => item.id) },
+      metadata: { retryItemIds: retryable.map((item) => item.id) },
       ipAddress: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim(),
       userAgent: req.headers.get("user-agent") || undefined,
     });
