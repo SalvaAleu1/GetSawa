@@ -15,7 +15,7 @@ export async function POST() {
       action: "payments.reconciliation.run",
       resource: "payment",
       resourceId: "batch",
-      metadata: result,
+      metadata: { ...result },
     });
     return jsonOk(result);
   } catch (error) {
