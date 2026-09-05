@@ -2,66 +2,11 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { getOwnedProjectOrThrow } from "@/lib/websites";
-import { prisma } from "@/lib/prisma";
 import { getAIProvider } from "@/lib/providers/ai/AIProviderFactory";
 import { AIProviderNotConfiguredError } from "@/lib/providers/ai/AIProvider";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { prisma } from "@/lib/prisma";
 import { logAudit } from "@/lib/audit";
-
-const schema = z.object({
-  pages: z.array(z.enum(["home", "about", "services", "pricing", "contact", "faq", "blog", "gallery"])).min(1).max(8).default(["home", "about", "services", "contact"]),
-});
-
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    const user = await requireUser();
-    const project = await getOwnedProjectOrThrow(params.id, user.id);
-
-    const rl = checkRateLimit("ai-generate", user.id, { max: 10, windowMs: 60 * 60_000 });
-    if (!rl.allowed) return jsonError("You've reached the generation limit for now. Please try again later.", 429);
-
-    const { pages } = schema.parse(await req.json().catch(() => ({})));
-
-    const provider = getAIProvider();
-    if (!provider.isConfigured()) {
-      return jsonError(
-        "The AI website builder is not currently available. The AI provider has not been configured yet.",
-        503,
-        { code: "PROVIDER_NOT_CONFIGURED" }
-      );
-    }
-
-    await prisma.websiteProject.update({ where: { id: project.id }, data: { status: "GENERATING" } });
-
-    try {
-      const content = await provider.generateWebsiteContent({
-        businessName: project.name,
-        businessDescription: project.businessDescription || "",
-        category: project.category || undefined,
-        tone: project.tone || undefined,
-        pages,
-      });
-
-      const [updated] = await prisma.$transaction([
-        prisma.websiteProject.update({
-          where: { id: project.id },
-          data: { content: content as any, status: "READY", aiModel: process.env.AI_MODEL || "claude-sonnet-4-5" },
-        }),
-        prisma.websiteVersion.create({ data: { projectId: project.id, content: content as any, note: "AI generated" } }),
-      ]);
-
-      await logAudit({ actorId: user.id, action: "website.ai_generated", resource: "website_project", resourceId: project.id });
-
-      return jsonOk({ project: updated });
-    } catch (err: any) {
-      await prisma.websiteProject.update({ where: { id: project.id }, data: { status: "DRAFT" } });
-      throw err;
-    }
-  } catch (err) {
-    if (err instanceof AIProviderNotConfiguredError) {
-      return jsonError(err.message, 503, { code: "PROVIDER_NOT_CONFIGURED" });
-    }
-    return handleError(err);
-  }
-}
+const schema = z.object({ pages: z.array(z.enum(["home", "about", "services", "pricing", "contact", "faq", "blog", "gallery"])).min(1).max(8).default(["home", "about", "services", "contact"]) }); type RouteContext = { params: Promise<{ id: string }> };
+export async function POST(req: NextRequest, { params }: RouteContext) { try { const user = await requireUser(); const { id } = await params; const project = await getOwnedProjectOrThrow(id, user.id); const rl = checkRateLimit("ai-generate", user.id, { max: 10, windowMs: 60 * 60_000 }); if (!rl.allowed) return jsonError("You've reached the generation limit for now. Please try again later.", 429); const { pages } = schema.parse(await req.json().catch(() => ({}))); const provider = getAIProvider(); if (!provider.isConfigured()) return jsonError("The AI website builder is not currently available. The AI provider has not been configured yet.", 503, { code: "PROVIDER_NOT_CONFIGURED" }); await prisma.websiteProject.update({ where: { id: project.id }, data: { status: "GENERATING" } }); try { const content = await provider.generateWebsiteContent({ businessName: project.name, businessDescription: project.businessDescription || "", category: project.category || undefined, tone: project.tone || undefined, pages }); const [updated] = await prisma.$transaction([prisma.websiteProject.update({ where: { id: project.id }, data: { content: content as any, status: "READY", aiModel: process.env.AI_MODEL || "claude-sonnet-4-5" } }), prisma.websiteVersion.create({ data: { projectId: project.id, content: content as any, note: "AI generated" } })]); await logAudit({ actorId: user.id, action: "website.ai_generated", resource: "website_project", resourceId: project.id }); return jsonOk({ project: updated }); } catch (err) { await prisma.websiteProject.update({ where: { id: project.id }, data: { status: "DRAFT" } }); throw err; } } catch (err) { if (err instanceof AIProviderNotConfiguredError) return jsonError(err.message, 503, { code: "PROVIDER_NOT_CONFIGURED" }); return handleError(err); } }
