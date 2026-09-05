@@ -30,15 +30,12 @@ export async function POST(req: NextRequest) {
     try {
       row = await prisma.webhookEvent.create({ data: { provider: "paypal", eventId, eventType, payloadHash, processingStatus: "RECEIVED" } });
     } catch (error: unknown) {
-      if (!(error as { code?: string })?.code || (error as { code?: string }).code !== "P2002") throw error;
+      if ((error as { code?: string })?.code !== "P2002") throw error;
       row = await prisma.webhookEvent.findUnique({ where: { eventId } });
       if (!row || row.processingStatus === "PROCESSED" || row.processingStatus === "PROCESSING") return jsonOk({ received: true, duplicate: true });
     }
   } else {
-    const reset = await prisma.webhookEvent.updateMany({
-      where: { id: row.id, processingStatus: "FAILED" },
-      data: { eventType, payloadHash, processingStatus: "RECEIVED", errorMessage: null },
-    });
+    const reset = await prisma.webhookEvent.updateMany({ where: { id: row.id, processingStatus: "FAILED" }, data: { eventType, payloadHash, processingStatus: "RECEIVED", errorMessage: null } });
     if (reset.count === 0) return jsonOk({ received: true, duplicate: true });
   }
 
@@ -90,15 +87,14 @@ async function handleVerifiedEvent(event: Record<string, unknown>) {
       if (payment.status !== "PAID") {
         const amount = Number((resource.amount as Record<string, unknown> | undefined)?.value);
         const capturedCents = Number.isFinite(amount) ? Math.round(amount * 100) : -1;
-        const capturedCurrency = typeof (resource.amount as Record<string, unknown> | undefined)?.currency_code === "string"
-          ? String((resource.amount as Record<string, unknown>).currency_code).toUpperCase()
-          : "";
+        const amountObject = resource.amount as Record<string, unknown> | undefined;
+        const capturedCurrency = typeof amountObject?.currency_code === "string" ? String(amountObject.currency_code).toUpperCase() : "";
         if (capturedCents !== payment.amountCents || capturedCurrency !== payment.currency.toUpperCase()) {
           await prisma.payment.update({ where: { id: payment.id }, data: { status: "DISPUTED", failureReason: "Webhook capture amount or currency did not match the recorded payment." } });
           return;
         }
         await prisma.payment.updateMany({ where: { id: payment.id, status: { not: "PAID" } }, data: { status: "PAID", providerCaptureId: captureId || payment.providerCaptureId } });
-        await transitionOrderStatus({ orderId: payment.orderId, to: "PROVISIONING", reason: "PayPal capture verified and payment confirmed.", metadata: { provider: "paypal", captureId } });
+        await transitionOrderStatus({ orderId: payment.orderId, to: "PAYMENT_CONFIRMED", reason: "PayPal capture verified and payment confirmed.", metadata: { provider: "paypal", captureId } });
       }
 
       const order = await prisma.order.findUnique({ where: { id: payment.orderId }, include: { user: true } });
