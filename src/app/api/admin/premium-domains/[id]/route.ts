@@ -12,11 +12,14 @@ const schema = z.object({
   status: z.enum(["LISTED", "DELISTED"]).optional(),
 });
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+type RouteContext = { params: Promise<{ id: string }> };
+
+export async function PUT(req: NextRequest, { params }: RouteContext) {
   try {
     const admin = await requireAdmin(["SUPER_ADMIN", "ADMIN", "PRODUCT_MANAGER"]);
+    const { id } = await params;
     const input = schema.parse(await req.json());
-    const listing = await prisma.premiumDomain.update({ where: { id: params.id }, data: input });
+    const listing = await prisma.premiumDomain.update({ where: { id }, data: input });
     await logAudit({ actorId: admin.id, action: "premium_domain.updated", resource: "premium_domain", resourceId: listing.id });
     return jsonOk({ listing });
   } catch (err) {
