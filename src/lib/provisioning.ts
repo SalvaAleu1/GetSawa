@@ -5,6 +5,7 @@ import { decryptSecret } from "@/lib/crypto";
 import { formatCents } from "@/lib/money";
 import { transitionOrderStatus } from "@/lib/order-lifecycle";
 import { notifyOrderLifecycle } from "@/lib/order-notifications";
+import { logAudit } from "@/lib/audit";
 
 const STALE_CLAIM_MS = 15 * 60 * 1000;
 
@@ -21,11 +22,7 @@ export async function provisionOrder(orderId: string): Promise<void> {
   if (!order) throw new Error("Order not found during provisioning.");
   if (!["PAYMENT_CONFIRMED", "PROVISIONING"].includes(order.status)) return;
 
-  await transitionOrderStatus({
-    orderId: order.id,
-    to: "PROVISIONING",
-    reason: "Paid order entered fulfilment workflow.",
-  });
+  await transitionOrderStatus({ orderId: order.id, to: "PROVISIONING", reason: "Paid order entered fulfilment workflow." });
 
   await notifyOrderLifecycle({
     orderId: order.id,
@@ -65,14 +62,12 @@ export async function provisionOrder(orderId: string): Promise<void> {
         },
       });
       try {
-        await prisma.auditLog.create({
-          data: {
-            actorId: null,
-            action: "ORDER_ITEM_PROVISIONING_FAILED",
-            resource: "order_item",
-            resourceId: item.id,
-            metadata: { orderId: order.id, reason: internalMessage.slice(0, 500) } as object,
-          },
+        await logAudit({
+          actorId: null,
+          action: "ORDER_ITEM_PROVISIONING_FAILED",
+          resource: "order_item",
+          resourceId: item.id,
+          metadata: { orderId: order.id, reason: internalMessage.slice(0, 500) },
         });
       } catch {
         // Never replace the durable FAILED state with an audit failure.
