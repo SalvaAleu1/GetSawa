@@ -8,6 +8,7 @@ const NAV = [
   { href: "/admin/customers", label: "Customers" },
   { href: "/admin/orders", label: "Orders" },
   { href: "/admin/billing", label: "Billing & Renewals" },
+  { href: "/admin/payments", label: "Payments & Refunds" },
   { href: "/admin/tlds", label: "TLD Manager" },
   { href: "/admin/products", label: "Products" },
   { href: "/admin/promotions", label: "Promotions" },
