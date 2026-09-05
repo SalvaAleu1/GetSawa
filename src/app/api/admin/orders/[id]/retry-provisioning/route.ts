@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { provisionOrder } from "@/lib/provisioning";
 import { logAudit } from "@/lib/audit";
 import { handleError } from "@/lib/api";
+import { transitionOrderStatus } from "@/lib/order-lifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,25 +16,24 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     const admin = await requireAdmin(["SUPER_ADMIN", "ADMIN", "FINANCE"]);
     const { id } = await params;
 
-    const order = await prisma.order.findUnique({
-      where: { id },
-      include: { items: true },
-    });
-
+    const order = await prisma.order.findUnique({ where: { id }, include: { items: true } });
     if (!order) return NextResponse.json({ error: "Order not found." }, { status: 404 });
     if (!["PAYMENT_CONFIRMED", "PROVISIONING"].includes(order.status)) {
       return NextResponse.json({ error: "Only paid/provisioning orders can be retried." }, { status: 409 });
     }
 
     const retryable = order.items.filter((item) => item.provisioningStatus === "FAILED");
-    if (retryable.length === 0) {
-      return NextResponse.json({ error: "There are no failed provisioning items to retry." }, { status: 409 });
-    }
+    if (retryable.length === 0) return NextResponse.json({ error: "There are no failed provisioning items to retry." }, { status: 409 });
 
-    await prisma.order.update({
-      where: { id: order.id },
-      data: { status: "PROVISIONING", provisioningError: null },
+    await transitionOrderStatus({
+      orderId: order.id,
+      to: "PROVISIONING",
+      actorId: admin.id,
+      reason: "Administrator requested retry of failed fulfilment items.",
+      metadata: { failedItemIds: retryable.map((item) => item.id) },
     });
+
+    await prisma.order.update({ where: { id: order.id }, data: { provisioningError: null } });
 
     await logAudit({
       actorId: admin.id,
@@ -47,11 +47,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
     await provisionOrder(order.id);
 
-    const refreshed = await prisma.order.findUnique({
-      where: { id: order.id },
-      include: { items: true },
-    });
-
+    const refreshed = await prisma.order.findUnique({ where: { id: order.id }, include: { items: true } });
     return NextResponse.json({ ok: true, order: refreshed });
   } catch (error) {
     return handleError(error);
