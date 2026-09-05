@@ -9,26 +9,18 @@ import { generateInvoiceNumber } from "@/lib/pricing";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
 import { sendEmail, emailTemplates } from "@/lib/email";
+import { markRenewalPaid, markRenewalOrderPaymentFailed } from "@/lib/billing";
 
 const schema = z.object({ orderId: z.string().min(1) });
 
 function captureDetails(payload: any) {
   const node = payload?.purchase_units?.[0]?.payments?.captures?.[0];
   const amount = Number(node?.amount?.value);
-  return {
-    node,
-    completed: payload?.status === "COMPLETED" && node?.status === "COMPLETED",
-    cents: Number.isFinite(amount) ? Math.round(amount * 100) : -1,
-    currency: typeof node?.amount?.currency_code === "string" ? node.amount.currency_code.toUpperCase() : "",
-  };
+  return { node, completed: payload?.status === "COMPLETED" && node?.status === "COMPLETED", cents: Number.isFinite(amount) ? Math.round(amount * 100) : -1, currency: typeof node?.amount?.currency_code === "string" ? node.amount.currency_code.toUpperCase() : "" };
 }
 
 async function reconcilePayPalOrder(providerOrderId: string) {
-  try {
-    return await PayPalProvider.getOrder(providerOrderId);
-  } catch {
-    return null;
-  }
+  try { return await PayPalProvider.getOrder(providerOrderId); } catch { return null; }
 }
 
 export async function POST(req: NextRequest) {
@@ -43,19 +35,15 @@ export async function POST(req: NextRequest) {
     if (!payment?.providerOrderId) return jsonError("No pending payment found for this order.", 400);
 
     let capture: any = null;
-    try {
-      capture = await PayPalProvider.captureOrder(payment.providerOrderId, `capture-${order.id}`);
-    } catch {
-      // A network timeout can happen after PayPal has captured the payment.
-      // Reconcile before telling the customer that they were not charged.
-      capture = await reconcilePayPalOrder(payment.providerOrderId);
-    }
+    try { capture = await PayPalProvider.captureOrder(payment.providerOrderId, `capture-${order.id}`); }
+    catch { capture = await reconcilePayPalOrder(payment.providerOrderId); }
 
     const details = captureDetails(capture);
     if (!details.completed) {
       const status = typeof capture?.status === "string" ? capture.status : "UNKNOWN";
       if (["VOIDED", "CANCELLED", "DENIED"].includes(status)) {
         await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED", failureReason: `PayPal status: ${status}` } });
+        await markRenewalOrderPaymentFailed(order.id, `PayPal status: ${status}`).catch(() => undefined);
         try { await sendEmail({ to: order.user.email, ...emailTemplates.paymentFailed(order.orderNumber) }); } catch { /* notification is independent */ }
         return jsonError("Payment was not completed. Your order has not been charged.", 402);
       }
@@ -71,33 +59,13 @@ export async function POST(req: NextRequest) {
     if (!captureId) return jsonError("PayPal returned a completed capture without a capture ID.", 502);
 
     const committed = await prisma.$transaction(async (tx) => {
-      const claimed = await tx.payment.updateMany({
-        where: { id: payment.id, status: "PENDING" },
-        data: { status: "PAID", providerCaptureId: captureId, failureReason: null },
-      });
+      const claimed = await tx.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "PAID", providerCaptureId: captureId, failureReason: null } });
       if (claimed.count !== 1) return false;
-
       await tx.order.updateMany({ where: { id: order.id, status: "PENDING_PAYMENT" }, data: { status: "PAYMENT_CONFIRMED" } });
       const existingInvoice = await tx.invoice.findUnique({ where: { orderId: order.id } });
       if (!existingInvoice) {
         const invoiceCount = await tx.invoice.count();
-        await tx.invoice.create({
-          data: {
-            invoiceNumber: generateInvoiceNumber(invoiceCount + 1),
-            orderId: order.id,
-            userId: order.userId,
-            subtotalCents: order.subtotalCents,
-            discountCents: order.discountCents,
-            taxCents: order.taxCents,
-            totalCents: order.totalCents,
-            currency: order.currency,
-            status: "PAID",
-            paidAt: new Date(),
-            billingName: `${order.user.firstName} ${order.user.lastName}`,
-            billingEmail: order.user.email,
-            billingCountry: order.user.country ?? undefined,
-          },
-        });
+        await tx.invoice.create({ data: { invoiceNumber: generateInvoiceNumber(invoiceCount + 1), orderId: order.id, userId: order.userId, subtotalCents: order.subtotalCents, discountCents: order.discountCents, taxCents: order.taxCents, totalCents: order.totalCents, currency: order.currency, status: "PAID", paidAt: new Date(), billingName: `${order.user.firstName} ${order.user.lastName}`, billingEmail: order.user.email, billingCountry: order.user.country ?? undefined } });
       }
       await tx.ledgerEntry.create({ data: { userId: order.userId, creditCents: order.totalCents, source: "order", reference: order.id, description: `Payment received for order ${order.orderNumber}` } });
       return true;
@@ -110,8 +78,7 @@ export async function POST(req: NextRequest) {
 
     await provisionOrder(order.id);
     const finalOrder = await prisma.order.findUnique({ where: { id: order.id } });
+    if (finalOrder?.status === "ACTIVE") await markRenewalPaid(order.id);
     return jsonOk({ orderId: order.id, status: finalOrder?.status, orderNumber: order.orderNumber });
-  } catch (err) {
-    return handleError(err);
-  }
+  } catch (err) { return handleError(err); }
 }
