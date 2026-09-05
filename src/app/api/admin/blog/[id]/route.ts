@@ -17,14 +17,17 @@ const updateSchema = z.object({
   status: z.enum(["DRAFT", "PUBLISHED"]).optional(),
 });
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+type RouteContext = { params: Promise<{ id: string }> };
+
+export async function PUT(req: NextRequest, { params }: RouteContext) {
   try {
     const admin = await requireAdmin(["SUPER_ADMIN", "ADMIN", "CONTENT_MANAGER"]);
+    const { id } = await params;
     const input = updateSchema.parse(await req.json());
-    const existing = await prisma.blogPost.findUnique({ where: { id: params.id } });
+    const existing = await prisma.blogPost.findUnique({ where: { id } });
 
     const post = await prisma.blogPost.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...input,
         publishedAt: input.status === "PUBLISHED" && existing?.status !== "PUBLISHED" ? new Date() : undefined,
@@ -38,11 +41,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_req: NextRequest, { params }: RouteContext) {
   try {
     const admin = await requireAdmin(["SUPER_ADMIN", "ADMIN", "CONTENT_MANAGER"]);
-    await prisma.blogPost.delete({ where: { id: params.id } });
-    await logAudit({ actorId: admin.id, action: "blog.deleted", resource: "blog_post", resourceId: params.id });
+    const { id } = await params;
+    await prisma.blogPost.delete({ where: { id } });
+    await logAudit({ actorId: admin.id, action: "blog.deleted", resource: "blog_post", resourceId: id });
     return jsonOk({ success: true });
   } catch (err) {
     return handleError(err);
