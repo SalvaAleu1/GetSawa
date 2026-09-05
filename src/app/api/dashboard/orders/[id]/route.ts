@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { jsonOk, handleError } from "@/lib/api";
+import { jsonError, jsonOk, handleError } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +31,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
       },
     });
 
-    if (!order) return jsonOk({ error: "Order not found." }, { status: 404 });
-
+    if (!order) return jsonError("Order not found.", 404);
     return jsonOk({ order });
   } catch (err) {
     return handleError(err);
