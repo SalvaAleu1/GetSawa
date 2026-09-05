@@ -1,11 +1,12 @@
 import { NextRequest } from "next/server";
 import crypto from "crypto";
-import { prisma } from "@/lib/prisma";
 import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
 import { jsonError, jsonOk } from "@/lib/api";
 import { provisionOrder } from "@/lib/provisioning";
 import { transitionOrderStatus } from "@/lib/order-lifecycle";
 import { notifyOrderLifecycle } from "@/lib/order-notifications";
+import { prisma } from "@/lib/prisma";
+import { markRenewalPaid, markRenewalOrderPaymentFailed } from "@/lib/billing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,7 +39,6 @@ export async function POST(req: NextRequest) {
     const reset = await prisma.webhookEvent.updateMany({ where: { id: row.id, processingStatus: "FAILED" }, data: { eventType, payloadHash, processingStatus: "RECEIVED", errorMessage: null } });
     if (reset.count === 0) return jsonOk({ received: true, duplicate: true });
   }
-
   if (!row) return jsonError("Webhook event could not be recorded.", 500);
 
   try {
@@ -51,15 +51,12 @@ export async function POST(req: NextRequest) {
       webhookId,
       webhookEvent: event,
     });
-
     if (!verified) {
       await prisma.webhookEvent.update({ where: { id: row.id }, data: { processingStatus: "FAILED", errorMessage: "Signature verification failed" } });
       return jsonError("Webhook signature verification failed.", 400);
     }
-
     const claim = await prisma.webhookEvent.updateMany({ where: { id: row.id, processingStatus: "RECEIVED" }, data: { processingStatus: "PROCESSING" } });
     if (claim.count !== 1) return jsonOk({ received: true, duplicate: true });
-
     await handleVerifiedEvent(event as Record<string, unknown>);
     await prisma.webhookEvent.update({ where: { id: row.id }, data: { processingStatus: "PROCESSED", processedAt: new Date(), errorMessage: null } });
     return jsonOk({ received: true });
@@ -72,7 +69,6 @@ export async function POST(req: NextRequest) {
 async function handleVerifiedEvent(event: Record<string, unknown>) {
   const type = typeof event.event_type === "string" ? event.event_type : "";
   const resource = (event.resource && typeof event.resource === "object" ? event.resource : {}) as Record<string, unknown>;
-
   switch (type) {
     case "PAYMENT.CAPTURE.COMPLETED": {
       const captureId = typeof resource.id === "string" ? resource.id : undefined;
@@ -100,18 +96,16 @@ async function handleVerifiedEvent(event: Record<string, unknown>) {
       const order = await prisma.order.findUnique({ where: { id: payment.orderId }, include: { user: true } });
       if (order) {
         await notifyOrderLifecycle({
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          userId: order.userId,
-          email: order.user.email,
-          type: "ORDER_PAYMENT_CONFIRMED",
-          title: `Payment confirmed for ${order.orderNumber}`,
+          orderId: order.id, orderNumber: order.orderNumber, userId: order.userId, email: order.user.email,
+          type: "ORDER_PAYMENT_CONFIRMED", title: `Payment confirmed for ${order.orderNumber}`,
           body: `Your payment for order ${order.orderNumber} has been confirmed. Fulfilment is starting now.`,
           emailSubject: `Payment confirmed — ${order.orderNumber}`,
           emailHtml: `<p>Your payment for order <strong>${escapeHtml(order.orderNumber)}</strong> has been confirmed. Fulfilment is starting now.</p>`,
         });
       }
       await provisionOrder(payment.orderId);
+      const completed = await prisma.order.findUnique({ where: { id: payment.orderId }, select: { status: true } });
+      if (completed?.status === "ACTIVE") await markRenewalPaid(payment.orderId);
       break;
     }
     case "PAYMENT.CAPTURE.DENIED": {
@@ -120,6 +114,7 @@ async function handleVerifiedEvent(event: Record<string, unknown>) {
       const payment = await prisma.payment.findFirst({ where: { providerCaptureId: captureId } });
       if (payment && payment.status !== "PAID") {
         await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED", failureReason: "Denied by PayPal" } });
+        await markRenewalOrderPaymentFailed(payment.orderId, "PayPal denied the renewal payment.");
         await transitionOrderStatus({ orderId: payment.orderId, to: "FAILED", reason: "PayPal capture was denied.", metadata: { provider: "paypal", captureId } }).catch(() => undefined);
       }
       break;
@@ -136,16 +131,13 @@ async function handleVerifiedEvent(event: Record<string, unknown>) {
     }
     case "CUSTOMER.DISPUTE.CREATED": {
       const disputed = Array.isArray(resource.disputed_transactions) ? resource.disputed_transactions[0] : undefined;
-      const captureId = disputed && typeof disputed === "object" && typeof (disputed as Record<string, unknown>).seller_transaction_id === "string"
-        ? (disputed as Record<string, unknown>).seller_transaction_id as string
-        : undefined;
+      const captureId = disputed && typeof disputed === "object" && typeof (disputed as Record<string, unknown>).seller_transaction_id === "string" ? (disputed as Record<string, unknown>).seller_transaction_id as string : undefined;
       if (!captureId) return;
       const payment = await prisma.payment.findFirst({ where: { providerCaptureId: captureId } });
       if (payment) await prisma.payment.update({ where: { id: payment.id }, data: { status: "DISPUTED" } });
       break;
     }
-    default:
-      return;
+    default: return;
   }
 }
 
