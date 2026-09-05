@@ -30,3 +30,7 @@ Hosting and mailbox provisioning are deliberately not faked. A real provider acc
 ## Operational rule
 
 Never represent an unconfigured third-party provider as a successful service. Provider errors must be classified and surfaced without leaking credentials or sensitive upstream details.
+
+## Phase 2 release checkpoint
+
+Implementation work is complete at the application/provider-boundary level. Release status is determined by the automated quality gate and by configuration of the external production accounts listed in `docs/PRODUCTION-CHECKLIST.md`.
