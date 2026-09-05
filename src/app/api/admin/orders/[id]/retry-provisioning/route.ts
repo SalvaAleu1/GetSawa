@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { provisionOrder } from "@/lib/provisioning";
 import { logAudit } from "@/lib/audit";
+import { handleError } from "@/lib/api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,12 +52,8 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       include: { items: true },
     });
 
-    return NextResponse.json({
-      ok: true,
-      order: refreshed,
-    });
+    return NextResponse.json({ ok: true, order: refreshed });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to retry provisioning.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleError(error);
   }
 }
