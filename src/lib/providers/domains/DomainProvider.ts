@@ -119,6 +119,13 @@ export interface DomainProvider {
   readonly name: string;
   isConfigured(): boolean;
 
+  /**
+   * True only when the provider integration can obtain an authoritative exact
+   * registry-premium price before GetSawa takes payment. Standard TLD price
+   * lists do not qualify. Premium-capable TLDs fail closed without this.
+   */
+  supportsExactPremiumPricing?(): boolean;
+
   checkAvailability(domains: string[]): Promise<DomainAvailability[]>;
   getPricing(tlds: string[]): Promise<DomainPricing[]>;
 
