@@ -15,11 +15,12 @@ const NAV_GROUPS = [
     ],
   },
   {
-    label: "Build",
+    label: "Products",
     items: [
+      { href: "/products", title: "All products", description: "See the GetSawa catalog and current availability." },
       { href: "/dashboard/websites", title: "AI website builder", description: "Generate and manage a website project." },
-      { href: "/products/HOSTING", title: "Web hosting", description: "Explore available hosting products." },
-      { href: "/products/EMAIL", title: "Business email", description: "Professional email products for your domain." },
+      { href: "/products/HOSTING", title: "Web hosting", description: "Explore currently active hosting products." },
+      { href: "/products/EMAIL", title: "Business email", description: "Explore currently active mailbox products." },
     ],
   },
   {

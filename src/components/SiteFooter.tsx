@@ -14,10 +14,10 @@ const GROUPS = [
   {
     title: "Products",
     links: [
+      ["All products", "/products"],
       ["Web hosting", "/products/HOSTING"],
       ["Business email", "/products/EMAIL"],
       ["AI website builder", "/dashboard/websites"],
-      ["My services", "/dashboard/services"],
     ],
   },
   {
