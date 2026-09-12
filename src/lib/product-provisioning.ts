@@ -11,8 +11,6 @@ import { logAudit } from "@/lib/audit";
 export async function provisionCatalogProduct(params: { order: Order & { user: User }; item: OrderItem }) {
   if (!params.item.productId) throw new Error("Catalog order item is missing its product reference.");
 
-  // Renewal orders point back to an existing provider-backed service instance.
-  // They must never execute the new-account provisioning path below.
   const hostingRenewal = await getHostingRenewalServiceForOrder(params.order.id);
   if (hostingRenewal) {
     return fulfillExistingHostingRenewal({
@@ -42,7 +40,10 @@ export async function provisionCatalogProduct(params: { order: Order & { user: U
     SELECT "id","provider_resource_id","status" FROM "product_service_instances" WHERE "order_item_id"=${params.item.id} LIMIT 1
   `;
   if (existing[0]) {
-    await prisma.orderItem.updateMany({ where: { id: params.item.id, provisioningStatus: "PROVISIONING" }, data: { provisioningStatus: "PROVISIONED", provisioningNote: "Provider service reconciled from existing service instance." } });
+    if (["MONTHLY", "YEARLY"].includes(product.billingCycle) && meta.renewalContract === "HOSTING_RENEWAL" && meta.provisioningContract === "HOSTING_ACCOUNT") {
+      await ensureHostingSubscription(existing[0].id);
+    }
+    await markCatalogItemProvisioned(params.item.id, "Provider service reconciled from existing service instance.");
     return existing[0];
   }
 
@@ -70,6 +71,7 @@ export async function provisionCatalogProduct(params: { order: Order & { user: U
     if (["MONTHLY", "YEARLY"].includes(product.billingCycle) && meta.renewalContract === "HOSTING_RENEWAL") {
       await ensureHostingSubscription(service.id);
     }
+    await markCatalogItemProvisioned(params.item.id, `Provisioned with ${provider.name}. Provider reference recorded.`);
     return service;
   }
 
@@ -81,7 +83,9 @@ export async function provisionCatalogProduct(params: { order: Order & { user: U
     const storageMb = Number(meta.providerConfig.storageMb);
     const result = await provider.createMailbox({ domain: validated.domain.name, localPart, customerEmail: params.order.user.email, storageMb, idempotencyKey: params.item.id });
     if (!result.success || !result.providerMailboxId) throw new Error(result.errorMessage || "Email provider did not return a mailbox reference.");
-    return persistServiceInstance({ item: params.item, product, userId: params.order.userId, domainId: validated.domain.id, providerName: provider.name, providerResourceId: result.providerMailboxId, metadata: { address: `${localPart}@${validated.domain.name}`, storageMb } });
+    const service = await persistServiceInstance({ item: params.item, product, userId: params.order.userId, domainId: validated.domain.id, providerName: provider.name, providerResourceId: result.providerMailboxId, metadata: { address: `${localPart}@${validated.domain.name}`, storageMb } });
+    await markCatalogItemProvisioned(params.item.id, `Provisioned with ${provider.name}. Provider reference recorded.`);
+    return service;
   }
 
   throw new Error(`Provisioning contract ${meta.provisioningContract || "none"} is not implemented.`);
@@ -118,23 +122,28 @@ async function fulfillExistingHostingRenewal(params: { orderId: string; itemId: 
     throw new Error(`Hosting service cannot be renewed from ${service.status}.`);
   }
 
-  await prisma.orderItem.updateMany({
-    where: { id: params.itemId, provisioningStatus: "PROVISIONING" },
-    data: { provisioningStatus: "PROVISIONED", provisioningNote: "Existing WHM hosting service renewed; no duplicate account was created." },
-  });
+  await markCatalogItemProvisioned(params.itemId, "Existing WHM hosting service renewed; no duplicate account was created.");
   return { id: service.id, providerResourceId: service.provider_resource_id, status: "ACTIVE" };
+}
+
+async function markCatalogItemProvisioned(itemId: string, note: string) {
+  const updated = await prisma.orderItem.updateMany({
+    where: { id: itemId, provisioningStatus: "PROVISIONING" },
+    data: { provisioningStatus: "PROVISIONED", provisioningNote: note },
+  });
+  if (updated.count !== 1) {
+    const item = await prisma.orderItem.findUnique({ where: { id: itemId }, select: { provisioningStatus: true } });
+    if (item?.provisioningStatus !== "PROVISIONED") throw new Error("Catalog fulfilment state changed before completion.");
+  }
 }
 
 async function persistServiceInstance(params: { item: OrderItem; product: Product; userId: string; domainId: string | null; providerName: string; providerResourceId: string; metadata: Record<string, unknown> }) {
   const serviceId = crypto.randomUUID();
-  await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`
-      INSERT INTO "product_service_instances" ("id","order_item_id","user_id","product_id","domain_id","provider_name","provider_resource_id","status","metadata")
-      VALUES (${serviceId},${params.item.id},${params.userId},${params.product.id},${params.domainId},${params.providerName},${params.providerResourceId},'ACTIVE',${JSON.stringify(params.metadata)}::jsonb)
-      ON CONFLICT ("order_item_id") DO NOTHING
-    `;
-    await tx.orderItem.updateMany({ where: { id: params.item.id, provisioningStatus: "PROVISIONING" }, data: { provisioningStatus: "PROVISIONED", provisioningNote: `Provisioned with ${params.providerName}. Provider reference recorded.` } });
-  });
+  await prisma.$executeRaw`
+    INSERT INTO "product_service_instances" ("id","order_item_id","user_id","product_id","domain_id","provider_name","provider_resource_id","status","metadata")
+    VALUES (${serviceId},${params.item.id},${params.userId},${params.product.id},${params.domainId},${params.providerName},${params.providerResourceId},'ACTIVE',${JSON.stringify(params.metadata)}::jsonb)
+    ON CONFLICT ("order_item_id") DO NOTHING
+  `;
   const rows = await prisma.$queryRaw<Array<{ id: string; provider_resource_id: string; status: string }>>`
     SELECT "id","provider_resource_id","status" FROM "product_service_instances" WHERE "order_item_id"=${params.item.id} LIMIT 1
   `;
