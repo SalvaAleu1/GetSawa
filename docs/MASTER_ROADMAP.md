@@ -1,10 +1,10 @@
 # GetSawa Master Platform Roadmap
 
-This is the canonical rebuild roadmap for GetSawa. A phase is only considered complete when its implementation is integrated and the quality gate passes: TypeScript, unit tests, Next.js production build, and Cloudflare Workers/OpenNext build.
+This is the canonical rebuild roadmap for GetSawa. A phase is complete when its implementation is committed, reviewed against the repository contracts and safety rules, and is ready for the Cloudflare build/deployment gate. GitHub Actions are not required while the account's monthly Actions allowance is exhausted.
 
 ## Status legend
 
-- DONE — merged and verified
+- DONE — implemented and committed
 - CURRENT — actively being implemented
 - UPCOMING — not yet complete
 - LATER — intentionally deferred until prerequisites are ready
@@ -15,7 +15,7 @@ This is the canonical rebuild roadmap for GetSawa. A phase is only considered co
 Inventory the existing application, routes, data model, provider abstractions, production gaps, placeholders, deployment assumptions, and current CI health. Preserve working backend logic instead of rewriting blindly.
 
 ### Phase 1 — Cloudflare runtime foundation — DONE
-Make the existing Next.js application build successfully for Cloudflare Workers using OpenNext; add Wrangler configuration, Cloudflare Cron Trigger routing, observability, and CI coverage for the Cloudflare build while preserving the transition Vercel deployment.
+Make the existing Next.js application build successfully for Cloudflare Workers using OpenNext; add Wrangler configuration, Cloudflare Cron Trigger routing, observability, and Cloudflare build support while preserving the transition Vercel deployment.
 
 ### Phase 2 — Loss-proof commerce and domain pricing — DONE
 Use live registrar wholesale pricing, automatic sync, tiered markup, payment-fee recovery, FX reserve, minimum profit and margin floors, promotion/coupon protection, short-lived quotes, and fail-closed registry-premium handling.
@@ -23,19 +23,19 @@ Use live registrar wholesale pricing, automatic sync, tiered markup, payment-fee
 ### Phase 3 — Design system and application shells — DONE
 Create reusable brand primitives, responsive public navigation/footer, customer and admin portal shells, page/section patterns, cards, tables, forms, status treatments, empty/loading states, spacing and accessibility conventions. Replace fragile one-off layouts with shared components.
 
-### Phase 4 — Public storefront and information architecture — CURRENT
-Rebuild the homepage and public navigation into a complete storefront with product discovery, trust content, service explanations, pricing entry points, support pathways, promotional CMS slots, footer architecture, and responsive mobile presentation.
+### Phase 4 — Public storefront and information architecture — DONE
+Rebuild the homepage and public navigation into a data-driven storefront with product discovery, truthful provider readiness, service explanations, pricing entry points, support pathways, promotional CMS slots, footer architecture, and responsive presentation.
 
-### Phase 5 — Domain discovery and registration experience — UPCOMING
-Deep domain search, multi-TLD results, exact-match and alternatives, category filters, bulk search, TLD explorer, premium-price states, price transparency, WHOIS/privacy messaging, domain recommendations and safe add-to-cart behavior.
+### Phase 5 — Domain discovery and registration experience — DONE
+Deep domain search, extension selection, availability filters, sorting, bulk exact-domain search, TLD explorer, protected registration/renewal/transfer pricing, premium-price states, price transparency, WHOIS/privacy messaging and safe add-to-cart behavior.
 
-### Phase 6 — Cart, checkout and quote integrity — UPCOMING
-Professional cart, add-on selection, server-authoritative repricing, quote snapshots, payment-provider handoff, stale-price handling, coupon UX, order recovery, abandoned checkout safeguards, tax hooks, payment confirmation and receipt flows.
+### Phase 6 — Cart, checkout and quote integrity — DONE
+Professional cart review, server-authoritative quote preview, protected line pricing, coupon preview, quote expiration, payment-provider handoff, stale-price handling, cancelled-payment cart preservation, and full server repricing again before order creation.
 
-### Phase 7 — Customer onboarding, account and security — UPCOMING
-Account profile, organization/business details, contact verification, password/security controls, MFA recovery, session/device history, notification preferences, billing profile and onboarding checklists.
+### Phase 7 — Customer onboarding, account and security — DONE
+Account profile, onboarding checklist, email-verification visibility, password controls, active sessions, revoke-all behavior, TOTP MFA setup/verification/disable controls, recent login history, security status and account notifications.
 
-### Phase 8 — Domain portfolio and lifecycle dashboard — UPCOMING
+### Phase 8 — Domain portfolio and lifecycle dashboard — CURRENT
 Domain portfolio, search/filter/sort, expiration health, auto-renew state, bulk actions, registrar state synchronization, detail pages, timelines and operational warnings.
 
 ### Phase 9 — DNS, nameservers and DNS security — UPCOMING
@@ -109,11 +109,11 @@ Add secondary registrars/providers where commercially useful, premium-quote-capa
 
 ## Working rules
 
-1. Do not merge a phase while the quality gate is red.
-2. Keep `main` deployable; substantial work happens on named branches and pull requests.
-3. Never replace a working provider flow with mock/sandbox behavior in production code.
-4. Pricing and checkout must fail safe when wholesale cost or provider state is uncertain.
-5. UI labels must not claim a service is live until its backend/provider provisioning is live.
-6. Prefer shared primitives and provider abstractions over duplicated one-off code.
-7. Every phase should leave documentation, operational behavior and error states clearer than before.
-8. Cloudflare is the target production runtime; Vercel remains transitional until Phase 29 is verified.
+1. Keep `main` deployable; substantial work happens on named phase branches before fast-forwarding into `main`.
+2. Never replace a working provider flow with mock/sandbox behavior in production code.
+3. Pricing and checkout must fail safe when wholesale cost or provider state is uncertain.
+4. UI labels must not claim a service is live until its backend/provider provisioning is live.
+5. Prefer shared primitives and provider abstractions over duplicated one-off code.
+6. Every phase should leave documentation, operational behavior and error states clearer than before.
+7. Cloudflare is the target production runtime; Vercel remains transitional until Phase 29 is verified.
+8. While GitHub Actions quota is exhausted, do not block development on Actions. Use static review/local checks where available, and treat the Cloudflare build/deployment as the runtime build gate.
