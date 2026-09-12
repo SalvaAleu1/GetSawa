@@ -15,7 +15,7 @@ type CreditApplicationRow = {
   expires_at: Date;
 };
 
-async function reservedCreditCents(tx: Prisma.TransactionClient | typeof prisma, userId: string): Promise<number> {
+async function reservedCreditCentsTx(tx: Prisma.TransactionClient, userId: string): Promise<number> {
   const rows = await tx.$queryRaw<Array<{ reserved_cents: bigint | number }>>`
     SELECT COALESCE(SUM("amount_cents"),0) AS "reserved_cents"
     FROM "order_credit_applications"
@@ -30,7 +30,16 @@ export async function getCustomerCreditBalance(userId: string): Promise<number> 
 }
 
 export async function getAvailableCustomerCredit(userId: string): Promise<number> {
-  const [balance, reserved] = await Promise.all([getCustomerCreditBalance(userId), reservedCreditCents(prisma, userId)]);
+  const [aggregate, rows] = await Promise.all([
+    prisma.customerCredit.aggregate({ where: { userId }, _sum: { amountCents: true } }),
+    prisma.$queryRaw<Array<{ reserved_cents: bigint | number }>>`
+      SELECT COALESCE(SUM("amount_cents"),0) AS "reserved_cents"
+      FROM "order_credit_applications"
+      WHERE "user_id"=${userId} AND "status"='RESERVED' AND "expires_at">CURRENT_TIMESTAMP
+    `,
+  ]);
+  const balance = aggregate._sum.amountCents ?? 0;
+  const reserved = Number(rows[0]?.reserved_cents ?? 0);
   return Math.max(0, balance - reserved);
 }
 
@@ -51,7 +60,7 @@ export async function reserveOrderCreditTx(
 
   const aggregate = await tx.customerCredit.aggregate({ where: { userId: params.userId }, _sum: { amountCents: true } });
   const balance = aggregate._sum.amountCents ?? 0;
-  const reserved = await reservedCreditCents(tx, params.userId);
+  const reserved = await reservedCreditCentsTx(tx, params.userId);
   const available = Math.max(0, balance - reserved);
   const amount = Math.min(available, params.maximumCents);
   if (amount <= 0) return 0;
@@ -177,7 +186,7 @@ export async function adjustCustomerCredit(params: {
     if (!users[0]) throw new Error("Customer not found.");
     const aggregate = await tx.customerCredit.aggregate({ where: { userId: params.userId }, _sum: { amountCents: true } });
     const currentBalance = aggregate._sum.amountCents ?? 0;
-    const reserved = await reservedCreditCents(tx, params.userId);
+    const reserved = await reservedCreditCentsTx(tx, params.userId);
     const nextBalance = currentBalance + params.amountCents;
     if (nextBalance < reserved) throw new Error("This adjustment would consume credit already reserved for a pending checkout.");
 
