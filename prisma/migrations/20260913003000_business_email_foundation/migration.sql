@@ -11,6 +11,12 @@ ALTER TABLE "product_service_instances"
   ADD CONSTRAINT "product_service_status_check"
   CHECK ("status" IN ('ACTIVE','SUSPENDED','SUSPENSION_PENDING','TERMINATED','PROVIDER_ERROR'));
 
+-- A provider resource may only belong to one GetSawa service. This prevents a
+-- retry or duplicate checkout from selling the same external mailbox/account
+-- twice while still allowing identical identifiers at different providers.
+CREATE UNIQUE INDEX IF NOT EXISTS "product_service_provider_resource_key"
+  ON "product_service_instances" ("provider_name", "provider_resource_id");
+
 CREATE TABLE IF NOT EXISTS "email_domain_services" (
   "id" TEXT PRIMARY KEY,
   "user_id" TEXT NOT NULL,
