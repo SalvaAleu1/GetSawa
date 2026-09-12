@@ -2,17 +2,40 @@ import type { CheckoutInput } from "@/lib/checkout";
 import { CheckoutError } from "@/lib/checkout";
 import { prisma } from "@/lib/prisma";
 import { getDomainProvider } from "@/lib/providers/domains/DomainProviderFactory";
+import { getPremiumListingForCheckout } from "@/lib/premium-aftermarket";
 
 type CartItem = CheckoutInput["items"][number];
+type RegistrationItem = Extract<CartItem, { kind: "DOMAIN_REGISTRATION" }>;
 type RenewalItem = Extract<CartItem, { kind: "DOMAIN_RENEWAL" }>;
 type TransferItem = Extract<CartItem, { kind: "DOMAIN_TRANSFER" }>;
 
 export async function validateDomainLifecycleCheckout(input: CheckoutInput, userId: string) {
+  const registrationItems: RegistrationItem[] = [];
   const renewalItems: RenewalItem[] = [];
   const transferItems: TransferItem[] = [];
   for (const item of input.items) {
+    if (item.kind === "DOMAIN_REGISTRATION") registrationItems.push(item);
     if (item.kind === "DOMAIN_RENEWAL") renewalItems.push(item);
     if (item.kind === "DOMAIN_TRANSFER") transferItems.push(item);
+  }
+
+  if (registrationItems.length > 0) {
+    const names = [...new Set(registrationItems.map((item) => item.domain.trim().toLowerCase()))];
+    const premiumListings = await prisma.premiumDomain.findMany({ where: { domainName: { in: names }, status: "LISTED" } });
+    const byName = new Map(premiumListings.map((listing) => [listing.domainName.toLowerCase(), listing]));
+
+    for (const item of registrationItems) {
+      const listing = byName.get(item.domain.trim().toLowerCase());
+      if (!listing) continue;
+      if (item.years !== 1) throw new CheckoutError("Aftermarket premium domains are purchased as a one-time acquisition; renewal is billed separately after ownership transfer.");
+      try {
+        const verified = await getPremiumListingForCheckout(listing.id, userId);
+        if (verified.meta.sellerUserId === userId) throw new CheckoutError("You cannot purchase your own aftermarket domain.");
+      } catch (error) {
+        if (error instanceof CheckoutError) throw error;
+        throw new CheckoutError(error instanceof Error ? error.message : "This premium domain is not currently available for checkout.");
+      }
+    }
   }
 
   if (renewalItems.length > 0) {
