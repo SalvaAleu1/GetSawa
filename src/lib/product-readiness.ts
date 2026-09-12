@@ -72,9 +72,11 @@ export async function getProductReadiness(product: Product, suppliedMeta?: Produ
     } else {
       const policy = await getPricingSafetyPolicy();
       minimumRetailCents = computeSafeRetailPrice(meta.wholesaleCostCents, policy).retailCents;
-      const firstChargeCents = product.retailPriceCents + product.setupFeeCents;
-      pricingReady = firstChargeCents >= minimumRetailCents;
-      if (!pricingReady) reasons.push(`First-charge price is below the protected minimum of ${(minimumRetailCents / 100).toFixed(2)} ${product.currency}.`);
+      // Checkout currently charges the catalog retail line directly. Setup fees
+      // therefore stay off-sale until their charge/persistence lifecycle is wired.
+      pricingReady = product.setupFeeCents === 0 && product.retailPriceCents >= minimumRetailCents;
+      if (product.setupFeeCents > 0) reasons.push("Setup-fee collection is not active for catalog checkout yet.");
+      else if (!pricingReady) reasons.push(`Retail price is below the protected minimum of ${(minimumRetailCents / 100).toFixed(2)} ${product.currency}.`);
     }
 
     const contract = meta.provisioningContract as ProductProvisioningContract | null;
@@ -101,12 +103,13 @@ export async function getProductReadiness(product: Product, suppliedMeta?: Produ
     }
   }
 
-  // Recurring catalog billing is hardened in Phase 14. Until that lifecycle is
-  // active, generic monthly/yearly products remain non-purchasable even when
-  // their service provider is connected. This avoids selling a renewable
-  // service without a real renewal/payment lifecycle.
-  billingReady = product.billingCycle === "ONE_TIME";
-  if (!billingReady) reasons.push("Recurring billing lifecycle is not active for this catalog product yet.");
+  // Phase 14 owns recurring charges, renewals and failed-payment recovery.
+  // Phase 13 therefore only permits one-time catalog products with no renewal
+  // price. This prevents a service being sold with a renewal promise that the
+  // billing engine cannot yet execute.
+  billingReady = product.billingCycle === "ONE_TIME" && product.renewalPriceCents == null && product.setupFeeCents === 0;
+  if (product.billingCycle !== "ONE_TIME") reasons.push("Recurring billing lifecycle is not active for this catalog product yet.");
+  if (product.billingCycle === "ONE_TIME" && product.renewalPriceCents != null) reasons.push("A one-time product cannot advertise a renewal price before the renewal lifecycle is active.");
 
   // An AI provider can be configured for the website generator, but that alone
   // is not a sellable catalog entitlement. Explicitly record that distinction.
