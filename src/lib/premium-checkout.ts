@@ -44,3 +44,43 @@ export async function reservePricedPremiumCart(priced: PricedCart, buyerUserId: 
   }
   return reserved;
 }
+
+/**
+ * Verify that every premium item on an order is still exclusively reserved by
+ * the paying buyer before PayPal capture. This prevents late-return double
+ * sales after a short reservation has expired.
+ */
+export async function assertPremiumOrderReservations(orderId: string, buyerUserId: string) {
+  const rows = await prisma.$queryRaw<Array<{
+    premium_domain_id: string;
+    domain_name: string;
+    status: string;
+    reserved_by_user_id: string | null;
+    reserved_until: Date | null;
+    sold_at: Date | null;
+  }>>`
+    SELECT pol."premium_domain_id",
+           pd."domainName" AS domain_name,
+           pd."status",
+           pim."reserved_by_user_id",
+           pim."reserved_until",
+           pim."sold_at"
+    FROM "premium_order_links" pol
+    JOIN "OrderItem" oi ON oi."id"=pol."order_item_id"
+    JOIN "PremiumDomain" pd ON pd."id"=pol."premium_domain_id"
+    JOIN "premium_inventory_meta" pim ON pim."premium_domain_id"=pol."premium_domain_id"
+    WHERE oi."orderId"=${orderId}
+  `;
+
+  for (const row of rows) {
+    if (row.sold_at || !["LISTED", "RESERVED"].includes(row.status)) {
+      throw new CheckoutError(`${row.domain_name} is no longer available for this order.`);
+    }
+    if (row.reserved_by_user_id !== buyerUserId) {
+      throw new CheckoutError(`${row.domain_name} is no longer reserved for your account.`);
+    }
+    if (row.status === "LISTED" && (!row.reserved_until || row.reserved_until.getTime() <= Date.now())) {
+      throw new CheckoutError(`${row.domain_name}'s checkout reservation expired. Start checkout again to reserve it.`);
+    }
+  }
+}
