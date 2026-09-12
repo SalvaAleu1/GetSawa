@@ -44,8 +44,6 @@ export async function POST(req: NextRequest) {
 
     if (priced.totalCents <= 0) return jsonError("Order total must be greater than zero.", 400);
 
-    // Premium aftermarket inventory is reserved only at the final order step,
-    // never at search or quote preview. The reservation is rechecked before capture.
     reservedPremium = await reservePricedPremiumCart(priced, user.id);
 
     const idempotencyKey = crypto.randomUUID();
@@ -137,8 +135,6 @@ export async function POST(req: NextRequest) {
 
     const amountDueCents = Math.max(0, priced.totalCents - creditAppliedCents);
 
-    // A fully credit-funded order never touches PayPal. It still gets a paid
-    // Payment record, invoice convergence and the same provisioning workflow.
     if (amountDueCents === 0 && creditAppliedCents > 0) {
       const payment = await prisma.payment.create({
         data: {
@@ -197,13 +193,13 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    const approveLink = paypalOrder.links?.find((link: any) => link.rel === "approve")?.href;
+    if (!approveLink) throw new Error("The payment provider did not return an approval link.");
+
     checkoutReady = true;
     await logAudit({ actorId: user.id, action: "order.created", resource: "order", resourceId: order.id, ipAddress: ip, metadata: { creditAppliedCents, amountDueCents } }).catch((auditError) => {
       console.error("[audit] order.created failed", auditError);
     });
-
-    const approveLink = paypalOrder.links?.find((link: any) => link.rel === "approve")?.href;
-    if (!approveLink) throw new Error("The payment provider did not return an approval link.");
 
     return jsonOk({
       orderId: order.id,
@@ -219,6 +215,7 @@ export async function POST(req: NextRequest) {
     if (!checkoutReady) {
       if (createdOrderId) {
         await releaseOrderCredit(createdOrderId).catch(() => undefined);
+        await prisma.payment.updateMany({ where: { orderId: createdOrderId, status: "PENDING" }, data: { status: "FAILED", failureReason: "Payment handoff did not complete." } }).catch(() => undefined);
         await prisma.order.updateMany({ where: { id: createdOrderId, status: "PENDING_PAYMENT" }, data: { status: "CANCELLED", provisioningError: "Checkout setup failed before payment approval." } }).catch(() => undefined);
       }
       if (transferRecordIds.length > 0) {
