@@ -4,16 +4,13 @@ export type CartItem =
   | { kind: "DOMAIN_REGISTRATION"; domain: string; years: number; privacy: boolean; autoRenew: boolean }
   | { kind: "DOMAIN_RENEWAL"; domainId: string; years: number }
   | { kind: "DOMAIN_TRANSFER"; domain: string; authCode: string }
-  | { kind: "PRODUCT"; sku: string; quantity: number };
+  | { kind: "PRODUCT"; sku: string; quantity: number; domainId?: string; configuration?: Record<string, string> };
 
 const CART_KEY = "getsawa_cart_v1";
 
 /**
- * The cart in the browser holds only the customer's SELECTIONS (which
- * domain, how many years) — never prices. Every price shown at checkout is
- * fetched fresh from /api/checkout/create-order, which recomputes
- * everything server-side. This is why it's safe to keep the cart in
- * localStorage.
+ * The cart stores customer selections/configuration but never trusted prices.
+ * Server checkout validates ownership/configuration and recomputes all prices.
  */
 export function getCart(): CartItem[] {
   if (typeof window === "undefined") return [];
