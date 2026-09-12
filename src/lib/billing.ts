@@ -4,6 +4,7 @@ import { computeTldPrice, generateInvoiceNumber, generateOrderNumber } from "@/l
 import { priceCart } from "@/lib/checkout";
 import { logAudit } from "@/lib/audit";
 import { notifyOrderLifecycle } from "@/lib/order-notifications";
+import { advanceHostingSubscriptionAfterPayment, createHostingRenewalOrder } from "@/lib/hosting-billing";
 
 type SubscriptionStatus = "ACTIVE" | "PAST_DUE" | "CANCELLED" | "EXPIRED";
 interface BillingSubscriptionRow {
@@ -11,6 +12,7 @@ interface BillingSubscriptionRow {
   userId: string;
   domainId: string | null;
   productId: string | null;
+  serviceInstanceId: string | null;
   provider: string;
   providerSubscriptionId: string | null;
   status: SubscriptionStatus;
@@ -34,8 +36,8 @@ interface RenewalResult { inspected: number; created: number; skipped: number; f
 function mapSubscription(row: Record<string, unknown>): BillingSubscriptionRow {
   return {
     id: String(row.id), userId: String(row.user_id), domainId: row.domain_id ? String(row.domain_id) : null,
-    productId: row.product_id ? String(row.product_id) : null, provider: String(row.provider),
-    providerSubscriptionId: row.provider_subscription_id ? String(row.provider_subscription_id) : null,
+    productId: row.product_id ? String(row.product_id) : null, serviceInstanceId: row.service_instance_id ? String(row.service_instance_id) : null,
+    provider: String(row.provider), providerSubscriptionId: row.provider_subscription_id ? String(row.provider_subscription_id) : null,
     status: String(row.status) as SubscriptionStatus, billingCycle: String(row.billing_cycle), amountCents: Number(row.amount_cents),
     currency: String(row.currency), currentPeriodStart: new Date(String(row.current_period_start)), currentPeriodEnd: new Date(String(row.current_period_end)),
     nextBillingAt: new Date(String(row.next_billing_at)), graceUntil: row.grace_until ? new Date(String(row.grace_until)) : null,
@@ -49,8 +51,6 @@ function mapSubscription(row: Record<string, unknown>): BillingSubscriptionRow {
 export async function ensureDomainSubscription(domainId: string): Promise<void> {
   const domain = await prisma.domain.findUnique({ where: { id: domainId }, include: { tld: true } });
   if (!domain || !domain.expiresAt) return;
-  // This is only a dashboard estimate. The actual renewal invoice is always
-  // re-quoted from live registrar wholesale pricing immediately before issue.
   const estimatedPrice = computeTldPrice(domain.tld).renewCents;
   const now = new Date();
   const periodStart = domain.registeredAt ?? now;
@@ -102,9 +102,8 @@ export async function setDomainAutoRenew(userId: string, domainId: string, enabl
 
 export async function listCustomerSubscriptions(userId: string): Promise<BillingSubscriptionRow[]> {
   const rows = await prisma.$queryRaw<Record<string, unknown>[]>`
-    SELECT bs.*, d."name" AS domain_name
+    SELECT bs.*
     FROM "billing_subscriptions" bs
-    LEFT JOIN "Domain" d ON d."id"=bs."domain_id"
     WHERE bs."user_id"=${userId}
     ORDER BY bs."next_billing_at" ASC
   `;
@@ -113,18 +112,23 @@ export async function listCustomerSubscriptions(userId: string): Promise<Billing
 
 export async function listRenewalAttemptsForUser(userId: string) {
   return prisma.$queryRaw<Record<string, unknown>[]>`
-    SELECT ra.*,bs."domain_id",d."name" AS domain_name,o."totalCents" AS order_total_cents,o."currency" AS order_currency,o."status" AS order_status
+    SELECT ra.*,bs."domain_id",bs."service_instance_id",d."name" AS domain_name,
+           hp."name" AS product_name,hd."name" AS service_domain_name,
+           o."totalCents" AS order_total_cents,o."currency" AS order_currency,o."status" AS order_status
     FROM "billing_renewal_attempts" ra
     JOIN "billing_subscriptions" bs ON bs."id"=ra."subscription_id"
     LEFT JOIN "Domain" d ON d."id"=bs."domain_id"
+    LEFT JOIN "product_service_instances" psi ON psi."id"=bs."service_instance_id"
+    LEFT JOIN "Product" hp ON hp."id"=psi."product_id"
+    LEFT JOIN "Domain" hd ON hd."id"=psi."domain_id"
     LEFT JOIN "Order" o ON o."id"=ra."order_id"
     WHERE bs."user_id"=${userId}
     ORDER BY ra."scheduled_at" DESC LIMIT 50
   `;
 }
 
-async function createRenewalOrder(subscription: BillingSubscriptionRow): Promise<{ orderId: string; created: boolean }> {
-  if (!subscription.domainId) throw new Error("Only domain renewals are currently supported by the automated renewal engine.");
+async function createDomainRenewalOrder(subscription: BillingSubscriptionRow): Promise<{ orderId: string; created: boolean }> {
+  if (!subscription.domainId) throw new Error("Domain renewal subscription is missing its domain.");
   const domain = await prisma.domain.findUnique({ where: { id: subscription.domainId }, include: { user: true } });
   if (!domain || domain.userId !== subscription.userId) throw new Error("Renewal domain is no longer owned by the subscription customer.");
   if (["TRANSFERRED_AWAY", "CANCELLED"].includes(domain.status)) throw new Error("Domain is not eligible for renewal.");
@@ -137,20 +141,15 @@ async function createRenewalOrder(subscription: BillingSubscriptionRow): Promise
   `;
   if (existing[0]?.order_id) return { orderId: existing[0].order_id, created: false };
 
-  // Critical safety rule: do not use the stored/estimated subscription price.
-  // Re-run the same live registrar wholesale + margin-floor pricing used by
-  // normal checkout immediately before issuing the renewal invoice.
   const priced = await priceCart({ items: [{ kind: "DOMAIN_RENEWAL", domainId: domain.id, years: 1 }] }, subscription.userId);
   const line = priced.items[0];
   if (!line || line.kind !== "DOMAIN_RENEWAL" || line.domainId !== domain.id) throw new Error("Live renewal quote could not be verified.");
 
   const now = new Date();
-  let orderNumber = "";
-  let invoiceNumber = "";
   for (let attempt = 0; attempt < 4; attempt++) {
     const [orderCount, invoiceCount] = await Promise.all([prisma.order.count(), prisma.invoice.count()]);
-    orderNumber = generateOrderNumber(orderCount + 1 + attempt);
-    invoiceNumber = generateInvoiceNumber(invoiceCount + 1 + attempt);
+    const orderNumber = generateOrderNumber(orderCount + 1 + attempt);
+    const invoiceNumber = generateInvoiceNumber(invoiceCount + 1 + attempt);
     try {
       const order = await prisma.$transaction(async (tx) => {
         const created = await tx.order.create({
@@ -225,7 +224,7 @@ async function createRenewalOrder(subscription: BillingSubscriptionRow): Promise
       throw error;
     }
   }
-  throw new Error("Could not create a unique renewal invoice.");
+  throw new Error("Could not create a unique domain renewal invoice.");
 }
 
 export async function processDueRenewals(limit = 100): Promise<RenewalResult> {
@@ -242,7 +241,9 @@ export async function processDueRenewals(limit = 100): Promise<RenewalResult> {
   for (const raw of subscriptions) {
     const subscription = mapSubscription(raw);
     try {
-      const renewal = await createRenewalOrder(subscription);
+      const renewal = subscription.serviceInstanceId
+        ? await createHostingRenewalOrder({ id: subscription.id, userId: subscription.userId, serviceInstanceId: subscription.serviceInstanceId, currentPeriodEnd: subscription.currentPeriodEnd, billingCycle: subscription.billingCycle })
+        : await createDomainRenewalOrder(subscription);
       if (renewal.created) result.created++; else result.skipped++;
       await prisma.$executeRaw`
         UPDATE "billing_subscriptions" SET
@@ -262,7 +263,7 @@ export async function processDueRenewals(limit = 100): Promise<RenewalResult> {
           "updated_at"=CURRENT_TIMESTAMP
         WHERE "id"=${subscription.id}
       `;
-      await logAudit({ actorId: null, action: "billing.renewal_quote_failed", resource: "billing_subscription", resourceId: subscription.id, metadata: { reason: error instanceof Error ? error.message.slice(0, 300) : "Unknown renewal failure" } });
+      await logAudit({ actorId: null, action: "billing.renewal_quote_failed", resource: "billing_subscription", resourceId: subscription.id, metadata: { reason: error instanceof Error ? error.message.slice(0, 300) : "Unknown renewal failure" } }).catch(() => undefined);
     }
   }
   return result;
@@ -277,6 +278,18 @@ export async function markRenewalPaid(orderId: string): Promise<void> {
   const subscriptionRows = await prisma.$queryRaw<Record<string, unknown>[]>`SELECT * FROM "billing_subscriptions" WHERE "id"=${subscriptionId} LIMIT 1`;
   if (!subscriptionRows[0]) return;
   const subscription = mapSubscription(subscriptionRows[0]);
+
+  if (subscription.serviceInstanceId) {
+    const advanced = await advanceHostingSubscriptionAfterPayment(subscription.id);
+    if (!advanced) throw new Error("Hosting renewal subscription could not be advanced.");
+    await prisma.$executeRaw`
+      UPDATE "billing_renewal_attempts" SET
+        "status"='PAID',"attempted_at"=COALESCE("attempted_at",CURRENT_TIMESTAMP),"completed_at"=CURRENT_TIMESTAMP,"updated_at"=CURRENT_TIMESTAMP
+      WHERE "order_id"=${orderId}
+    `;
+    return;
+  }
+
   const domain = subscription.domainId ? await prisma.domain.findUnique({ where: { id: subscription.domainId } }) : null;
   const newEnd = domain?.expiresAt ?? new Date(subscription.currentPeriodEnd.getTime() + 365 * 86400000);
   const newNext = new Date(Math.max(Date.now(), newEnd.getTime() - 7 * 86400000));
