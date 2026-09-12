@@ -11,6 +11,7 @@ import { sendEmail, emailTemplates } from "@/lib/email";
 import { markRenewalPaid, markRenewalOrderPaymentFailed } from "@/lib/billing";
 import { DOMAIN_QUOTE_TTL_MS } from "@/lib/checkout";
 import { assertPremiumOrderReservations, releaseOrRestorePremiumOrderReservations } from "@/lib/premium-checkout";
+import { assertOrderCreditReservation, finalizeOrderCredit, releaseOrderCredit } from "@/lib/credits";
 import { recordPaymentSettlement } from "@/lib/finance";
 import { extractPayPalCaptureEconomics } from "@/lib/paypal-economics";
 
@@ -40,7 +41,10 @@ export async function POST(req: NextRequest) {
     if (!order || order.userId !== user.id) return jsonError("Order not found.", 404);
     if (order.status !== "PENDING_PAYMENT") {
       const paid = order.payments.find((item) => item.status === "PAID");
-      if (paid) await recordPaymentSettlement({ paymentId: paid.id, providerReference: paid.providerCaptureId }).catch(() => undefined);
+      if (paid) {
+        await finalizeOrderCredit(order.id).catch(() => undefined);
+        await recordPaymentSettlement({ paymentId: paid.id, providerReference: paid.providerCaptureId }).catch(() => undefined);
+      }
       return jsonOk({ orderId: order.id, status: order.status });
     }
 
@@ -55,6 +59,7 @@ export async function POST(req: NextRequest) {
         prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED", failureReason: "Domain price quote expired before payment capture." } }),
         prisma.order.updateMany({ where: { id: order.id, status: "PENDING_PAYMENT" }, data: { status: "CANCELLED", provisioningError: "Pricing quote expired before payment capture." } }),
       ]);
+      await releaseOrderCredit(order.id).catch(() => undefined);
       await releaseOrRestorePremiumOrderReservations(order.id, user.id).catch(() => undefined);
       await logAudit({ actorId: user.id, action: "order.quote_expired", resource: "order", resourceId: order.id });
       return jsonError("The domain price quote expired before payment capture. Your payment was not captured; please restart checkout for a fresh price.", 409, { code: "PRICE_QUOTE_EXPIRED" });
@@ -62,14 +67,16 @@ export async function POST(req: NextRequest) {
 
     try {
       await assertPremiumOrderReservations(order.id, user.id);
+      await assertOrderCreditReservation(order.id, user.id);
     } catch (reservationError) {
-      const message = reservationError instanceof Error ? reservationError.message : "A premium-domain reservation is no longer valid.";
+      const message = reservationError instanceof Error ? reservationError.message : "A checkout reservation is no longer valid.";
       await prisma.$transaction([
         prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED", failureReason: message.slice(0, 500) } }),
         prisma.order.updateMany({ where: { id: order.id, status: "PENDING_PAYMENT" }, data: { status: "CANCELLED", provisioningError: message.slice(0, 500) } }),
       ]);
+      await releaseOrderCredit(order.id).catch(() => undefined);
       await releaseOrRestorePremiumOrderReservations(order.id, user.id).catch(() => undefined);
-      return jsonError(message, 409, { code: "PREMIUM_RESERVATION_EXPIRED" });
+      return jsonError(message, 409, { code: "CHECKOUT_RESERVATION_EXPIRED" });
     }
 
     let capture: any = null;
@@ -81,6 +88,7 @@ export async function POST(req: NextRequest) {
       const status = typeof capture?.status === "string" ? capture.status : "UNKNOWN";
       if (["VOIDED", "CANCELLED", "DENIED"].includes(status)) {
         await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED", failureReason: `PayPal status: ${status}` } });
+        await releaseOrderCredit(order.id).catch(() => undefined);
         await releaseOrRestorePremiumOrderReservations(order.id, user.id).catch(() => undefined);
         await markRenewalOrderPaymentFailed(order.id, `PayPal status: ${status}`).catch(() => undefined);
         try { await sendEmail({ to: order.user.email, ...emailTemplates.paymentFailed(order.orderNumber) }); } catch { /* notification is independent */ }
@@ -89,8 +97,8 @@ export async function POST(req: NextRequest) {
       return jsonError("Payment is still being confirmed by PayPal. Please refresh your order shortly.", 202);
     }
 
-    if (details.cents !== order.totalCents || details.currency !== order.currency.toUpperCase()) {
-      await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "DISPUTED", failureReason: "Captured amount or currency did not match order total." } });
+    if (details.cents !== payment.amountCents || details.currency !== payment.currency.toUpperCase()) {
+      await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "DISPUTED", failureReason: "Captured amount or currency did not match the recorded payment attempt." } });
       return jsonError("Payment verification failed. Please contact support.", 409);
     }
 
@@ -104,6 +112,7 @@ export async function POST(req: NextRequest) {
       return true;
     });
 
+    await finalizeOrderCredit(order.id);
     await recordPaymentSettlement({ paymentId: payment.id, providerReference: captureId, providerFeeCents: details.providerFeeCents });
 
     if (committed) {
