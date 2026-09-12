@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import crypto from "crypto";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { checkoutSchema, priceCart, CheckoutError } from "@/lib/checkout";
@@ -7,12 +8,18 @@ import { validateDomainLifecycleCheckout } from "@/lib/checkout-domain-guard";
 import { reservePricedPremiumCart, validatePricedPremiumCart, type ReservedPremiumItem } from "@/lib/premium-checkout";
 import { releasePremiumReservation } from "@/lib/premium-aftermarket";
 import { assertCatalogPriceFloors, validateCatalogCheckout } from "@/lib/catalog-checkout-guard";
+import { finalizeOrderCredit, releaseOrderCredit, reserveOrderCreditTx } from "@/lib/credits";
 import { generateOrderNumber } from "@/lib/pricing";
 import { encryptSecret } from "@/lib/crypto";
 import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
+import { transitionOrderStatus } from "@/lib/order-lifecycle";
+import { provisionOrder } from "@/lib/provisioning";
+import { recordPaymentSettlement } from "@/lib/finance";
+
+const createOrderSchema = checkoutSchema.extend({ applyCredit: z.boolean().optional().default(false) });
 
 export async function POST(req: NextRequest) {
   let reservationOwnerId: string | null = null;
@@ -28,7 +35,7 @@ export async function POST(req: NextRequest) {
     const rl = checkRateLimit("create-order", user.id, { max: 20, windowMs: 60_000 });
     if (!rl.allowed) return jsonError("Too many checkout attempts. Please slow down.", 429);
 
-    const input = checkoutSchema.parse(await req.json());
+    const input = createOrderSchema.parse(await req.json());
     await validateDomainLifecycleCheckout(input, user.id);
     const catalogFloors = await validateCatalogCheckout(input);
     const priced = await priceCart(input, user.id);
@@ -36,15 +43,13 @@ export async function POST(req: NextRequest) {
     assertCatalogPriceFloors(priced, catalogFloors);
 
     if (priced.totalCents <= 0) return jsonError("Order total must be greater than zero.", 400);
-    if (!PayPalProvider.isConfigured()) {
-      return jsonError("Payments are temporarily unavailable. Please try again later.", 503, { code: "PROVIDER_NOT_CONFIGURED" });
-    }
 
     // Premium aftermarket inventory is reserved only at the final order step,
     // never at search or quote preview. The reservation is rechecked before capture.
     reservedPremium = await reservePricedPremiumCart(priced, user.id);
 
     const idempotencyKey = crypto.randomUUID();
+    const orderId = crypto.randomUUID();
     const itemIds = priced.items.map(() => crypto.randomUUID());
     const transferRecords = new Map<number, string>();
 
@@ -66,13 +71,15 @@ export async function POST(req: NextRequest) {
     }
 
     let order;
+    let creditAppliedCents = 0;
     for (let attempt = 0; attempt < 3; attempt++) {
       const count = await prisma.order.count();
       const orderNumber = generateOrderNumber(count + 1 + attempt);
       try {
-        order = await prisma.$transaction(async (tx) => {
+        const result = await prisma.$transaction(async (tx) => {
           const created = await tx.order.create({
             data: {
+              id: orderId,
               orderNumber,
               userId: user.id,
               status: "PENDING_PAYMENT",
@@ -111,8 +118,14 @@ export async function POST(req: NextRequest) {
               ON CONFLICT ("order_item_id") DO NOTHING
             `;
           }
-          return created;
+
+          const credit = input.applyCredit
+            ? await reserveOrderCreditTx(tx, { userId: user.id, orderId: created.id, maximumCents: priced.totalCents })
+            : 0;
+          return { created, credit };
         });
+        order = result.created;
+        creditAppliedCents = result.credit;
         break;
       } catch (error: any) {
         if (error?.code === "P2002" && attempt < 2) continue;
@@ -122,8 +135,48 @@ export async function POST(req: NextRequest) {
     if (!order) throw new Error("Failed to create order.");
     createdOrderId = order.id;
 
+    const amountDueCents = Math.max(0, priced.totalCents - creditAppliedCents);
+
+    // A fully credit-funded order never touches PayPal. It still gets a paid
+    // Payment record, invoice convergence and the same provisioning workflow.
+    if (amountDueCents === 0 && creditAppliedCents > 0) {
+      const payment = await prisma.payment.create({
+        data: {
+          orderId: order.id,
+          userId: user.id,
+          provider: "credit",
+          providerOrderId: `credit:${order.id}`,
+          providerCaptureId: `credit:${order.id}`,
+          amountCents: 0,
+          currency: priced.currency,
+          status: "PAID",
+        },
+      });
+      await finalizeOrderCredit(order.id);
+      await transitionOrderStatus({ orderId: order.id, to: "PAYMENT_CONFIRMED", reason: "Order paid in full using GetSawa account credit." });
+      await recordPaymentSettlement({ paymentId: payment.id, providerReference: payment.providerCaptureId });
+      checkoutReady = true;
+      await logAudit({ actorId: user.id, action: "order.paid_with_credit", resource: "order", resourceId: order.id, ipAddress: ip, metadata: { creditAppliedCents } }).catch(() => undefined);
+      await provisionOrder(order.id);
+      const finalOrder = await prisma.order.findUnique({ where: { id: order.id }, select: { status: true } });
+      return jsonOk({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        totalCents: priced.totalCents,
+        creditAppliedCents,
+        amountDueCents: 0,
+        currency: priced.currency,
+        completedWithCredit: true,
+        status: finalOrder?.status,
+      });
+    }
+
+    if (!PayPalProvider.isConfigured()) {
+      throw new CheckoutError("Payments are temporarily unavailable. Your account credit was not consumed.");
+    }
+
     const paypalOrder = await PayPalProvider.createOrder({
-      amountCents: priced.totalCents,
+      amountCents: amountDueCents,
       currency: priced.currency,
       referenceId: order.id,
       description: `GetSawa order ${order.orderNumber}`,
@@ -138,14 +191,14 @@ export async function POST(req: NextRequest) {
         userId: user.id,
         provider: "paypal",
         providerOrderId: paypalOrder.id,
-        amountCents: priced.totalCents,
+        amountCents: amountDueCents,
         currency: priced.currency,
         status: "PENDING",
       },
     });
 
     checkoutReady = true;
-    await logAudit({ actorId: user.id, action: "order.created", resource: "order", resourceId: order.id, ipAddress: ip }).catch((auditError) => {
+    await logAudit({ actorId: user.id, action: "order.created", resource: "order", resourceId: order.id, ipAddress: ip, metadata: { creditAppliedCents, amountDueCents } }).catch((auditError) => {
       console.error("[audit] order.created failed", auditError);
     });
 
@@ -156,6 +209,8 @@ export async function POST(req: NextRequest) {
       orderId: order.id,
       orderNumber: order.orderNumber,
       totalCents: priced.totalCents,
+      creditAppliedCents,
+      amountDueCents,
       currency: priced.currency,
       paypalOrderId: paypalOrder.id,
       approveUrl: approveLink,
@@ -163,6 +218,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     if (!checkoutReady) {
       if (createdOrderId) {
+        await releaseOrderCredit(createdOrderId).catch(() => undefined);
         await prisma.order.updateMany({ where: { id: createdOrderId, status: "PENDING_PAYMENT" }, data: { status: "CANCELLED", provisioningError: "Checkout setup failed before payment approval." } }).catch(() => undefined);
       }
       if (transferRecordIds.length > 0) {
