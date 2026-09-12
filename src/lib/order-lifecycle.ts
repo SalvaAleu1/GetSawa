@@ -14,7 +14,10 @@ export const ORDER_STATUSES = [
 export type OrderLifecycleStatus = (typeof ORDER_STATUSES)[number];
 
 const TRANSITIONS: Record<OrderLifecycleStatus, readonly OrderLifecycleStatus[]> = {
-  PENDING_PAYMENT: ["PAYMENT_CONFIRMED", "CANCELLED", "REFUNDED"],
+  // A provider can explicitly deny/void a payment attempt before any funds are
+  // confirmed. FAILED is therefore a legitimate terminal/recovery state from
+  // PENDING_PAYMENT; renewal billing may keep its invoice retryable separately.
+  PENDING_PAYMENT: ["PAYMENT_CONFIRMED", "FAILED", "CANCELLED", "REFUNDED"],
   PAYMENT_CONFIRMED: ["PROVISIONING", "FAILED", "CANCELLED", "REFUNDED"],
   PROVISIONING: ["ACTIVE", "FAILED", "CANCELLED", "REFUNDED"],
   ACTIVE: ["REFUNDED"],
@@ -53,8 +56,6 @@ export async function transitionOrderStatus(params: {
   });
 
   if (updated.count !== 1) {
-    // Another worker may have advanced the order. Re-read it so callers can
-    // safely treat concurrent webhook/retry delivery as idempotent.
     const current = await prisma.order.findUnique({ where: { id: params.orderId }, select: { status: true } });
     if (current && current.status === params.to) return { changed: false, from, to: params.to };
     throw new Error("Order changed concurrently; lifecycle transition was not applied.");
