@@ -3,7 +3,7 @@
  * The rest of the application (search, checkout, DNS management, admin) talks
  * to this interface only — never to a specific provider's SDK or response
  * shape directly. This is what lets a second registrar be added later
- * without rewriting the platform (see spec section 4).
+ * without rewriting the platform.
  */
 
 export class ProviderNotConfiguredError extends Error {
@@ -19,12 +19,12 @@ export interface DomainAvailability {
   available: boolean;
   isPremium: boolean;
   premiumPriceCents?: number;
-  reason?: string; // e.g. "invalid", "reserved", "registered"
+  reason?: string;
 }
 
 export interface DomainPricing {
   tld: string;
-  registerCents: number; // wholesale cost per year, minor units
+  registerCents: number;
   renewCents: number;
   transferCents: number | null;
   currency: string;
@@ -44,7 +44,7 @@ export interface DomainRegistrationResult {
   success: boolean;
   providerOrderId?: string;
   domain: string;
-  expiresAt?: string; // ISO date
+  expiresAt?: string;
   errorCode?: string;
   errorMessage?: string;
 }
@@ -93,7 +93,7 @@ export interface RegistrantContact {
 }
 
 export interface DnsRecordInput {
-  type: "A" | "AAAA" | "CNAME" | "MX" | "TXT" | "NS" | "SRV" | "CAA";
+  type: "A" | "AAAA" | "CNAME" | "MX" | "TXT" | "SRV" | "CAA";
   host: string;
   value: string;
   ttl?: number;
@@ -102,6 +102,20 @@ export interface DnsRecordInput {
 
 export interface DnsRecordResult extends DnsRecordInput {
   providerRecordId: string;
+}
+
+export interface DnssecRecord {
+  keyTag: number;
+  algorithm: number;
+  digestType: number;
+  digest: string;
+}
+
+export interface DnssecStatus {
+  supported: boolean;
+  enabled: boolean;
+  records: DnssecRecord[];
+  message?: string;
 }
 
 export interface DomainInfo {
@@ -119,11 +133,6 @@ export interface DomainProvider {
   readonly name: string;
   isConfigured(): boolean;
 
-  /**
-   * True only when the provider integration can obtain an authoritative exact
-   * registry-premium price before GetSawa takes payment. Standard TLD price
-   * lists do not qualify. Premium-capable TLDs fail closed without this.
-   */
   supportsExactPremiumPricing?(): boolean;
 
   checkAvailability(domains: string[]): Promise<DomainAvailability[]>;
@@ -143,6 +152,10 @@ export interface DomainProvider {
   createDnsRecord(domain: string, record: DnsRecordInput): Promise<DnsRecordResult>;
   updateDnsRecord(domain: string, providerRecordId: string, record: DnsRecordInput): Promise<DnsRecordResult>;
   deleteDnsRecord(domain: string, providerRecordId: string): Promise<void>;
+
+  getDnssecStatus?(domain: string): Promise<DnssecStatus>;
+  enableDnssec?(domain: string, records: DnssecRecord[]): Promise<DnssecStatus>;
+  disableDnssec?(domain: string): Promise<DnssecStatus>;
 
   lockDomain(domain: string): Promise<void>;
   unlockDomain(domain: string): Promise<void>;
