@@ -18,6 +18,7 @@ const NAV: PortalNavGroup[] = [
       { href: "/domains/transfer", label: "Transfer Domain" },
       { href: "/dashboard/transfers", label: "Transfer Status" },
       { href: "/dashboard/marketplace", label: "Domain Marketplace" },
+      { href: "/dashboard/marketplace/sales", label: "Marketplace Sales" },
     ],
   },
   {
