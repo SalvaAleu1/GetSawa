@@ -80,12 +80,19 @@ export async function getProductReadiness(product: Product, suppliedMeta?: Produ
     const contract = meta.provisioningContract as ProductProvisioningContract | null;
     if (contract === "HOSTING_ACCOUNT") {
       const hosting = await getHostingOperationalState();
+      const planCode = product.providerProductId?.trim() || "";
+      const planVerified = Boolean(planCode) && hosting.creatablePlanCodes.includes(planCode);
       providerReady = hosting.configured && hosting.verified;
-      fulfillmentReady = product.category === "HOSTING" && product.providerName === "hosting" && Boolean(product.providerProductId) && meta.requiresDomain;
+      fulfillmentReady = product.category === "HOSTING"
+        && ["hosting", "cpanel_whm"].includes(product.providerName || "")
+        && planVerified
+        && meta.requiresDomain;
       if (!hosting.configured) reasons.push("cPanel/WHM hosting credentials are not configured.");
       else if (!hosting.verified) reasons.push(hosting.reason || "cPanel/WHM must pass a live provider test before this plan can be sold.");
-      if (!product.providerProductId) reasons.push("WHM hosting plan code is missing.");
+      if (!planCode) reasons.push("WHM hosting plan code is missing.");
+      else if (hosting.verified && !planVerified) reasons.push("The configured WHM plan code is not in the live-tested list of packages this reseller can create.");
       if (!meta.requiresDomain) reasons.push("Hosting products must require a managed domain.");
+      if (product.providerName && !["hosting", "cpanel_whm"].includes(product.providerName)) reasons.push("Hosting product provider name does not match the WHM integration.");
     } else if (contract === "EMAIL_MAILBOX") {
       const provider = getEmailProvider();
       providerReady = provider.isConfigured();
@@ -116,7 +123,6 @@ export async function getProductReadiness(product: Product, suppliedMeta?: Produ
       && Number(renewalPrice) >= minimumRetailCents;
     if (!Number.isSafeInteger(renewalPrice) || Number(renewalPrice) <= 0) reasons.push("Recurring hosting requires a positive renewal price.");
     else if (minimumRetailCents !== null && Number(renewalPrice) < minimumRetailCents) reasons.push(`Hosting renewal price is below the protected minimum of ${(minimumRetailCents / 100).toFixed(2)} ${product.currency}.`);
-    if (meta?.renewalContract !== "HOSTING_RENEWAL") reasons.push("Recurring hosting requires the HOSTING_RENEWAL contract.");
   } else {
     billingReady = product.billingCycle === "ONE_TIME" && product.renewalPriceCents == null && product.setupFeeCents === 0;
     if (product.billingCycle !== "ONE_TIME") reasons.push("Recurring billing is not enabled for this product contract.");
