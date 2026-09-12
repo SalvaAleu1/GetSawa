@@ -10,6 +10,7 @@ const NAV: PortalNavGroup[] = [
       { href: "/admin/operations", label: "Operations Center" },
       { href: "/admin/customers", label: "Customers" },
       { href: "/admin/hosting", label: "Web Hosting" },
+      { href: "/admin/email", label: "Business Email" },
       { href: "/admin/support", label: "Support" },
     ],
   },
