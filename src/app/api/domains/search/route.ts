@@ -2,18 +2,18 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDomainProvider } from "@/lib/providers/domains/DomainProviderFactory";
 import { ProviderNotConfiguredError } from "@/lib/providers/domains/DomainProvider";
-import { computeProtectedTldPrice } from "@/lib/pricing";
-import { computeSafeRetailPrice } from "@/lib/pricing-safety";
 import { getPricingSafetyPolicy } from "@/lib/pricing-policy";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { mapDiscoveryResult, normalizeDomainLabel } from "@/lib/domain-discovery";
 
 /**
  * GET /api/domains/search?q=example&tlds=com,net,org
  *
- * Availability always comes live from the configured domain provider. Retail
- * display prices use GetSawa's protected pricing floor over the latest cached
- * wholesale snapshot. Checkout independently refreshes wholesale pricing.
+ * The query is a domain label; callers may submit a full URL/domain and the
+ * first label is normalized safely. Availability comes live from the active
+ * registrar. Display pricing uses GetSawa's protected price floor while
+ * checkout independently refreshes wholesale pricing again.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -22,12 +22,13 @@ export async function GET(req: NextRequest) {
     if (!rl.allowed) return jsonError("Too many searches. Please slow down.", 429);
 
     const { searchParams } = new URL(req.url);
-    const query = (searchParams.get("q") || "").trim().toLowerCase();
-    if (!query || !/^[a-z0-9-]{1,63}$/.test(query)) {
-      return jsonError("Enter a valid domain name (letters, numbers, hyphens only).", 400);
-    }
+    const query = normalizeDomainLabel(searchParams.get("q") || "");
+    if (!query) return jsonError("Enter a valid domain name.", 400);
 
-    const activeTlds = await prisma.tld.findMany({ where: { isActive: true } });
+    const activeTlds = await prisma.tld.findMany({
+      where: { isActive: true },
+      orderBy: [{ isFeatured: "desc" }, { extension: "asc" }],
+    });
     if (activeTlds.length === 0) {
       return jsonOk({
         query,
@@ -37,10 +38,19 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const requestedExt = searchParams.get("tlds");
-    const tldsToCheck = requestedExt
-      ? activeTlds.filter((t) => requestedExt.split(",").includes(t.extension))
-      : activeTlds.slice(0, 12);
+    const requested = (searchParams.get("tlds") || "")
+      .split(",")
+      .map((value) => value.trim().toLowerCase().replace(/^\./, ""))
+      .filter(Boolean)
+      .slice(0, 25);
+    const requestedSet = new Set(requested);
+    const tldsToCheck = requested.length > 0
+      ? activeTlds.filter((tld) => requestedSet.has(tld.extension.toLowerCase()))
+      : activeTlds.slice(0, 20);
+
+    if (tldsToCheck.length === 0) {
+      return jsonError("None of the requested domain extensions are active in GetSawa.", 400);
+    }
 
     const provider = getDomainProvider();
     if (!provider.isConfigured()) {
@@ -48,63 +58,40 @@ export async function GET(req: NextRequest) {
         query,
         configured: false,
         message: "Domain availability is not currently available. The domain provider has not been configured yet.",
-        results: tldsToCheck.map((t) => ({ tld: t.extension, domain: `${query}.${t.extension}`, status: "not_configured" })),
+        results: tldsToCheck.map((tld) => ({
+          tld: tld.extension,
+          domain: `${query}.${tld.extension}`,
+          available: false,
+          checkoutEligible: false,
+          status: "not_configured",
+        })),
       });
     }
 
-    const candidates = tldsToCheck.map((t) => `${query}.${t.extension}`);
-    const availability = await provider.checkAvailability(candidates);
-    const policy = await getPricingSafetyPolicy();
-    const exactPremiumPricingSupported = provider.supportsExactPremiumPricing?.() ?? false;
+    const candidates = tldsToCheck.map((tld) => `${query}.${tld.extension}`);
+    const [availability, policy] = await Promise.all([
+      provider.checkAvailability(candidates),
+      getPricingSafetyPolicy(),
+    ]);
+    const tldByExtension = new Map(tldsToCheck.map((tld) => [tld.extension.toLowerCase(), tld]));
 
-    const tldByExtension = new Map(tldsToCheck.map((t) => [t.extension, t]));
-    const protectedPriceByTld = new Map(
-      tldsToCheck.map((t) => [t.extension, computeProtectedTldPrice(t, policy)]),
-    );
-
-    const results = availability.map((a) => {
-      const tld = tldByExtension.get(a.tld);
-      const protectedPrice = protectedPriceByTld.get(a.tld);
-      const exactPremiumRetail = a.isPremium && a.premiumPriceCents != null
-        ? computeSafeRetailPrice(a.premiumPriceCents, policy).retailCents
-        : null;
-      const requiresPremiumVerification = Boolean(
-        tld?.supportsPremium && !exactPremiumPricingSupported && !a.isPremium,
-      );
-      const premiumQuoteMissing = Boolean(a.isPremium && a.premiumPriceCents == null);
-      const checkoutEligible = Boolean(
-        a.available && protectedPrice?.wholesaleAvailable && !requiresPremiumVerification && !premiumQuoteMissing,
-      );
-
-      return {
-        domain: a.domain,
-        tld: a.tld,
-        available: a.available,
-        isPremium: a.isPremium,
-        reason: a.reason,
-        registerPriceCents: exactPremiumRetail ?? protectedPrice?.registerCents,
-        renewPriceCents: a.isPremium ? undefined : protectedPrice?.renewCents,
-        currency: protectedPrice?.currency ?? "USD",
-        checkoutEligible,
-        requiresPremiumVerification,
-        premiumQuoteMissing,
-        pricingProtected: Boolean(exactPremiumRetail != null || protectedPrice?.wholesaleAvailable),
-        wholesaleUpdatedAt: tld?.wholesaleUpdatedAt?.toISOString() ?? null,
-        provider: provider.name,
-      };
+    const results = availability.flatMap((item) => {
+      const tld = tldByExtension.get(item.tld.toLowerCase());
+      return tld ? [mapDiscoveryResult(item, tld, provider, policy)] : [];
     });
 
     return jsonOk({
       query,
       configured: true,
       provider: provider.name,
-      exactPremiumPricingSupported,
+      exactPremiumPricingSupported: provider.supportsExactPremiumPricing?.() ?? false,
+      checkedTlds: tldsToCheck.map((tld) => tld.extension),
       results,
     });
-  } catch (err) {
-    if (err instanceof ProviderNotConfiguredError) {
-      return jsonOk({ configured: false, message: err.message, results: [] });
+  } catch (error) {
+    if (error instanceof ProviderNotConfiguredError) {
+      return jsonOk({ configured: false, message: error.message, results: [] });
     }
-    return handleError(err);
+    return handleError(error);
   }
 }
