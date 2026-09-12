@@ -22,8 +22,36 @@ export async function GET() {
         select: { id: true, invoiceNumber: true, orderId: true, totalCents: true, currency: true, status: true, paidAt: true, createdAt: true },
       }),
     ]);
+
+    const domainIds = subscriptions.map((subscription) => subscription.domainId).filter((id): id is string => Boolean(id));
+    const serviceIds = subscriptions.map((subscription) => subscription.serviceInstanceId).filter((id): id is string => Boolean(id));
+    const [domains, services] = await Promise.all([
+      domainIds.length > 0
+        ? prisma.domain.findMany({ where: { id: { in: domainIds }, userId: user.id }, select: { id: true, name: true } })
+        : Promise.resolve([]),
+      serviceIds.length > 0
+        ? prisma.$queryRaw<Array<{ id: string; product_name: string; domain_name: string | null }>>`
+            SELECT psi."id",p."name" AS product_name,d."name" AS domain_name
+            FROM "product_service_instances" psi
+            JOIN "Product" p ON p."id"=psi."product_id"
+            LEFT JOIN "Domain" d ON d."id"=psi."domain_id"
+            WHERE psi."user_id"=${user.id} AND psi."id" IN (${PrismaJoin(serviceIds)})
+          `
+        : Promise.resolve([]),
+    ]);
+    const domainNames = new Map(domains.map((domain) => [domain.id, domain.name]));
+    const serviceNames = new Map(services.map((service) => [service.id, service.domain_name ? `${service.product_name} — ${service.domain_name}` : service.product_name]));
+    const labeledSubscriptions = subscriptions.map((subscription) => ({
+      ...subscription,
+      serviceLabel: subscription.serviceInstanceId
+        ? serviceNames.get(subscription.serviceInstanceId) || "Web Hosting"
+        : subscription.domainId
+          ? domainNames.get(subscription.domainId) || "Domain renewal"
+          : "Recurring service",
+    }));
+
     return jsonOk({
-      subscriptions,
+      subscriptions: labeledSubscriptions,
       renewals,
       invoices,
       creditBalanceCents,
@@ -36,4 +64,11 @@ export async function GET() {
   } catch (error) {
     return handleError(error);
   }
+}
+
+// Prisma's tagged template does not accept an arbitrary array directly. This
+// helper is intentionally local so service IDs remain parameterized, not string-concatenated SQL.
+function PrismaJoin(values: string[]) {
+  const { Prisma } = require("@prisma/client") as typeof import("@prisma/client");
+  return Prisma.join(values);
 }
