@@ -47,13 +47,13 @@ Transfer-in/out workflows, authorization codes, transfer status and recovery, do
 ### Phase 11 — Premium domains and aftermarket — DONE
 Separate registry-premium domains from GetSawa-owned and customer-custody aftermarket inventory; enforce custody verification, acquisition-cost/retail economics, seller consent, protected Buy Now and offer pricing, reservations, PayPal checkout, registrar-verified fulfillment, seller proceeds and auditable settlements. Unverified inventory is never public.
 
-### Phase 12 — Domain auctions — CURRENT
-Auction discovery, verified inventory eligibility, bidding, bidder controls, anti-sniping, reserve logic, closing, winner payment, inventory reservation, registrar-verified fulfillment, seller proceeds, admin controls, disputes and auditability.
+### Phase 12 — Domain auctions — DONE
+Auction discovery, verified-inventory eligibility, verified-account bidder controls, self-bid prevention, serializable bidding, anti-sniping, reserve logic, closing, winner payment windows, inventory reservation/release, PayPal capture, registrar-verified fulfillment, seller proceeds, admin controls, cancellation notifications and reconciliation/audit paths.
 
-### Phase 13 — Product catalog, bundles and add-ons — UPCOMING
-Production catalog for hosting, email, SSL/security, DNS/Anycast, WHOIS privacy, AI builder and other add-ons; provider readiness, wholesale cost, retail pricing, billing cycle, bundles, eligibility, provisioning contracts, provisioning status and renewal behavior. Products without real provisioning providers remain non-purchasable.
+### Phase 13 — Product catalog, bundles and add-ons — DONE
+Production catalog governance for hosting, email, SSL/security, DNS/Anycast, WHOIS privacy, AI builder and other add-ons; verified wholesale-cost metadata, protected retail floors, provider/fulfillment/billing readiness, bundle economics and eligibility, provider service-instance state and checkout-time revalidation. Products or bundles without real provider/provisioning readiness remain non-purchasable, and recurring catalog billing remains closed until Phase 14.
 
-### Phase 14 — Payments, billing, invoices, refunds and credits — UPCOMING
+### Phase 14 — Payments, billing, invoices, refunds and credits — CURRENT
 Harden PayPal and card-compatible payment paths, payment reconciliation, refunds, credits, invoices, subscriptions/renewals, failed-payment recovery, financial ledger, provider fees and finance reporting.
 
 ### Phase 15 — Web hosting product — UPCOMING
