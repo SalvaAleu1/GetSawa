@@ -17,6 +17,9 @@ interface EmailDomainRow {
   last_dns_checked_at: Date | null;
 }
 
+interface DohAnswer { name?: string; type?: number; data?: string; }
+interface DohResponse { Status?: number; Answer?: DohAnswer[]; Comment?: string; }
+
 function normalizeHost(host: string, domain: string) {
   const value = host.trim().toLowerCase().replace(/\.$/, "");
   const normalizedDomain = domain.trim().toLowerCase().replace(/\.$/, "");
@@ -45,6 +48,57 @@ function recordMatches(record: DnsRecordResult, required: EmailDnsRecord, domain
   return true;
 }
 
+async function resolvePublic(name: string, type: "MX" | "CNAME" | "TXT"): Promise<string[]> {
+  const url = new URL("https://cloudflare-dns.com/dns-query");
+  url.searchParams.set("name", name);
+  url.searchParams.set("type", type);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(url, { headers: { Accept: "application/dns-json" }, cache: "no-store", signal: controller.signal });
+    if (!response.ok) throw new Error(`Public DNS resolver returned HTTP ${response.status}.`);
+    const body = await response.json() as DohResponse;
+    if (body.Status !== 0 && body.Status !== 3) throw new Error(body.Comment || `Public DNS resolver returned status ${body.Status}.`);
+    return (body.Answer ?? []).map((answer) => String(answer.data ?? "")).filter(Boolean);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function publicMxMatches(answer: string, required: EmailDnsRecord) {
+  const match = answer.trim().match(/^(\d+)\s+(.+)$/);
+  if (!match) return false;
+  return Number(match[1]) === Number(required.priority ?? 0) && normalizeValue(match[2]) === normalizeValue(required.value);
+}
+
+function publicCnameMatches(answer: string, required: EmailDnsRecord) {
+  return normalizeValue(answer) === normalizeValue(required.value);
+}
+
+function normalizeTxtAnswer(answer: string) {
+  return answer.replace(/^"|"$/g, "").replace(/"\s+"/g, "").trim();
+}
+
+async function publicDnsState(domain: string, required: EmailDnsRecord[]) {
+  const requiredMx = required.filter((record) => record.type === "MX");
+  const requiredCname = required.filter((record) => record.type === "CNAME");
+  const requiredSpf = required.find((record) => record.type === "TXT" && record.purpose === "spf") ?? null;
+  try {
+    const [mxAnswers, cnameAnswers, txtAnswers] = await Promise.all([
+      resolvePublic(domain, "MX"),
+      Promise.all(requiredCname.map((record) => resolvePublic(normalizeHost(record.host, domain), "CNAME"))).then((groups) => groups.flat()),
+      resolvePublic(domain, "TXT"),
+    ]);
+    const mxReady = requiredMx.every((record) => mxAnswers.some((answer) => publicMxMatches(answer, record)));
+    const cnameReady = requiredCname.every((record) => cnameAnswers.some((answer) => publicCnameMatches(answer, record)));
+    const spfRecords = txtAnswers.map(normalizeTxtAnswer).filter((value) => value.toLowerCase().startsWith("v=spf1"));
+    const spfReady = Boolean(requiredSpf) && spfRecords.some((value) => value.toLowerCase().includes("include:_spf.hostedemail.com"));
+    return { mxReady, cnameReady, spfReady, spfNeedsManualMerge: Boolean(requiredSpf) && spfRecords.length > 0 && !spfReady, error: null as string | null };
+  } catch (error) {
+    return { mxReady: false, cnameReady: false, spfReady: false, spfNeedsManualMerge: false, error: error instanceof Error ? error.message : "Public DNS verification failed." };
+  }
+}
+
 async function getEmailDomainForUser(userId: string, domainId: string) {
   const rows = await prisma.$queryRaw<EmailDomainRow[]>`
     SELECT eds.* FROM "email_domain_services" eds
@@ -70,27 +124,24 @@ export async function inspectEmailDns(userId: string, domainId: string) {
 
   const info = await domainProvider.getDomainInfo(domain.name);
   const managedHere = domain.providerName === domainProvider.name && isNameSiloManagedDns(info.nameservers);
-  let records: DnsRecordResult[] = [];
-  if (managedHere) records = await domainProvider.listDnsRecords(domain.name);
+  let configuredRecords: DnsRecordResult[] = [];
+  if (managedHere) configuredRecords = await domainProvider.listDnsRecords(domain.name);
+  const configuredMx = required.filter((record) => record.type === "MX").every((needed) => configuredRecords.some((record) => recordMatches(record, needed, domain.name)));
+  const configuredCname = required.filter((record) => record.type === "CNAME").every((needed) => configuredRecords.some((record) => recordMatches(record, needed, domain.name)));
 
-  const mx = required.filter((record) => record.type === "MX");
-  const cname = required.filter((record) => record.type === "CNAME");
-  const spf = required.find((record) => record.type === "TXT" && record.purpose === "spf") ?? null;
-  const mxReady = managedHere && mx.every((requiredRecord) => records.some((record) => recordMatches(record, requiredRecord, domain.name)));
-  const cnameReady = managedHere && cname.every((requiredRecord) => records.some((record) => recordMatches(record, requiredRecord, domain.name)));
-  const rootSpfRecords = managedHere ? records.filter((record) => record.type === "TXT" && isRoot(record, domain.name) && record.value.trim().toLowerCase().startsWith("v=spf1")) : [];
-  const spfReady = Boolean(spf) && rootSpfRecords.some((record) => record.value.toLowerCase().includes("include:_spf.hostedemail.com"));
-  const spfNeedsManualMerge = Boolean(spf) && rootSpfRecords.length > 0 && !spfReady;
-  const routingReady = mxReady && cnameReady;
+  const publicState = await publicDnsState(domain.name, required);
+  const routingReady = publicState.mxReady && publicState.cnameReady;
   const state = {
     authoritativeDnsManagedByGetSawa: managedHere,
     nameservers: info.nameservers,
     requiredRecords: required,
-    mxReady,
-    cnameReady,
-    spfReady,
-    spfNeedsManualMerge,
+    configuredAtManagedProvider: managedHere ? { mxReady: configuredMx, cnameReady: configuredCname } : null,
+    mxReady: publicState.mxReady,
+    cnameReady: publicState.cnameReady,
+    spfReady: publicState.spfReady,
+    spfNeedsManualMerge: publicState.spfNeedsManualMerge,
     routingReady,
+    publicCheckError: publicState.error,
     checkedAt: new Date(),
   };
 
@@ -134,8 +185,6 @@ export async function applyEmailDnsCutover(params: { userId: string; domainId: s
   const requiredCname = required.filter((record) => record.type === "CNAME");
   const requiredSpf = required.find((record) => record.type === "TXT" && record.purpose === "spf") ?? null;
 
-  // Replace root MX records atomically from the application's perspective: old
-  // MX records are removed only after the provider/domain/mailbox already exist.
   for (const record of records.filter((record) => record.type === "MX" && isRoot(record, domain.name) && !requiredMx.some((needed) => recordMatches(record, needed, domain.name)))) {
     await domainProvider.deleteDnsRecord(domain.name, record.providerRecordId);
   }
@@ -146,8 +195,6 @@ export async function applyEmailDnsCutover(params: { userId: string; domainId: s
     }
   }
 
-  // The friendly mail hostname must be a CNAME, so explicitly remove only the
-  // record types that conflict at that host after customer confirmation.
   records = await domainProvider.listDnsRecords(domain.name);
   for (const needed of requiredCname) {
     const neededHost = normalizeHost(needed.host, domain.name);
@@ -174,7 +221,7 @@ export async function applyEmailDnsCutover(params: { userId: string; domainId: s
     action: "email.dns_cutover_applied",
     resource: "domain",
     resourceId: params.domainId,
-    metadata: { domain: domain.name, spfNeedsManualMerge: result.spfNeedsManualMerge, routingReady: result.routingReady },
+    metadata: { domain: domain.name, spfNeedsManualMerge: result.spfNeedsManualMerge, routingReady: result.routingReady, publicCheckError: result.publicCheckError },
   });
   return result;
 }
