@@ -1,6 +1,6 @@
 # GetSawa Master Platform Roadmap
 
-This is the canonical rebuild roadmap for GetSawa. A phase is complete when its implementation is committed, reviewed against the repository contracts and safety rules, and is ready for the Cloudflare build/deployment gate. GitHub Actions are not required while the account's monthly Actions allowance is exhausted.
+This is the canonical rebuild roadmap for GetSawa. A phase is complete when its implementation is committed, reviewed against repository contracts and safety rules, and is ready for the Cloudflare build/deployment gate. GitHub Actions are not required while the account's monthly Actions allowance is exhausted.
 
 ## Status legend
 
@@ -44,14 +44,14 @@ Complete DNS record editor, validation, nameservers, DNSSEC/DS record management
 ### Phase 10 — Transfers, renewals, locks and privacy — DONE
 Transfer-in/out workflows, authorization codes, transfer status and recovery, domain locks, WHOIS privacy, renewal pricing, multi-year renewals, expiry-state handling and lifecycle controls.
 
-### Phase 11 — Premium domains and aftermarket — CURRENT
-Separate registry-premium domains from GetSawa-owned/aftermarket inventory, authoritative premium quoting, acquisition cost vs retail price, renewal premium handling, premium search/browse, offers and safe fulfillment.
+### Phase 11 — Premium domains and aftermarket — DONE
+Separate registry-premium domains from GetSawa-owned and customer-custody aftermarket inventory; enforce custody verification, acquisition-cost/retail economics, seller consent, protected Buy Now and offer pricing, reservations, PayPal checkout, registrar-verified fulfillment, seller proceeds and auditable settlements. Unverified inventory is never public.
 
-### Phase 12 — Domain auctions — UPCOMING
-Auction discovery, bidding, anti-sniping, bidder eligibility, reserve logic, closing, winner payment, fulfillment, admin controls, disputes and auditability.
+### Phase 12 — Domain auctions — CURRENT
+Auction discovery, verified inventory eligibility, bidding, bidder controls, anti-sniping, reserve logic, closing, winner payment, inventory reservation, registrar-verified fulfillment, seller proceeds, admin controls, disputes and auditability.
 
 ### Phase 13 — Product catalog, bundles and add-ons — UPCOMING
-Production catalog for hosting, email, SSL/security, DNS/Anycast, WHOIS privacy, AI builder and other add-ons; wholesale cost, retail pricing, billing cycle, bundles, eligibility, provisioning status and renewal behavior.
+Production catalog for hosting, email, SSL/security, DNS/Anycast, WHOIS privacy, AI builder and other add-ons; provider readiness, wholesale cost, retail pricing, billing cycle, bundles, eligibility, provisioning contracts, provisioning status and renewal behavior. Products without real provisioning providers remain non-purchasable.
 
 ### Phase 14 — Payments, billing, invoices, refunds and credits — UPCOMING
 Harden PayPal and card-compatible payment paths, payment reconciliation, refunds, credits, invoices, subscriptions/renewals, failed-payment recovery, financial ledger, provider fees and finance reporting.
@@ -110,11 +110,13 @@ Add secondary registrars/providers where commercially useful, premium-quote-capa
 ## Working rules
 
 1. Keep `main` deployable; substantial work happens on named phase branches before fast-forwarding into `main`.
-2. Never replace a working provider flow with mock/sandbox behavior in production code.
-3. Pricing and checkout must fail safe when wholesale cost or provider state is uncertain.
-4. UI labels must not claim a service is live until its backend/provider provisioning is live.
-5. Customer-facing pages must never expose README text, developer instructions, implementation notes, placeholder copy, fake data or setup guidance. Public UI must contain polished product copy backed by real state and real actions.
-6. Prefer shared primitives and provider abstractions over duplicated one-off code.
-7. Every phase should leave documentation, operational behavior and error states clearer than before.
-8. Cloudflare is the target production runtime; Vercel remains transitional until Phase 29 is verified.
-9. While GitHub Actions quota is exhausted, do not block development on Actions. Use static review/local checks where available, and treat the Cloudflare build/deployment as the runtime build gate.
+2. Backend/provider truth takes priority over UI breadth. A customer action is not complete until its server-side authorization, pricing, provider/provisioning behavior, reconciliation, failure handling and audit trail exist.
+3. Never replace a working provider flow with mock, sandbox or simulated behavior in production code.
+4. Pricing and checkout must fail safe when wholesale cost, custody, provider capability or provisioning state is uncertain.
+5. UI labels must not claim a service is live until its backend/provider provisioning is live.
+6. Customer-facing pages must never expose README text, developer instructions, implementation notes, placeholder copy, fake data or setup guidance. Public UI must contain polished product copy backed by real state and real actions.
+7. Never create a purchasable product merely because a UI card or database product row exists. Real provider readiness and a supported fulfillment contract are mandatory.
+8. Prefer shared primitives and provider abstractions over duplicated one-off code.
+9. Every phase should leave data integrity, operational behavior, reconciliation and error states clearer than before.
+10. Cloudflare is the target production runtime; Vercel remains transitional until Phase 29 is verified.
+11. While GitHub Actions quota is exhausted, do not block development on Actions. Use static review/local checks where available, and treat the Cloudflare build/deployment as the runtime build gate.
