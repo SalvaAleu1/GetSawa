@@ -16,11 +16,15 @@ export async function cancelAuctionAndRelease(auctionId: string, reason: string)
     const inventory = inventoryRows[0];
     if (!inventory) throw new AuctionError("Auction inventory linkage is missing.");
 
+    const bidderRows = await tx.$queryRaw<Array<{ userId: string }>>`SELECT DISTINCT "userId" FROM "AuctionBid" WHERE "auctionId"=${auction.id}`;
     const updated = await tx.auction.update({ where: { id: auction.id }, data: { status: "CANCELLED" } });
     if (!inventory.released_at) {
       await tx.premiumDomain.update({ where: { id: inventory.premium_domain_id }, data: { status: "LISTED", isAuction: false } });
       await tx.$executeRaw`UPDATE "premium_inventory_meta" SET "reserved_by_user_id"=NULL, "reserved_until"=NULL, "updated_at"=CURRENT_TIMESTAMP WHERE "premium_domain_id"=${inventory.premium_domain_id} AND "sold_at" IS NULL`;
       await tx.$executeRaw`UPDATE "auction_inventory" SET "outcome"='ADMIN_CANCELLED', "released_at"=CURRENT_TIMESTAMP, "updated_at"=CURRENT_TIMESTAMP WHERE "auction_id"=${auction.id}`;
+    }
+    if (bidderRows.length > 0) {
+      await tx.notification.createMany({ data: bidderRows.map((bidder) => ({ userId: bidder.userId, type: "AUCTION_CANCELLED", title: `Auction cancelled — ${auction.domainName}`, body: `The auction for ${auction.domainName} was cancelled. Reason: ${normalizedReason}` })) });
     }
     return { auction: updated, reason: normalizedReason };
   });
