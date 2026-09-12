@@ -10,6 +10,7 @@ async function ensurePaidInvoice(orderId: string) {
   const order = await prisma.order.findUnique({ where: { id: orderId }, include: { user: true, invoice: true } });
   if (!order) throw new Error("Order not found while finalizing payment accounting.");
   if (order.invoice) {
+    if (order.invoice.status === "REFUNDED") return;
     if (order.invoice.status !== "PAID") {
       await prisma.invoice.update({ where: { id: order.invoice.id }, data: { status: "PAID", paidAt: order.invoice.paidAt ?? new Date() } });
     }
@@ -47,7 +48,6 @@ async function ensurePaidInvoice(orderId: string) {
 /**
  * Records one successful payment exactly once even when confirmation arrives
  * through browser capture, webhook and reconciliation in different orders.
- * It also makes invoice state converge to PAID regardless of which path won.
  */
 export async function recordPaymentSettlement(params: {
   paymentId: string;
@@ -56,7 +56,7 @@ export async function recordPaymentSettlement(params: {
 }) {
   const payment = await prisma.payment.findUnique({ where: { id: params.paymentId }, include: { order: true } });
   if (!payment) throw new Error("Payment not found while recording settlement.");
-  if (payment.status !== "PAID") throw new Error("Only paid payments can be recorded as settled.");
+  if (!["PAID", "PARTIALLY_REFUNDED", "REFUNDED"].includes(payment.status)) throw new Error("Only captured payments can be recorded as settled.");
 
   await ensurePaidInvoice(payment.orderId);
 
@@ -99,7 +99,6 @@ export async function recordPaymentSettlement(params: {
   });
 }
 
-/** A completed refund is also idempotent by provider refund reference. */
 export async function recordRefundSettlement(params: {
   refundId: string;
   providerFeeCents?: number | null;
@@ -158,7 +157,7 @@ export async function recordPaymentDispute(params: {
     INSERT INTO "finance_events"
       ("id","event_key","event_type","payment_id","order_id","provider","gross_cents","provider_fee_cents","net_cents","currency","provider_reference")
     VALUES
-      (${crypto.randomUUID()},${eventKey},'PAYMENT_DISPUTED',${payment.id},${payment.orderId},${payment.provider},${payment.amountCents},0,${-payment.amountCents},${payment.currency.toUpperCase()},${params.providerReference})
+      (${crypto.randomUUID()},${eventKey},'PAYMENT_DISPUTED',${payment.id},${payment.orderId},${payment.provider},${payment.amountCents},0,0,${payment.currency.toUpperCase()},${params.providerReference})
     ON CONFLICT ("event_key") DO NOTHING
   `;
   return Number(inserted) === 1;
