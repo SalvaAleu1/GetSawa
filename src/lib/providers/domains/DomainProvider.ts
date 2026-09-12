@@ -30,6 +30,21 @@ export interface DomainPricing {
   currency: string;
 }
 
+export interface TransferAvailability {
+  domain: string;
+  available: boolean;
+  reason?: string;
+  premium?: boolean;
+  priceCents?: number;
+  currency?: string;
+}
+
+export interface AuthCodeRequestResult {
+  requested: boolean;
+  delivery: "ADMIN_EMAIL" | "UNKNOWN";
+  message: string;
+}
+
 export interface DomainRegistrationRequest {
   domain: string;
   years: number;
@@ -136,12 +151,14 @@ export interface DomainProvider {
   supportsExactPremiumPricing?(): boolean;
 
   checkAvailability(domains: string[]): Promise<DomainAvailability[]>;
+  checkTransferAvailability?(domains: string[]): Promise<TransferAvailability[]>;
   getPricing(tlds: string[]): Promise<DomainPricing[]>;
 
   registerDomain(req: DomainRegistrationRequest): Promise<DomainRegistrationResult>;
   renewDomain(req: DomainRenewalRequest): Promise<DomainRenewalResult>;
   transferDomain(req: DomainTransferRequest): Promise<DomainTransferResult>;
   getTransferStatus(providerTransferId: string): Promise<{ status: string; errorMessage?: string }>;
+  requestAuthCode?(domain: string): Promise<AuthCodeRequestResult>;
 
   getDomainInfo(domain: string): Promise<DomainInfo>;
   listDomains(): Promise<DomainInfo[]>;
