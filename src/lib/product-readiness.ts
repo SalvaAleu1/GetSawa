@@ -1,8 +1,8 @@
 import type { Product } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getEmailProvider } from "@/lib/providers/email/EmailProvider";
 import { getAIProvider } from "@/lib/providers/ai/AIProviderFactory";
 import { getHostingOperationalState } from "@/lib/hosting-readiness";
+import { getEmailOperationalState } from "@/lib/email-readiness";
 import { computeSafeRetailPrice } from "@/lib/pricing-safety";
 import { getPricingSafetyPolicy } from "@/lib/pricing-policy";
 
@@ -94,13 +94,19 @@ export async function getProductReadiness(product: Product, suppliedMeta?: Produ
       if (!meta.requiresDomain) reasons.push("Hosting products must require a managed domain.");
       if (product.providerName && !["hosting", "cpanel_whm"].includes(product.providerName)) reasons.push("Hosting product provider name does not match the WHM integration.");
     } else if (contract === "EMAIL_MAILBOX") {
-      const provider = getEmailProvider();
-      providerReady = provider.isConfigured();
+      const email = await getEmailOperationalState();
       const storageMb = Number(meta.providerConfig.storageMb);
-      fulfillmentReady = product.category === "EMAIL" && product.providerName === "email" && meta.requiresDomain && Number.isInteger(storageMb) && storageMb > 0;
-      if (!providerReady) reasons.push("A concrete business email provider is not configured.");
+      providerReady = email.configured && email.verified;
+      fulfillmentReady = product.category === "EMAIL"
+        && ["email", "email_hosting", "opensrs_hosted_email"].includes(product.providerName || "")
+        && meta.requiresDomain
+        && Number.isInteger(storageMb)
+        && storageMb > 0;
+      if (!email.configured) reasons.push("OpenSRS Hosted Email credentials are not configured.");
+      else if (!email.verified) reasons.push(email.reason || "OpenSRS Hosted Email must pass a live provider test before mailboxes can be sold.");
       if (!meta.requiresDomain) reasons.push("Mailbox products must require a managed domain.");
       if (!Number.isInteger(storageMb) || storageMb <= 0) reasons.push("Mailbox storage configuration is missing.");
+      if (product.providerName && !["email", "email_hosting", "opensrs_hosted_email"].includes(product.providerName)) reasons.push("Business email product provider name does not match the OpenSRS integration.");
     } else {
       providerReady = false;
       fulfillmentReady = false;
@@ -113,16 +119,20 @@ export async function getProductReadiness(product: Product, suppliedMeta?: Produ
     && meta?.provisioningContract === "HOSTING_ACCOUNT"
     && meta.renewalContract === "HOSTING_RENEWAL"
     && ["MONTHLY", "YEARLY"].includes(product.billingCycle);
+  const isRecurringEmail = product.category === "EMAIL"
+    && meta?.provisioningContract === "EMAIL_MAILBOX"
+    && meta.renewalContract === "EMAIL_RENEWAL"
+    && ["MONTHLY", "YEARLY"].includes(product.billingCycle);
 
-  if (isRecurringHosting) {
+  if (isRecurringHosting || isRecurringEmail) {
     const renewalPrice = product.renewalPriceCents;
     billingReady = product.setupFeeCents === 0
       && Number.isSafeInteger(renewalPrice)
       && Number(renewalPrice) > 0
       && minimumRetailCents !== null
       && Number(renewalPrice) >= minimumRetailCents;
-    if (!Number.isSafeInteger(renewalPrice) || Number(renewalPrice) <= 0) reasons.push("Recurring hosting requires a positive renewal price.");
-    else if (minimumRetailCents !== null && Number(renewalPrice) < minimumRetailCents) reasons.push(`Hosting renewal price is below the protected minimum of ${(minimumRetailCents / 100).toFixed(2)} ${product.currency}.`);
+    if (!Number.isSafeInteger(renewalPrice) || Number(renewalPrice) <= 0) reasons.push(`${isRecurringEmail ? "Recurring email" : "Recurring hosting"} requires a positive renewal price.`);
+    else if (minimumRetailCents !== null && Number(renewalPrice) < minimumRetailCents) reasons.push(`${isRecurringEmail ? "Email" : "Hosting"} renewal price is below the protected minimum of ${(minimumRetailCents / 100).toFixed(2)} ${product.currency}.`);
   } else {
     billingReady = product.billingCycle === "ONE_TIME" && product.renewalPriceCents == null && product.setupFeeCents === 0;
     if (product.billingCycle !== "ONE_TIME") reasons.push("Recurring billing is not enabled for this product contract.");
@@ -152,7 +162,7 @@ export async function validateProductConfiguration(params: { product: Product; u
     domain = await prisma.domain.findFirst({ where: { id: params.domainId, userId: params.userId, status: { in: ["ACTIVE", "EXPIRING"] } }, select: { id: true, name: true } });
     if (!domain) throw new Error("The selected domain is not an active domain in your account.");
   }
-  const config = params.configuration ?? {};
+  const config = { ...(params.configuration ?? {}) };
   if (meta.provisioningContract === "EMAIL_MAILBOX") {
     const localPart = (config.localPart || "").trim().toLowerCase();
     if (!/^[a-z0-9][a-z0-9._-]{0,62}[a-z0-9]$|^[a-z0-9]$/.test(localPart)) throw new Error("Enter a valid mailbox name.");
