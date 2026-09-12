@@ -22,9 +22,10 @@ const NAV: PortalNavGroup[] = [
     ],
   },
   {
-    section: "Websites & Hosting",
+    section: "Digital Services",
     items: [
       { href: "/dashboard/hosting", label: "Web Hosting" },
+      { href: "/dashboard/email", label: "Business Email" },
       { href: "/dashboard/websites", label: "My Websites" },
     ],
   },
