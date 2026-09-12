@@ -56,11 +56,11 @@ Production catalog governance for hosting, email, SSL/security, DNS/Anycast, WHO
 ### Phase 14 — Payments, billing, invoices, refunds and credits — DONE
 Production PayPal payment lifecycle with amount/currency verification, webhook and reconciliation convergence, idempotent finance events, invoices, provider-fee capture, refunds and disputes, registrar-priced domain-renewal invoices, retry-safe failed payments, account-credit reservation/application/refund controls, finance reporting and truthful payment-method capability reporting. A separate direct-card gateway remains fail-closed until a real production provider is configured. Build verification evidence is documented in `docs/PHASE14_VERIFICATION.md`; the authoritative runtime build remains the Cloudflare gate.
 
-### Phase 15 — Web hosting product — CURRENT
-Select and integrate a real hosting provider, plans, provisioning, suspension/reactivation, storage/bandwidth state, sites, backups, SFTP/deployment controls where supported, usage visibility and billing lifecycle. No hosting plan may become purchasable until a concrete provider and fulfilment contract are configured and verified.
+### Phase 15 — Web hosting product — DONE
+Production cPanel/WHM API 1 integration with credential-fingerprint/live-test gating, reseller-creatable package verification, managed-domain checkout configuration, idempotent account provisioning, provider-backed service instances, secure temporary cPanel access, live disk/bandwidth visibility, monthly/yearly protected renewals, failed-payment grace handling, cancel-at-period-end, suspension/reactivation, full-refund suspension recovery, admin operations and Cloudflare scheduled enforcement. Hosting remains fail-closed until real WHM credentials pass the live provider test and the exact product package is verified as creatable. Build/provider verification evidence is documented in `docs/PHASE15_VERIFICATION.md`; the authoritative runtime build and end-to-end live-provider test remain deployment gates.
 
-### Phase 16 — Business email product — UPCOMING
-Select and integrate a real email provider; domain verification, mailbox creation, aliases, forwarding, quotas, password reset, DNS records, suspension, renewal and admin/customer management.
+### Phase 16 — Business email product — CURRENT
+Select and integrate a real email provider; domain verification, mailbox creation, aliases, forwarding, quotas, password reset, DNS records, suspension, renewal and admin/customer management. Email products must remain non-purchasable until the selected provider, mailbox provisioning, DNS requirements, billing lifecycle and recovery paths are genuinely implemented and verified.
 
 ### Phase 17 — SSL, CDN, DNS and security add-ons — UPCOMING
 Operational SSL/TLS products where applicable, Cloudflare-based CDN/security options, DNSSEC/Anycast offerings, malware/security integrations if selected, provisioning, health monitoring and renewals.
