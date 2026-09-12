@@ -8,6 +8,7 @@ import { validateDomainLifecycleCheckout } from "@/lib/checkout-domain-guard";
 import { reservePricedPremiumCart, validatePricedPremiumCart, type ReservedPremiumItem } from "@/lib/premium-checkout";
 import { releasePremiumReservation } from "@/lib/premium-aftermarket";
 import { assertCatalogPriceFloors, validateCatalogCheckout } from "@/lib/catalog-checkout-guard";
+import { validateProductCheckoutConfigurations } from "@/lib/product-checkout-config";
 import { finalizeOrderCredit, releaseOrderCredit, reserveOrderCreditTx } from "@/lib/credits";
 import { generateOrderNumber } from "@/lib/pricing";
 import { encryptSecret } from "@/lib/crypto";
@@ -35,8 +36,10 @@ export async function POST(req: NextRequest) {
     const rl = checkRateLimit("create-order", user.id, { max: 20, windowMs: 60_000 });
     if (!rl.allowed) return jsonError("Too many checkout attempts. Please slow down.", 429);
 
-    const input = createOrderSchema.parse(await req.json());
+    const rawBody = await req.json();
+    const input = createOrderSchema.parse(rawBody);
     await validateDomainLifecycleCheckout(input, user.id);
+    const productConfigurations = await validateProductCheckoutConfigurations(rawBody, input, user.id);
     const catalogFloors = await validateCatalogCheckout(input);
     const priced = await priceCart(input, user.id);
     await validatePricedPremiumCart(priced, user.id);
@@ -114,6 +117,19 @@ export async function POST(req: NextRequest) {
               INSERT INTO "premium_order_links" ("order_item_id","premium_domain_id","premium_offer_id")
               VALUES (${orderItemId},${reserved.premiumDomainId},NULL)
               ON CONFLICT ("order_item_id") DO NOTHING
+            `;
+          }
+
+          for (const configured of productConfigurations) {
+            const orderItemId = itemIds[configured.itemIndex];
+            if (!orderItemId) throw new Error("Product configuration linkage failed.");
+            await tx.$executeRaw`
+              INSERT INTO "product_order_configuration" ("order_item_id","domain_id","configuration")
+              VALUES (${orderItemId},${configured.domainId},${JSON.stringify(configured.configuration)}::jsonb)
+              ON CONFLICT ("order_item_id") DO UPDATE SET
+                "domain_id"=EXCLUDED."domain_id",
+                "configuration"=EXCLUDED."configuration",
+                "updated_at"=CURRENT_TIMESTAMP
             `;
           }
 
