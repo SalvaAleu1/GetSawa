@@ -7,6 +7,8 @@ import { transitionOrderStatus } from "@/lib/order-lifecycle";
 import { notifyOrderLifecycle } from "@/lib/order-notifications";
 import { prisma } from "@/lib/prisma";
 import { markRenewalPaid, markRenewalOrderPaymentFailed } from "@/lib/billing";
+import { recordPaymentDispute, recordPaymentSettlement, recordRefundSettlement } from "@/lib/finance";
+import { extractPayPalCaptureEconomics, extractPayPalRefundEconomics } from "@/lib/paypal-economics";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,36 +70,38 @@ export async function POST(req: NextRequest) {
 
 async function handleVerifiedEvent(event: Record<string, unknown>) {
   const type = typeof event.event_type === "string" ? event.event_type : "";
-  const resource = (event.resource && typeof event.resource === "object" ? event.resource : {}) as Record<string, unknown>;
+  const resource = (event.resource && typeof event.resource === "object" ? event.resource : {}) as Record<string, any>;
+
   switch (type) {
     case "PAYMENT.CAPTURE.COMPLETED": {
-      const captureId = typeof resource.id === "string" ? resource.id : undefined;
-      const supplementary = resource.supplementary_data as Record<string, unknown> | undefined;
-      const relatedIds = supplementary?.related_ids as Record<string, unknown> | undefined;
-      const paypalOrderId = typeof relatedIds?.order_id === "string" ? relatedIds.order_id : undefined;
+      const economics = extractPayPalCaptureEconomics(resource);
+      const captureId = economics.captureId;
+      const paypalOrderId = relatedId(resource, "order_id");
       let payment = captureId ? await prisma.payment.findFirst({ where: { providerCaptureId: captureId } }) : null;
       if (!payment && paypalOrderId) payment = await prisma.payment.findFirst({ where: { providerOrderId: paypalOrderId } });
       if (!payment) return;
       if (paypalOrderId && payment.providerOrderId && payment.providerOrderId !== paypalOrderId) throw new Error("PayPal webhook order ID does not match the recorded payment.");
-
-      if (payment.status !== "PAID") {
-        const amount = Number((resource.amount as Record<string, unknown> | undefined)?.value);
-        const capturedCents = Number.isFinite(amount) ? Math.round(amount * 100) : -1;
-        const amountObject = resource.amount as Record<string, unknown> | undefined;
-        const capturedCurrency = typeof amountObject?.currency_code === "string" ? String(amountObject.currency_code).toUpperCase() : "";
-        if (capturedCents !== payment.amountCents || capturedCurrency !== payment.currency.toUpperCase()) {
-          await prisma.payment.update({ where: { id: payment.id }, data: { status: "DISPUTED", failureReason: "Webhook capture amount or currency did not match the recorded payment." } });
-          return;
-        }
-        await prisma.payment.updateMany({ where: { id: payment.id, status: { not: "PAID" } }, data: { status: "PAID", providerCaptureId: captureId || payment.providerCaptureId } });
-        await transitionOrderStatus({ orderId: payment.orderId, to: "PAYMENT_CONFIRMED", reason: "PayPal capture verified and payment confirmed.", metadata: { provider: "paypal", captureId } });
+      if (!captureId || economics.grossCents !== payment.amountCents || economics.currency !== payment.currency.toUpperCase()) {
+        await prisma.payment.update({ where: { id: payment.id }, data: { status: "DISPUTED", failureReason: "Webhook capture amount, currency or capture reference did not match the recorded payment." } });
+        await recordPaymentDispute({ paymentId: payment.id, providerReference: captureId || paypalOrderId || String(event.id || "unknown") }).catch(() => undefined);
+        return;
       }
 
+      const claimed = await prisma.payment.updateMany({ where: { id: payment.id, status: { in: ["PENDING", "AUTHORIZED"] } }, data: { status: "PAID", providerCaptureId: captureId, failureReason: null } });
+      if (claimed.count === 1) {
+        await transitionOrderStatus({ orderId: payment.orderId, to: "PAYMENT_CONFIRMED", reason: "PayPal capture verified and payment confirmed.", metadata: { provider: "paypal", captureId } });
+      }
+      await recordPaymentSettlement({ paymentId: payment.id, providerReference: captureId, providerFeeCents: economics.providerFeeCents });
+
       const order = await prisma.order.findUnique({ where: { id: payment.orderId }, include: { user: true } });
-      if (order) {
+      if (order && claimed.count === 1) {
         await notifyOrderLifecycle({
-          orderId: order.id, orderNumber: order.orderNumber, userId: order.userId, email: order.user.email,
-          type: "ORDER_PAYMENT_CONFIRMED", title: `Payment confirmed for ${order.orderNumber}`,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          userId: order.userId,
+          email: order.user.email,
+          type: "ORDER_PAYMENT_CONFIRMED",
+          title: `Payment confirmed for ${order.orderNumber}`,
           body: `Your payment for order ${order.orderNumber} has been confirmed. Fulfilment is starting now.`,
           emailSubject: `Payment confirmed — ${order.orderNumber}`,
           emailHtml: `<p>Your payment for order <strong>${escapeHtml(order.orderNumber)}</strong> has been confirmed. Fulfilment is starting now.</p>`,
@@ -108,10 +112,12 @@ async function handleVerifiedEvent(event: Record<string, unknown>) {
       if (completed?.status === "ACTIVE") await markRenewalPaid(payment.orderId);
       break;
     }
+
     case "PAYMENT.CAPTURE.DENIED": {
       const captureId = typeof resource.id === "string" ? resource.id : undefined;
-      if (!captureId) return;
-      const payment = await prisma.payment.findFirst({ where: { providerCaptureId: captureId } });
+      const paypalOrderId = relatedId(resource, "order_id");
+      let payment = captureId ? await prisma.payment.findFirst({ where: { providerCaptureId: captureId } }) : null;
+      if (!payment && paypalOrderId) payment = await prisma.payment.findFirst({ where: { providerOrderId: paypalOrderId } });
       if (payment && payment.status !== "PAID") {
         await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED", failureReason: "Denied by PayPal" } });
         await markRenewalOrderPaymentFailed(payment.orderId, "PayPal denied the renewal payment.");
@@ -119,28 +125,72 @@ async function handleVerifiedEvent(event: Record<string, unknown>) {
       }
       break;
     }
+
     case "PAYMENT.CAPTURE.REFUNDED": {
-      const captureId = typeof resource.id === "string" ? resource.id : undefined;
-      if (!captureId) return;
-      const payment = await prisma.payment.findFirst({ where: { providerCaptureId: captureId } });
-      if (payment) {
-        await prisma.payment.update({ where: { id: payment.id }, data: { status: "REFUNDED" } });
-        await transitionOrderStatus({ orderId: payment.orderId, to: "REFUNDED", reason: "PayPal refund confirmed.", metadata: { provider: "paypal", captureId } });
+      const economics = extractPayPalRefundEconomics(resource);
+      const refundId = economics.refundId;
+      const captureId = relatedId(resource, "capture_id") || captureIdFromLinks(resource);
+      if (!refundId || !captureId || economics.grossCents == null || economics.grossCents <= 0) return;
+      const payment = await prisma.payment.findFirst({ where: { providerCaptureId: captureId }, include: { refunds: true } });
+      if (!payment) return;
+      if (economics.currency && economics.currency !== payment.currency.toUpperCase()) {
+        await prisma.payment.update({ where: { id: payment.id }, data: { status: "DISPUTED", failureReason: "PayPal refund currency did not match the captured payment." } });
+        return;
       }
+
+      let refund = await prisma.refund.findFirst({ where: { providerRefundId: refundId } });
+      if (!refund) {
+        const alreadyRefunded = payment.refunds.filter((row) => row.status === "COMPLETED").reduce((sum, row) => sum + row.amountCents, 0);
+        if (alreadyRefunded + economics.grossCents > payment.amountCents) {
+          await prisma.payment.update({ where: { id: payment.id }, data: { status: "DISPUTED", failureReason: "PayPal reported refunds exceeding the captured payment." } });
+          return;
+        }
+        refund = await prisma.refund.create({ data: { paymentId: payment.id, amountCents: economics.grossCents, reason: "Refund confirmed by PayPal webhook", providerRefundId: refundId, status: "COMPLETED" } });
+      }
+
+      const totals = await prisma.refund.aggregate({ where: { paymentId: payment.id, status: "COMPLETED" }, _sum: { amountCents: true } });
+      const refundedCents = totals._sum.amountCents ?? 0;
+      const fullyRefunded = refundedCents >= payment.amountCents;
+      await prisma.payment.update({ where: { id: payment.id }, data: { status: fullyRefunded ? "REFUNDED" : "PARTIALLY_REFUNDED" } });
+      if (fullyRefunded) {
+        await transitionOrderStatus({ orderId: payment.orderId, to: "REFUNDED", reason: "PayPal refund confirmed.", metadata: { provider: "paypal", refundId } }).catch(() => undefined);
+        await prisma.invoice.updateMany({ where: { orderId: payment.orderId }, data: { status: "REFUNDED" } });
+      }
+      await recordRefundSettlement({ refundId: refund.id, providerFeeCents: economics.providerFeeCents });
       break;
     }
+
     case "CUSTOMER.DISPUTE.CREATED": {
       const disputed = Array.isArray(resource.disputed_transactions) ? resource.disputed_transactions[0] : undefined;
       const captureId = disputed && typeof disputed === "object" && typeof (disputed as Record<string, unknown>).seller_transaction_id === "string" ? (disputed as Record<string, unknown>).seller_transaction_id as string : undefined;
       if (!captureId) return;
       const payment = await prisma.payment.findFirst({ where: { providerCaptureId: captureId } });
-      if (payment) await prisma.payment.update({ where: { id: payment.id }, data: { status: "DISPUTED" } });
+      if (payment) {
+        await prisma.payment.update({ where: { id: payment.id }, data: { status: "DISPUTED" } });
+        await recordPaymentDispute({ paymentId: payment.id, providerReference: captureId });
+      }
       break;
     }
-    default: return;
+
+    default:
+      return;
   }
 }
 
+function relatedId(resource: Record<string, any>, key: string): string | null {
+  const supplementary = resource.supplementary_data && typeof resource.supplementary_data === "object" ? resource.supplementary_data : {};
+  const related = supplementary.related_ids && typeof supplementary.related_ids === "object" ? supplementary.related_ids : {};
+  return typeof related[key] === "string" ? related[key] : null;
+}
+
+function captureIdFromLinks(resource: Record<string, any>): string | null {
+  const links = Array.isArray(resource.links) ? resource.links : [];
+  const up = links.find((link) => link && typeof link === "object" && (link.rel === "up" || link.rel === "capture"));
+  const href = typeof up?.href === "string" ? up.href : "";
+  const match = href.match(/\/captures\/([^/?#]+)/i);
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
+}
+
 function escapeHtml(input: string): string {
-  return input.replace(/[&<>\"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '\"': "&quot;", "'": "&#39;" }[c] as string));
+  return input.replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '\"': "&quot;", "'": "&#39;" }[character] as string));
 }
