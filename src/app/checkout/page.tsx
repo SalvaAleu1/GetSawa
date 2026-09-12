@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { SiteFooter } from "@/components/SiteFooter";
-import { getCart, removeFromCart, CartItem } from "@/lib/cart-client";
+import { clearCart, getCart, removeFromCart, CartItem } from "@/lib/cart-client";
 
 interface QuoteItem {
   kind: CartItem["kind"];
@@ -24,6 +24,9 @@ interface Quote {
   subtotalCents: number;
   discountCents: number;
   totalCents: number;
+  creditBalanceCents: number;
+  creditAppliedCents: number;
+  amountDueCents: number;
   currency: string;
   appliedCouponCode: string | null;
   quotedAt: string;
@@ -39,6 +42,7 @@ export default function CheckoutPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [couponCode, setCouponCode] = useState("");
   const [activeCoupon, setActiveCoupon] = useState<string | undefined>();
+  const [applyCredit, setApplyCredit] = useState(false);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -48,10 +52,10 @@ export default function CheckoutPage() {
   useEffect(() => {
     const loaded = getCart();
     setCart(loaded);
-    if (loaded.length > 0) void refreshQuote(loaded);
+    if (loaded.length > 0) void refreshQuote(loaded, undefined, false);
   }, []);
 
-  async function refreshQuote(items = cart, coupon = activeCoupon) {
+  async function refreshQuote(items = cart, coupon = activeCoupon, useCredit = applyCredit) {
     if (items.length === 0) {
       setQuote(null);
       return;
@@ -63,7 +67,7 @@ export default function CheckoutPage() {
       const response = await fetch("/api/checkout/quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items, couponCode: coupon || undefined }),
+        body: JSON.stringify({ items, couponCode: coupon || undefined, applyCredit: useCredit }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -84,13 +88,18 @@ export default function CheckoutPage() {
     removeFromCart(index);
     const next = getCart();
     setCart(next);
-    void refreshQuote(next, activeCoupon);
+    void refreshQuote(next, activeCoupon, applyCredit);
   }
 
   async function applyCoupon() {
     const normalized = couponCode.trim().toUpperCase();
     setActiveCoupon(normalized || undefined);
-    await refreshQuote(cart, normalized || undefined);
+    await refreshQuote(cart, normalized || undefined, applyCredit);
+  }
+
+  async function toggleCredit(enabled: boolean) {
+    setApplyCredit(enabled);
+    await refreshQuote(cart, activeCoupon, enabled);
   }
 
   async function handlePay() {
@@ -98,20 +107,23 @@ export default function CheckoutPage() {
     setSubmitting(true);
     setError(null);
     try {
-      // create-order recomputes the entire cart again. The quote shown above is
-      // informative and short-lived; it is never trusted as the payment amount.
       const response = await fetch("/api/checkout/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: cart, couponCode: activeCoupon }),
+        body: JSON.stringify({ items: cart, couponCode: activeCoupon, applyCredit }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not start checkout.");
+      if (data.completedWithCredit) {
+        clearCart();
+        window.location.href = `/dashboard/orders/${data.orderId}`;
+        return;
+      }
       if (!data.approveUrl) throw new Error("The payment provider did not return an approval link.");
       window.location.href = data.approveUrl;
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : "Could not start checkout.");
-      await refreshQuote(cart, activeCoupon);
+      await refreshQuote(cart, activeCoupon, applyCredit);
     } finally {
       setSubmitting(false);
     }
@@ -177,6 +189,18 @@ export default function CheckoutPage() {
                   {activeCoupon ? <p className="mt-2 text-xs font-semibold text-success">Applied: {activeCoupon}</p> : null}
                 </div>
 
+                {quote && quote.creditBalanceCents > 0 ? (
+                  <div className="panel p-5">
+                    <div className="flex items-start gap-3">
+                      <input id="account-credit" type="checkbox" checked={applyCredit} disabled={quoteLoading} onChange={(event) => void toggleCredit(event.target.checked)} className="mt-1" />
+                      <label htmlFor="account-credit" className="min-w-0 cursor-pointer">
+                        <span className="font-bold">Use GetSawa account credit</span>
+                        <span className="mt-1 block text-sm text-ink/55">Available balance: {money(quote.creditBalanceCents, quote.currency)}. Credit is reserved only when you start payment and consumed only after the order is paid.</span>
+                      </label>
+                    </div>
+                  </div>
+                ) : null}
+
                 <div className="panel p-5 text-sm leading-6 text-ink/55">
                   <p className="font-bold text-ink">Price protection</p>
                   <p className="mt-2">Domain wholesale costs are refreshed on the server. Promotions and coupons cannot reduce protected domain lines below the configured wholesale cost, payment-fee allowance, FX reserve, and minimum GetSawa margin.</p>
@@ -190,8 +214,9 @@ export default function CheckoutPage() {
                     <div className="mt-5 space-y-3 text-sm">
                       <div className="flex justify-between gap-4"><span className="text-ink/55">Subtotal</span><span>{money(quote.subtotalCents, quote.currency)}</span></div>
                       <div className="flex justify-between gap-4"><span className="text-ink/55">Discounts</span><span className={quote.discountCents > 0 ? "text-success" : ""}>−{money(quote.discountCents, quote.currency)}</span></div>
-                      <div className="border-t border-border pt-4"><div className="flex items-end justify-between gap-4"><span className="font-bold">Total</span><span className="text-2xl font-bold">{money(quote.totalCents, quote.currency)}</span></div></div>
-                      <p className="text-xs leading-5 text-ink/40">Quote expires {new Date(quote.quoteExpiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. The amount is recalculated again immediately before the PayPal order is created.</p>
+                      {quote.creditAppliedCents > 0 ? <div className="flex justify-between gap-4"><span className="text-ink/55">Account credit</span><span className="text-success">−{money(quote.creditAppliedCents, quote.currency)}</span></div> : null}
+                      <div className="border-t border-border pt-4"><div className="flex items-end justify-between gap-4"><span className="font-bold">Amount due</span><span className="text-2xl font-bold">{money(quote.amountDueCents, quote.currency)}</span></div></div>
+                      <p className="text-xs leading-5 text-ink/40">Order value {money(quote.totalCents, quote.currency)}. Quote expires {new Date(quote.quoteExpiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. The amount is recalculated again immediately before payment starts.</p>
                     </div>
                   ) : null}
 
@@ -199,9 +224,9 @@ export default function CheckoutPage() {
                   {error ? <div className="mt-4 rounded-xl border border-danger/20 bg-danger/5 p-3 text-xs text-danger">{error}{needsLogin ? <span> <Link href="/login" className="font-bold underline">Sign in to continue.</Link></span> : null}</div> : null}
 
                   <button type="button" onClick={quoteExpired ? () => refreshQuote() : handlePay} disabled={submitting || quoteLoading || !quote} className="btn-primary mt-5 w-full !py-3.5 text-base">
-                    {quoteExpired ? "Refresh quote" : submitting ? "Preparing payment…" : "Continue to PayPal"}
+                    {quoteExpired ? "Refresh quote" : submitting ? "Preparing payment…" : quote?.amountDueCents === 0 ? "Pay with account credit" : "Continue to PayPal"}
                   </button>
-                  <p className="mt-3 text-center text-[11px] leading-5 text-ink/40">Payment is not captured until PayPal confirms the order and GetSawa verifies the amount and currency.</p>
+                  <p className="mt-3 text-center text-[11px] leading-5 text-ink/40">GetSawa verifies server-side pricing, reserved credit and the final payment amount before fulfilment begins.</p>
                 </div>
               </aside>
             </div>
