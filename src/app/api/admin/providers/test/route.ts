@@ -7,10 +7,12 @@ import { getDomainProvider } from "@/lib/providers/domains/DomainProviderFactory
 import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
 import { getAIProvider } from "@/lib/providers/ai/AIProviderFactory";
 import { getHostingProvider } from "@/lib/providers/hosting/HostingProvider";
+import { getEmailProvider } from "@/lib/providers/email/EmailProvider";
 import { currentHostingCredentialFingerprint } from "@/lib/hosting-readiness";
+import { currentEmailCredentialFingerprint } from "@/lib/email-readiness";
 import { logAudit } from "@/lib/audit";
 
-const schema = z.object({ provider: z.enum(["namesilo", "paypal", "hosting", "ai"]) });
+const schema = z.object({ provider: z.enum(["namesilo", "paypal", "hosting", "email_hosting", "ai"]) });
 
 /** Runs a real connectivity check. Never fabricates a successful provider. */
 export async function POST(req: NextRequest) {
@@ -66,6 +68,20 @@ export async function POST(req: NextRequest) {
       };
     }
 
+    if (provider === "email_hosting") {
+      const email = getEmailProvider();
+      const health = await email.healthCheck();
+      ok = health.ok;
+      message = health.message;
+      metadata = {
+        implementation: email.name,
+        credentialFingerprint: currentEmailCredentialFingerprint(),
+        cluster: health.cluster,
+        webmailUrl: health.webmailUrl,
+        imapSmtpHost: health.imapSmtpHost,
+      };
+    }
+
     if (provider === "ai") {
       const ai = getAIProvider();
       if (!ai.isConfigured()) message = "AI_API_KEY is not set.";
@@ -84,8 +100,8 @@ export async function POST(req: NextRequest) {
 
     await prisma.providerCredential.upsert({
       where: { provider },
-      create: { provider, isConfigured: ok, lastTestedAt: new Date(), lastTestOk: ok, lastTestMessage: message, metadata },
-      update: { isConfigured: ok, lastTestedAt: new Date(), lastTestOk: ok, lastTestMessage: message, metadata },
+      create: { provider, isConfigured: ok, isEnabled: ok, lastTestedAt: new Date(), lastTestOk: ok, lastTestMessage: message, metadata },
+      update: { isConfigured: ok, isEnabled: ok, lastTestedAt: new Date(), lastTestOk: ok, lastTestMessage: message, metadata },
     });
 
     await logAudit({ actorId: admin.id, action: "provider.tested", resource: "provider", resourceId: provider, metadata: { ok, message } });
