@@ -11,8 +11,7 @@ import { logAudit } from "@/lib/audit";
 import { sendEmail, emailTemplates } from "@/lib/email";
 import { markRenewalPaid, markRenewalOrderPaymentFailed } from "@/lib/billing";
 import { DOMAIN_QUOTE_TTL_MS } from "@/lib/checkout";
-import { assertPremiumOrderReservations } from "@/lib/premium-checkout";
-import { releasePremiumReservationsForOrder } from "@/lib/premium-aftermarket";
+import { assertPremiumOrderReservations, releaseOrRestorePremiumOrderReservations } from "@/lib/premium-checkout";
 
 const schema = z.object({ orderId: z.string().min(1) });
 
@@ -45,7 +44,7 @@ export async function POST(req: NextRequest) {
         prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED", failureReason: "Domain price quote expired before payment capture." } }),
         prisma.order.updateMany({ where: { id: order.id, status: "PENDING_PAYMENT" }, data: { status: "CANCELLED", provisioningError: "Pricing quote expired before payment capture." } }),
       ]);
-      await releasePremiumReservationsForOrder(order.id, user.id).catch(() => undefined);
+      await releaseOrRestorePremiumOrderReservations(order.id, user.id).catch(() => undefined);
       await logAudit({ actorId: user.id, action: "order.quote_expired", resource: "order", resourceId: order.id });
       return jsonError("The domain price quote expired before payment capture. Your payment was not captured; please restart checkout for a fresh price.", 409, { code: "PRICE_QUOTE_EXPIRED" });
     }
@@ -58,7 +57,7 @@ export async function POST(req: NextRequest) {
         prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED", failureReason: message.slice(0, 500) } }),
         prisma.order.updateMany({ where: { id: order.id, status: "PENDING_PAYMENT" }, data: { status: "CANCELLED", provisioningError: message.slice(0, 500) } }),
       ]);
-      await releasePremiumReservationsForOrder(order.id, user.id).catch(() => undefined);
+      await releaseOrRestorePremiumOrderReservations(order.id, user.id).catch(() => undefined);
       return jsonError(message, 409, { code: "PREMIUM_RESERVATION_EXPIRED" });
     }
 
@@ -71,7 +70,7 @@ export async function POST(req: NextRequest) {
       const status = typeof capture?.status === "string" ? capture.status : "UNKNOWN";
       if (["VOIDED", "CANCELLED", "DENIED"].includes(status)) {
         await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED", failureReason: `PayPal status: ${status}` } });
-        await releasePremiumReservationsForOrder(order.id, user.id).catch(() => undefined);
+        await releaseOrRestorePremiumOrderReservations(order.id, user.id).catch(() => undefined);
         await markRenewalOrderPaymentFailed(order.id, `PayPal status: ${status}`).catch(() => undefined);
         try { await sendEmail({ to: order.user.email, ...emailTemplates.paymentFailed(order.orderNumber) }); } catch { /* notification is independent */ }
         return jsonError("Payment was not completed. Your order has not been charged.", 402);
