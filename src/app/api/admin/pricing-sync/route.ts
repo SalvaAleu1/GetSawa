@@ -11,7 +11,7 @@ export async function POST() {
       actorId: admin.id,
       action: "pricing.wholesale_sync",
       resource: "tld",
-      metadata: result,
+      metadata: { ...result },
     });
     return jsonOk({ result });
   } catch (err) {
