@@ -10,7 +10,9 @@ function asObject(value: unknown): Record<string, any> {
 export function extractPayPalCaptureEconomics(payload: Record<string, any>) {
   const purchaseUnit = Array.isArray(payload.purchase_units) ? asObject(payload.purchase_units[0]) : {};
   const payments = asObject(purchaseUnit.payments);
-  const capture = Array.isArray(payments.captures) ? asObject(payments.captures[0]) : {};
+  const nestedCapture = Array.isArray(payments.captures) ? asObject(payments.captures[0]) : {};
+  const looksLikeDirectCapture = typeof payload.id === "string" && payload.amount && typeof payload.amount === "object";
+  const capture = Object.keys(nestedCapture).length > 0 ? nestedCapture : looksLikeDirectCapture ? payload : {};
   const amount = asObject(capture.amount ?? purchaseUnit.amount);
   const breakdown = asObject(capture.seller_receivable_breakdown);
   const feeAmount = asObject(breakdown.paypal_fee);
