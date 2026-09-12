@@ -31,6 +31,9 @@ export function parsePricingSafetyPolicy(value: unknown): PricingSafetyPolicy {
     minimumMarginPercent: numberOr(candidate.minimumMarginPercent, defaultPolicy.minimumMarginPercent),
     markupTiers: rawTiers.map((raw, index) => {
       const fallback = defaultPolicy.markupTiers[Math.min(index, defaultPolicy.markupTiers.length - 1)];
+      if (!fallback) {
+        throw new Error("Default pricing policy requires at least one markup tier.");
+      }
       const tier = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
       return {
         minWholesaleCents: integerOr(tier.minWholesaleCents, fallback.minWholesaleCents),
