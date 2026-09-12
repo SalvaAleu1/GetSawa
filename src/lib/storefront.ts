@@ -68,7 +68,7 @@ const PRODUCT_CATEGORIES: ProductCategory[] = [
 export async function getStorefrontSnapshot(): Promise<StorefrontSnapshot> {
   const now = new Date();
 
-  const [tlds, products, banner, announcement] = await Promise.all([
+  const [tlds, products, productCategoryRows, banner, announcement] = await Promise.all([
     prisma.tld.findMany({
       where: { isActive: true },
       orderBy: [{ isFeatured: "desc" }, { extension: "asc" }],
@@ -95,6 +95,13 @@ export async function getStorefrontSnapshot(): Promise<StorefrontSnapshot> {
         isFeatured: true,
       },
     }),
+    prisma.product.findMany({
+      where: {
+        status: "ACTIVE",
+        category: { in: PRODUCT_CATEGORIES },
+      },
+      select: { category: true },
+    }),
     prisma.advertisement.findFirst({
       where: {
         placement: "homepage_banner",
@@ -115,7 +122,7 @@ export async function getStorefrontSnapshot(): Promise<StorefrontSnapshot> {
   ]);
 
   const productCounts = new Map<ProductCategory, number>();
-  for (const product of products) {
+  for (const product of productCategoryRows) {
     productCounts.set(product.category, (productCounts.get(product.category) ?? 0) + 1);
   }
 
