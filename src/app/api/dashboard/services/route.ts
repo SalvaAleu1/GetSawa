@@ -1,19 +1,20 @@
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { jsonOk, handleError } from "@/lib/api";
+import { getCustomerServiceInstances } from "@/lib/product-provisioning";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Unified customer service inventory. It deliberately derives state from
- * authoritative Domain, WebsiteProject and paid OrderItem records instead
- * of maintaining a second, drift-prone service table.
+ * Unified customer service inventory. Domain and website state comes from
+ * their authoritative models; provisioned catalog products come from the
+ * provider-backed service-instance ledger created only after fulfilment.
  */
 export async function GET() {
   try {
     const user = await requireUser();
 
-    const [domains, websites, orderItems] = await Promise.all([
+    const [domains, websites, orderItems, serviceInstances] = await Promise.all([
       prisma.domain.findMany({
         where: { userId: user.id },
         select: {
@@ -36,7 +37,7 @@ export async function GET() {
       prisma.orderItem.findMany({
         where: {
           order: { userId: user.id, status: { in: ["PAYMENT_CONFIRMED", "PROVISIONING", "ACTIVE"] } },
-          provisioningStatus: { in: ["PENDING", "PROVISIONING", "FAILED", "PROVISIONED"] },
+          provisioningStatus: { in: ["PENDING", "PROVISIONING", "FAILED"] },
         },
         select: {
           id: true,
@@ -49,6 +50,7 @@ export async function GET() {
         orderBy: { createdAt: "desc" },
         take: 100,
       }),
+      getCustomerServiceInstances(user.id),
     ]);
 
     const now = Date.now();
@@ -77,9 +79,15 @@ export async function GET() {
     }));
 
     return jsonOk({
-      summary: { domains: domainSummary, websites: websites.length, fulfilmentItems: fulfilment.length },
+      summary: {
+        domains: domainSummary,
+        websites: websites.length,
+        activeCatalogServices: serviceInstances.filter((service) => service.status === "ACTIVE").length,
+        fulfilmentItems: fulfilment.length,
+      },
       domains,
       websites,
+      services: serviceInstances,
       fulfilment,
     });
   } catch (error) {
