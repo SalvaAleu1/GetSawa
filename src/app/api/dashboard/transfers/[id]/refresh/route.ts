@@ -20,58 +20,46 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
     const mapped = mapTransferStatus(providerStatus.status);
     const updated = await prisma.domainTransfer.update({
       where: { id },
-      data: {
-        status: mapped,
-        failureReason: mapped === "FAILED" ? (providerStatus.errorMessage ?? transfer.failureReason) : transfer.failureReason,
-      },
+      data: { status: mapped, failureReason: mapped === "FAILED" ? (providerStatus.errorMessage ?? transfer.failureReason) : transfer.failureReason },
     });
 
     let domain = transfer.domainId ? await prisma.domain.findUnique({ where: { id: transfer.domainId } }) : null;
+    if (domain && domain.userId !== user.id) return jsonError("Transfer reconciliation detected a domain ownership mismatch. Staff review is required.", 409);
+
     if (mapped === "COMPLETED") {
       const info = await provider.getDomainInfo(transfer.domainName);
       const extension = transfer.domainName.split(".").slice(1).join(".");
       const tld = await prisma.tld.findUnique({ where: { extension } });
       if (!tld) return jsonError(`Transfer completed, but .${extension} is not configured in GetSawa. Staff reconciliation is required.`, 409);
 
-      domain = await prisma.domain.upsert({
-        where: { name: transfer.domainName },
-        create: {
-          userId: user.id,
-          tldId: tld.id,
-          name: transfer.domainName,
-          status: "ACTIVE",
-          providerName: provider.name,
-          registeredAt: info.registeredAt ? new Date(info.registeredAt) : null,
-          expiresAt: info.expiresAt ? new Date(info.expiresAt) : null,
-          autoRenew: info.autoRenew,
-          isLocked: info.isLocked,
-          privacyEnabled: info.privacyEnabled,
-          nameservers: info.nameservers,
-        },
-        update: {
-          userId: user.id,
-          tldId: tld.id,
-          status: "ACTIVE",
-          providerName: provider.name,
-          registeredAt: info.registeredAt ? new Date(info.registeredAt) : undefined,
-          expiresAt: info.expiresAt ? new Date(info.expiresAt) : undefined,
-          autoRenew: info.autoRenew,
-          isLocked: info.isLocked,
-          privacyEnabled: info.privacyEnabled,
-          nameservers: info.nameservers,
-        },
-      });
+      const existing = await prisma.domain.findUnique({ where: { name: transfer.domainName } });
+      if (existing && existing.userId !== user.id) {
+        await logAudit({ actorId: user.id, action: "domain.transfer.ownership_conflict", resource: "domain_transfer", resourceId: transfer.id, metadata: { existingDomainId: existing.id } });
+        return jsonError("Transfer completed at the registrar, but this domain is already attached to another GetSawa customer. Staff review is required before assignment.", 409);
+      }
+
+      const lifecycleData = {
+        userId: user.id,
+        tldId: tld.id,
+        status: "ACTIVE" as const,
+        providerName: provider.name,
+        registeredAt: info.registeredAt ? new Date(info.registeredAt) : undefined,
+        expiresAt: info.expiresAt ? new Date(info.expiresAt) : undefined,
+        autoRenew: info.autoRenew,
+        isLocked: info.isLocked,
+        privacyEnabled: info.privacyEnabled,
+        nameservers: info.nameservers,
+      };
+
+      if (existing) {
+        domain = await prisma.domain.update({ where: { id: existing.id }, data: lifecycleData });
+      } else {
+        domain = await prisma.domain.create({ data: { ...lifecycleData, name: transfer.domainName } });
+      }
       await prisma.domainTransfer.update({ where: { id }, data: { domainId: domain.id, failureReason: null } });
     }
 
-    await logAudit({
-      actorId: user.id,
-      action: "domain.transfer.refreshed",
-      resource: "domain_transfer",
-      resourceId: transfer.id,
-      metadata: { providerStatus: providerStatus.status, mappedStatus: mapped, domainId: domain?.id },
-    });
-
+    await logAudit({ actorId: user.id, action: "domain.transfer.refreshed", resource: "domain_transfer", resourceId: transfer.id, metadata: { providerStatus: providerStatus.status, mappedStatus: mapped, domainId: domain?.id } });
     return jsonOk({ transfer: { ...updated, domainId: domain?.id ?? transfer.domainId }, registrarChecked: true, providerStatus: providerStatus.status });
   } catch (err) {
     return handleError(err);
