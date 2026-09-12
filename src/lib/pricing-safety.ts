@@ -82,6 +82,8 @@ export function validatePricingSafetyPolicy(policy: PricingSafetyPolicy): Pricin
   let expectedMin = 0;
   for (let i = 0; i < tiers.length; i += 1) {
     const tier = tiers[i];
+    if (!tier) throw new Error("Markup tier configuration is incomplete.");
+
     if (!Number.isInteger(tier.minWholesaleCents) || tier.minWholesaleCents < 0) {
       throw new Error("Markup tier minimums must be non-negative integer cents.");
     }
@@ -103,7 +105,12 @@ export function validatePricingSafetyPolicy(policy: PricingSafetyPolicy): Pricin
     if (tier.maxWholesaleCents != null) expectedMin = tier.maxWholesaleCents + 1;
   }
 
-  if (tiers[0].minWholesaleCents !== 0 || tiers[tiers.length - 1].maxWholesaleCents !== null) {
+  const firstTier = tiers[0];
+  const lastTier = tiers[tiers.length - 1];
+  if (!firstTier || !lastTier) {
+    throw new Error("At least one markup tier is required.");
+  }
+  if (firstTier.minWholesaleCents !== 0 || lastTier.maxWholesaleCents !== null) {
     throw new Error("Markup tiers must cover the full range from zero with an open-ended final tier.");
   }
 
