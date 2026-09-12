@@ -1,21 +1,23 @@
-import { CheckoutInput, CheckoutError } from "@/lib/checkout";
+import type { CheckoutInput } from "@/lib/checkout";
+import { CheckoutError } from "@/lib/checkout";
 import { prisma } from "@/lib/prisma";
 import { getDomainProvider } from "@/lib/providers/domains/DomainProviderFactory";
 
-/**
- * Policy checks that belong to the domain lifecycle rather than to price math.
- * This runs for both quote preview and final payment-order creation.
- */
+type CartItem = CheckoutInput["items"][number];
+type RenewalItem = Extract<CartItem, { kind: "DOMAIN_RENEWAL" }>;
+type TransferItem = Extract<CartItem, { kind: "DOMAIN_TRANSFER" }>;
+
 export async function validateDomainLifecycleCheckout(input: CheckoutInput, userId: string) {
-  const renewalItems = input.items.filter((item) => item.kind === "DOMAIN_RENEWAL");
-  const transferItems = input.items.filter((item) => item.kind === "DOMAIN_TRANSFER");
+  const renewalItems: RenewalItem[] = [];
+  const transferItems: TransferItem[] = [];
+  for (const item of input.items) {
+    if (item.kind === "DOMAIN_RENEWAL") renewalItems.push(item);
+    if (item.kind === "DOMAIN_TRANSFER") transferItems.push(item);
+  }
 
   if (renewalItems.length > 0) {
     const ids = [...new Set(renewalItems.map((item) => item.domainId))];
-    const domains = await prisma.domain.findMany({
-      where: { id: { in: ids }, userId },
-      include: { tld: true },
-    });
+    const domains = await prisma.domain.findMany({ where: { id: { in: ids }, userId }, include: { tld: true } });
     if (domains.length !== ids.length) throw new CheckoutError("One or more renewal domains are no longer available in your account.");
     const byId = new Map(domains.map((domain) => [domain.id, domain]));
 
