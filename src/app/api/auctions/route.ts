@@ -17,8 +17,7 @@ export async function GET() {
              ai."premium_domain_id" AS "premiumDomainId", ai."source", ai."outcome",
              pd."renewalPriceCents", pd."currency",
              COALESCE((SELECT MAX(b."amountCents") FROM "AuctionBid" b WHERE b."auctionId"=a."id"), a."startingBidCents") AS "currentBidCents",
-             (SELECT COUNT(*)::int FROM "AuctionBid" b WHERE b."auctionId"=a."id") AS "bidCount",
-             CASE WHEN a."winningBidId" IS NULL THEN NULL ELSE (SELECT b."userId" FROM "AuctionBid" b WHERE b."id"=a."winningBidId") END AS "winnerUserId"
+             (SELECT COUNT(*)::int FROM "AuctionBid" b WHERE b."auctionId"=a."id") AS "bidCount"
       FROM "Auction" a
       JOIN "auction_inventory" ai ON ai."auction_id"=a."id"
       JOIN "PremiumDomain" pd ON pd."id"=ai."premium_domain_id"
