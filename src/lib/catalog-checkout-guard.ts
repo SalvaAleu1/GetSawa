@@ -12,6 +12,8 @@ interface CatalogFloor {
  * Product ACTIVE state is necessary but never sufficient for taking money.
  * Re-check cost/provider/billing readiness at every quote and final order so a
  * provider outage or stale product row cannot bypass the catalog safety gate.
+ * Customer-specific fulfilment configuration is validated separately by
+ * product-checkout-config.ts and never influences server-authoritative prices.
  */
 export async function validateCatalogCheckout(input: CheckoutInput): Promise<CatalogFloor[]> {
   const floors: CatalogFloor[] = [];
@@ -24,14 +26,6 @@ export async function validateCatalogCheckout(input: CheckoutInput): Promise<Cat
     const readiness = await getProductReadiness(product, meta);
     if (!readiness.purchasable || readiness.minimumRetailCents == null) {
       throw new CheckoutError(readiness.reasons[0] || "This product is temporarily unavailable.");
-    }
-
-    // Supported catalog contracts currently require customer-specific domain
-    // configuration. Their full purchase UX is delivered in the provider
-    // phases (15/16). Until then, fail closed rather than accept money without
-    // enough information to provision the paid service.
-    if (meta?.requiresDomain) {
-      throw new CheckoutError("This service requires domain configuration before payment and is not yet available for instant checkout.");
     }
 
     floors.push({
