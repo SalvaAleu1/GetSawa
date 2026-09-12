@@ -28,6 +28,7 @@ type HostingService = {
     suspended: boolean;
     diskUsedMb: number | null;
     diskLimitMb: number | null;
+    bandwidthUsedMb: number | null;
     email: string | null;
     serverIp: string | null;
   };
@@ -124,7 +125,7 @@ export default function HostingDashboardPage() {
         <div>
           <p className="text-sm font-medium">My Services</p>
           <h1 className="text-3xl font-bold">Web Hosting</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-ink/60">Manage provider-backed cPanel hosting, usage, renewal status and secure control-panel access from GetSawa.</p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-ink/60">Manage provider-backed cPanel hosting, live resource usage, renewal status and secure control-panel access from GetSawa.</p>
         </div>
         <Link href="/products/hosting" className="btn-primary">Browse hosting plans</Link>
       </div>
@@ -172,10 +173,15 @@ export default function HostingDashboardPage() {
                   <Metric label="Renewal" value={service.billing ? money(service.billing.amountCents, service.billing.currency || "USD") : "One-time"} />
                 </div>
 
-                <div className="mt-5 grid gap-5 lg:grid-cols-2">
+                <div className="mt-5 grid gap-5 lg:grid-cols-3">
                   <div className="rounded-xl border border-border p-4">
                     <div className="flex items-center justify-between gap-4"><p className="font-semibold">Disk usage</p><p className="text-sm text-ink/60">{service.live?.diskUsedMb == null ? "Unavailable" : `${Math.round(service.live.diskUsedMb)} MB${service.live.diskLimitMb == null ? "" : ` / ${Math.round(service.live.diskLimitMb)} MB`}`}</p></div>
                     {diskPercent != null ? <div className="mt-3 h-2 overflow-hidden rounded-full bg-border"><div className="h-full bg-current" style={{ width: `${diskPercent}%` }} /></div> : null}
+                  </div>
+                  <div className="rounded-xl border border-border p-4">
+                    <p className="font-semibold">Bandwidth this month</p>
+                    <p className="mt-2 text-sm text-ink/60">{service.live?.bandwidthUsedMb == null ? "Unavailable" : `${service.live.bandwidthUsedMb >= 1024 ? `${(service.live.bandwidthUsedMb / 1024).toFixed(2)} GB` : `${Math.round(service.live.bandwidthUsedMb)} MB`} transferred`}</p>
+                    <p className="mt-1 text-xs text-ink/45">Live WHM usage, refreshed when this page loads.</p>
                   </div>
                   <div className="rounded-xl border border-border p-4 text-sm">
                     <p className="font-semibold">Billing status</p>
@@ -194,6 +200,8 @@ export default function HostingDashboardPage() {
                     ) : <p className="mt-2 text-ink/60">No recurring subscription is attached to this service.</p>}
                   </div>
                 </div>
+
+                <p className="mt-4 text-xs leading-5 text-ink/45">Open cPanel for provider-supported site files, backups, FTP accounts, databases and other hosting controls. GetSawa uses a temporary sign-in session and does not store a cPanel password.</p>
               </article>
             );
           })}
