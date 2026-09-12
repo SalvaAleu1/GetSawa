@@ -1,12 +1,57 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { getOwnedDomainOrThrow } from "@/lib/domains";
 import { getDomainProvider } from "@/lib/providers/domains/DomainProviderFactory";
 import { prisma } from "@/lib/prisma";
 import { jsonOk, handleError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
-const createSchema = z.object({ type: z.enum(["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SRV", "CAA"]), host: z.string().max(255), value: z.string().min(1).max(1000), ttl: z.number().int().min(300).max(86400).optional(), priority: z.number().int().min(0).max(65535).optional() });
+import { dnsRecordSchema, normalizeDnsHost } from "@/lib/dns";
+
 type RouteContext = { params: Promise<{ id: string }> };
-export async function GET(_req: NextRequest, { params }: RouteContext) { try { const user = await requireUser(); const { id } = await params; const domain = await getOwnedDomainOrThrow(id, user.id); const records = await prisma.dnsRecord.findMany({ where: { domainId: domain.id }, orderBy: { type: "asc" } }); return jsonOk({ records }); } catch (err) { return handleError(err); } }
-export async function POST(req: NextRequest, { params }: RouteContext) { try { const user = await requireUser(); const { id } = await params; const domain = await getOwnedDomainOrThrow(id, user.id); const input = createSchema.parse(await req.json()); const created = await getDomainProvider().createDnsRecord(domain.name, input); const record = await prisma.dnsRecord.create({ data: { domainId: domain.id, type: input.type, host: input.host, value: input.value, ttl: input.ttl ?? 3600, priority: input.priority, providerRecordId: created.providerRecordId } }); await logAudit({ actorId: user.id, action: "dns.record.created", resource: "domain", resourceId: domain.id }); return jsonOk({ record }, 201); } catch (err) { return handleError(err); } }
+
+export async function GET(_req: NextRequest, { params }: RouteContext) {
+  try {
+    const user = await requireUser();
+    const { id } = await params;
+    const domain = await getOwnedDomainOrThrow(id, user.id);
+    const records = await prisma.dnsRecord.findMany({
+      where: { domainId: domain.id },
+      orderBy: [{ type: "asc" }, { host: "asc" }],
+    });
+    return jsonOk({ records });
+  } catch (err) {
+    return handleError(err);
+  }
+}
+
+export async function POST(req: NextRequest, { params }: RouteContext) {
+  try {
+    const user = await requireUser();
+    const { id } = await params;
+    const domain = await getOwnedDomainOrThrow(id, user.id);
+    const parsed = dnsRecordSchema.parse(await req.json());
+    const input = { ...parsed, host: normalizeDnsHost(parsed.host) };
+    const created = await getDomainProvider().createDnsRecord(domain.name, input);
+    const record = await prisma.dnsRecord.create({
+      data: {
+        domainId: domain.id,
+        type: input.type,
+        host: input.host,
+        value: input.value,
+        ttl: input.ttl,
+        priority: input.priority,
+        providerRecordId: created.providerRecordId,
+      },
+    });
+    await logAudit({
+      actorId: user.id,
+      action: "dns.record.created",
+      resource: "domain",
+      resourceId: domain.id,
+      metadata: { type: input.type, host: input.host, ttl: input.ttl },
+    });
+    return jsonOk({ record }, 201);
+  } catch (err) {
+    return handleError(err);
+  }
+}
