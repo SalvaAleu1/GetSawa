@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "getsawa",
+  "main": "./cloudflare-worker.ts",
+  "compatibility_date": "2026-09-12",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": [
+      "17 * * * *",
+      "37 * * * *",
+      "*/10 * * * *",
+      "13 * * * *",
+      "*/15 * * * *",
+      "23 6 * * *",
+      "*/5 * * * *"
+    ]
+  }
+}
