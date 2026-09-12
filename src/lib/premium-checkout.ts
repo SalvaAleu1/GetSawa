@@ -7,12 +7,6 @@ export interface ReservedPremiumItem {
   premiumDomainId: string;
 }
 
-/**
- * Static aftermarket inventory has a negotiated/listed retail price. Generic
- * cart promotions are not allowed to change it. Negotiated discounts use the
- * premium-offer workflow so custody, buyer identity and accepted price remain
- * auditable.
- */
 export async function validatePricedPremiumCart(priced: PricedCart, buyerUserId: string) {
   const seen = new Set<string>();
   for (const item of priced.items) {
@@ -31,7 +25,6 @@ export async function validatePricedPremiumCart(priced: PricedCart, buyerUserId:
   }
 }
 
-/** Reserve listed premium inventory immediately before an order is created. */
 export async function reservePricedPremiumCart(priced: PricedCart, buyerUserId: string): Promise<ReservedPremiumItem[]> {
   const reserved: ReservedPremiumItem[] = [];
   for (let index = 0; index < priced.items.length; index++) {
@@ -45,11 +38,6 @@ export async function reservePricedPremiumCart(priced: PricedCart, buyerUserId: 
   return reserved;
 }
 
-/**
- * Verify that every premium item on an order is still exclusively reserved by
- * the paying buyer before PayPal capture. This prevents late-return double
- * sales after a short reservation has expired.
- */
 export async function assertPremiumOrderReservations(orderId: string, buyerUserId: string) {
   const rows = await prisma.$queryRaw<Array<{
     premium_domain_id: string;
@@ -73,14 +61,47 @@ export async function assertPremiumOrderReservations(orderId: string, buyerUserI
   `;
 
   for (const row of rows) {
-    if (row.sold_at || !["LISTED", "RESERVED"].includes(row.status)) {
-      throw new CheckoutError(`${row.domain_name} is no longer available for this order.`);
-    }
-    if (row.reserved_by_user_id !== buyerUserId) {
-      throw new CheckoutError(`${row.domain_name} is no longer reserved for your account.`);
-    }
+    if (row.sold_at || !["LISTED", "RESERVED"].includes(row.status)) throw new CheckoutError(`${row.domain_name} is no longer available for this order.`);
+    if (row.reserved_by_user_id !== buyerUserId) throw new CheckoutError(`${row.domain_name} is no longer reserved for your account.`);
     if (row.status === "LISTED" && (!row.reserved_until || row.reserved_until.getTime() <= Date.now())) {
       throw new CheckoutError(`${row.domain_name}'s checkout reservation expired. Start checkout again to reserve it.`);
+    }
+  }
+}
+
+/**
+ * Release a Buy Now reservation, or restore an accepted offer's longer
+ * purchase window. This is used only before a payment is captured.
+ */
+export async function releaseOrRestorePremiumOrderReservations(orderId: string, buyerUserId: string) {
+  const rows = await prisma.$queryRaw<Array<{
+    premium_domain_id: string;
+    premium_offer_id: string | null;
+    offer_status: string | null;
+    offer_expires_at: Date | null;
+  }>>`
+    SELECT pol."premium_domain_id", pol."premium_offer_id",
+           po."status" AS offer_status, po."expires_at" AS offer_expires_at
+    FROM "premium_order_links" pol
+    JOIN "OrderItem" oi ON oi."id"=pol."order_item_id"
+    LEFT JOIN "premium_offers" po ON po."id"=pol."premium_offer_id"
+    WHERE oi."orderId"=${orderId}
+  `;
+
+  for (const row of rows) {
+    const restoreOffer = row.premium_offer_id && row.offer_status === "ACCEPTED" && row.offer_expires_at && row.offer_expires_at.getTime() > Date.now();
+    if (restoreOffer) {
+      await prisma.$executeRaw`
+        UPDATE "premium_inventory_meta"
+        SET "reserved_by_user_id"=${buyerUserId}, "reserved_until"=${row.offer_expires_at}, "updated_at"=CURRENT_TIMESTAMP
+        WHERE "premium_domain_id"=${row.premium_domain_id} AND "sold_at" IS NULL
+      `;
+    } else {
+      await prisma.$executeRaw`
+        UPDATE "premium_inventory_meta"
+        SET "reserved_by_user_id"=NULL, "reserved_until"=NULL, "updated_at"=CURRENT_TIMESTAMP
+        WHERE "premium_domain_id"=${row.premium_domain_id} AND "reserved_by_user_id"=${buyerUserId} AND "sold_at" IS NULL
+      `;
     }
   }
 }
