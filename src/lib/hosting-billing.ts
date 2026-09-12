@@ -228,7 +228,8 @@ export async function advanceHostingSubscriptionAfterPayment(subscriptionId: str
   await prisma.$executeRaw`
     UPDATE "billing_subscriptions" SET
       "status"='ACTIVE',"current_period_start"=${periodStart},"current_period_end"=${periodEnd},"next_billing_at"=${nextAt},
-      "grace_until"=NULL,"failed_payment_count"=0,"last_payment_at"=CURRENT_TIMESTAMP,"updated_at"=CURRENT_TIMESTAMP
+      "grace_until"=NULL,"failed_payment_count"=0,"last_payment_at"=CURRENT_TIMESTAMP,"cancel_at_period_end"=FALSE,
+      "auto_renew"=TRUE,"updated_at"=CURRENT_TIMESTAMP
     WHERE "id"=${subscriptionId}
   `;
   return true;
@@ -246,25 +247,95 @@ export async function reactivateHostingServiceAfterPaidRenewal(serviceInstanceId
   await logAudit({ actorId: service.user_id, action: "hosting.reactivated_after_payment", resource: "hosting_service", resourceId: service.id });
 }
 
+export async function handleFullyRefundedHostingOrder(orderId: string) {
+  const services = await prisma.$queryRaw<Array<{ id: string; user_id: string; provider_resource_id: string; status: string }>>`
+    SELECT DISTINCT service."id",service."user_id",service."provider_resource_id",service."status"
+    FROM (
+      SELECT psi."id",psi."user_id",psi."provider_resource_id",psi."status"
+      FROM "product_service_instances" psi
+      JOIN "OrderItem" oi ON oi."id"=psi."order_item_id"
+      WHERE oi."orderId"=${orderId} AND psi."provider_name"='cpanel_whm'
+      UNION
+      SELECT psi."id",psi."user_id",psi."provider_resource_id",psi."status"
+      FROM "billing_renewal_attempts" ra
+      JOIN "billing_subscriptions" bs ON bs."id"=ra."subscription_id"
+      JOIN "product_service_instances" psi ON psi."id"=bs."service_instance_id"
+      WHERE ra."order_id"=${orderId} AND psi."provider_name"='cpanel_whm'
+    ) AS service
+  `;
+  if (services.length === 0) return { found: 0, suspended: 0, pending: 0 };
+
+  const operational = await getHostingOperationalState();
+  const provider = getHostingProvider();
+  let suspended = 0;
+  let pending = 0;
+
+  for (const service of services) {
+    await prisma.$executeRaw`
+      UPDATE "billing_subscriptions" SET "status"='CANCELLED',"auto_renew"=FALSE,"cancel_at_period_end"=TRUE,"updated_at"=CURRENT_TIMESTAMP
+      WHERE "service_instance_id"=${service.id}
+    `;
+    if (service.status === "TERMINATED" || service.status === "SUSPENDED") continue;
+    if (operational.verified) {
+      try {
+        await provider.suspendAccount(service.provider_resource_id, "GetSawa order fully refunded");
+        await prisma.$executeRaw`UPDATE "product_service_instances" SET "status"='SUSPENDED',"updated_at"=CURRENT_TIMESTAMP WHERE "id"=${service.id}`;
+        await logAudit({ actorId: null, action: "hosting.suspended_after_refund", resource: "hosting_service", resourceId: service.id, metadata: { orderId } }).catch(() => undefined);
+        suspended++;
+        continue;
+      } catch (error) {
+        await logAudit({ actorId: null, action: "hosting.refund_suspension_failed", resource: "hosting_service", resourceId: service.id, metadata: { orderId, reason: error instanceof Error ? error.message.slice(0, 400) : "Unknown WHM suspension failure" } }).catch(() => undefined);
+      }
+    }
+    await prisma.$executeRaw`UPDATE "product_service_instances" SET "status"='SUSPENSION_PENDING',"updated_at"=CURRENT_TIMESTAMP WHERE "id"=${service.id}`;
+    pending++;
+  }
+  return { found: services.length, suspended, pending };
+}
+
 export async function enforceHostingPastDue(limit = 100) {
   const operational = await getHostingOperationalState();
   if (!operational.verified) return { inspected: 0, suspended: 0, skipped: 0, providerReady: false };
-  const rows = await prisma.$queryRaw<Array<{ subscription_id: string; service_instance_id: string; provider_resource_id: string; user_id: string }>>`
-    SELECT bs."id" AS "subscription_id",bs."service_instance_id",psi."provider_resource_id",psi."user_id"
-    FROM "billing_subscriptions" bs
-    JOIN "product_service_instances" psi ON psi."id"=bs."service_instance_id"
-    WHERE bs."status"='PAST_DUE' AND bs."grace_until" IS NOT NULL AND bs."grace_until"<=CURRENT_TIMESTAMP
-      AND psi."status"='ACTIVE' AND psi."provider_name"='cpanel_whm'
-    ORDER BY bs."grace_until" ASC LIMIT ${limit}
+  const rows = await prisma.$queryRaw<Array<{
+    subscription_id: string | null;
+    service_instance_id: string;
+    provider_resource_id: string;
+    user_id: string;
+    enforcement_reason: "PAST_DUE" | "PERIOD_ENDED" | "SUSPENSION_PENDING";
+  }>>`
+    SELECT bs."id" AS "subscription_id",psi."id" AS "service_instance_id",psi."provider_resource_id",psi."user_id",
+      CASE
+        WHEN psi."status"='SUSPENSION_PENDING' THEN 'SUSPENSION_PENDING'
+        WHEN bs."cancel_at_period_end"=TRUE AND bs."current_period_end"<=CURRENT_TIMESTAMP THEN 'PERIOD_ENDED'
+        ELSE 'PAST_DUE'
+      END AS enforcement_reason
+    FROM "product_service_instances" psi
+    LEFT JOIN "billing_subscriptions" bs ON bs."service_instance_id"=psi."id"
+    WHERE psi."provider_name"='cpanel_whm'
+      AND psi."status" IN ('ACTIVE','SUSPENSION_PENDING')
+      AND (
+        psi."status"='SUSPENSION_PENDING'
+        OR (bs."status"='PAST_DUE' AND bs."grace_until" IS NOT NULL AND bs."grace_until"<=CURRENT_TIMESTAMP)
+        OR (bs."status"='ACTIVE' AND bs."cancel_at_period_end"=TRUE AND bs."current_period_end"<=CURRENT_TIMESTAMP)
+      )
+    ORDER BY COALESCE(bs."grace_until",bs."current_period_end",CURRENT_TIMESTAMP) ASC LIMIT ${limit}
   `;
   const provider = getHostingProvider();
   let suspended = 0;
   let skipped = 0;
   for (const row of rows) {
     try {
-      await provider.suspendAccount(row.provider_resource_id, "GetSawa hosting renewal payment overdue");
-      await prisma.$executeRaw`UPDATE "product_service_instances" SET "status"='SUSPENDED',"updated_at"=CURRENT_TIMESTAMP WHERE "id"=${row.service_instance_id} AND "status"='ACTIVE'`;
-      await logAudit({ actorId: null, action: "hosting.suspended_for_nonpayment", resource: "hosting_service", resourceId: row.service_instance_id, metadata: { subscriptionId: row.subscription_id, userId: row.user_id } });
+      const reason = row.enforcement_reason === "PERIOD_ENDED"
+        ? "GetSawa hosting subscription ended"
+        : row.enforcement_reason === "SUSPENSION_PENDING"
+          ? "GetSawa hosting suspension retry"
+          : "GetSawa hosting renewal payment overdue";
+      await provider.suspendAccount(row.provider_resource_id, reason);
+      await prisma.$executeRaw`UPDATE "product_service_instances" SET "status"='SUSPENDED',"updated_at"=CURRENT_TIMESTAMP WHERE "id"=${row.service_instance_id}`;
+      if (row.subscription_id && row.enforcement_reason === "PERIOD_ENDED") {
+        await prisma.$executeRaw`UPDATE "billing_subscriptions" SET "status"='EXPIRED',"updated_at"=CURRENT_TIMESTAMP WHERE "id"=${row.subscription_id}`;
+      }
+      await logAudit({ actorId: null, action: "hosting.suspended", resource: "hosting_service", resourceId: row.service_instance_id, metadata: { subscriptionId: row.subscription_id, userId: row.user_id, reason: row.enforcement_reason } });
       suspended++;
     } catch (error) {
       skipped++;
