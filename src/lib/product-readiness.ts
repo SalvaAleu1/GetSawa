@@ -102,12 +102,26 @@ export async function getProductReadiness(product: Product, suppliedMeta?: Produ
     }
   }
 
-  // Product-specific recurring billing is enabled phase-by-phase. Domain
-  // renewals exist in Phase 14, but generic service subscriptions must not be
-  // inferred from that. Phase 15 will explicitly open supported hosting cycles.
-  billingReady = product.billingCycle === "ONE_TIME" && product.renewalPriceCents == null && product.setupFeeCents === 0;
-  if (product.billingCycle !== "ONE_TIME") reasons.push("Recurring billing is not yet enabled for this product contract.");
-  if (product.billingCycle === "ONE_TIME" && product.renewalPriceCents != null) reasons.push("A one-time product cannot advertise a renewal price without a service-renewal contract.");
+  const isRecurringHosting = product.category === "HOSTING"
+    && meta?.provisioningContract === "HOSTING_ACCOUNT"
+    && meta.renewalContract === "HOSTING_RENEWAL"
+    && ["MONTHLY", "YEARLY"].includes(product.billingCycle);
+
+  if (isRecurringHosting) {
+    const renewalPrice = product.renewalPriceCents;
+    billingReady = product.setupFeeCents === 0
+      && Number.isSafeInteger(renewalPrice)
+      && Number(renewalPrice) > 0
+      && minimumRetailCents !== null
+      && Number(renewalPrice) >= minimumRetailCents;
+    if (!Number.isSafeInteger(renewalPrice) || Number(renewalPrice) <= 0) reasons.push("Recurring hosting requires a positive renewal price.");
+    else if (minimumRetailCents !== null && Number(renewalPrice) < minimumRetailCents) reasons.push(`Hosting renewal price is below the protected minimum of ${(minimumRetailCents / 100).toFixed(2)} ${product.currency}.`);
+    if (meta?.renewalContract !== "HOSTING_RENEWAL") reasons.push("Recurring hosting requires the HOSTING_RENEWAL contract.");
+  } else {
+    billingReady = product.billingCycle === "ONE_TIME" && product.renewalPriceCents == null && product.setupFeeCents === 0;
+    if (product.billingCycle !== "ONE_TIME") reasons.push("Recurring billing is not enabled for this product contract.");
+    if (product.billingCycle === "ONE_TIME" && product.renewalPriceCents != null) reasons.push("A one-time product cannot advertise a renewal price without a service-renewal contract.");
+  }
 
   if (product.category === "AI" && getAIProvider().isConfigured() && !meta?.provisioningContract) {
     if (!reasons.includes("A supported provisioning contract is missing.")) reasons.push("AI generation is configured, but no paid catalog entitlement contract exists yet.");
