@@ -17,6 +17,7 @@ type HostingService = {
     nextBillingAt: string | null;
     graceUntil: string | null;
     autoRenew: boolean | null;
+    cancelAtPeriodEnd: boolean | null;
     amountCents: number | null;
     currency: string | null;
   };
@@ -47,8 +48,8 @@ function date(value: string | null) {
 }
 function statusClass(status: string) {
   if (status === "ACTIVE") return "badge-success";
-  if (["SUSPENDED", "PAST_DUE"].includes(status)) return "badge-warning";
-  if (["TERMINATED", "EXPIRED", "FAILED"].includes(status)) return "badge-danger";
+  if (["SUSPENDED", "PAST_DUE", "SUSPENSION_PENDING"].includes(status)) return "badge-warning";
+  if (["TERMINATED", "EXPIRED", "FAILED", "CANCELLED"].includes(status)) return "badge-danger";
   return "badge-neutral";
 }
 
@@ -57,6 +58,7 @@ export default function HostingDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [opening, setOpening] = useState("");
+  const [renewalBusy, setRenewalBusy] = useState("");
 
   async function load() {
     setLoading(true);
@@ -87,6 +89,29 @@ export default function HostingDashboardPage() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to open cPanel.");
       setOpening("");
+    }
+  }
+
+  async function setAutoRenew(serviceId: string, enabled: boolean) {
+    if (!enabled) {
+      const confirmed = window.confirm("Turn off automatic renewal? Your hosting will remain active through the paid period and will then be suspended unless you renew it.");
+      if (!confirmed) return;
+    }
+    setRenewalBusy(serviceId);
+    setError("");
+    try {
+      const response = await fetch(`/api/dashboard/hosting/${serviceId}/auto-renew`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Unable to update hosting renewal settings.");
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to update hosting renewal settings.");
+    } finally {
+      setRenewalBusy("");
     }
   }
 
@@ -155,10 +180,16 @@ export default function HostingDashboardPage() {
                   <div className="rounded-xl border border-border p-4 text-sm">
                     <p className="font-semibold">Billing status</p>
                     {service.billing ? (
-                      <div className="mt-2 space-y-1 text-ink/60">
-                        <p>Auto-renew: {service.billing.autoRenew ? "Enabled" : "Disabled"}</p>
+                      <div className="mt-2 space-y-2 text-ink/60">
+                        <p>Automatic renewal: {service.billing.autoRenew ? "Enabled" : "Disabled"}</p>
                         <p>Next invoice check: {date(service.billing.nextBillingAt)}</p>
+                        {service.billing.cancelAtPeriodEnd ? <p className="text-amber-700">Scheduled to end after the paid period on {date(service.billing.currentPeriodEnd)}.</p> : null}
                         {service.billing.graceUntil ? <p className="text-amber-700">Payment grace until {date(service.billing.graceUntil)}</p> : null}
+                        {!(["EXPIRED", "CANCELLED"].includes(service.billing.status || "")) ? (
+                          <button type="button" onClick={() => void setAutoRenew(service.id, !service.billing?.autoRenew)} disabled={renewalBusy === service.id} className="btn-secondary mt-2 disabled:opacity-50">
+                            {renewalBusy === service.id ? "Saving…" : service.billing.autoRenew ? "Turn off auto-renew" : "Re-enable auto-renew"}
+                          </button>
+                        ) : null}
                       </div>
                     ) : <p className="mt-2 text-ink/60">No recurring subscription is attached to this service.</p>}
                   </div>
