@@ -11,6 +11,7 @@ interface ProviderStatus {
   lastTestedAt: string | null;
   lastTestOk: boolean | null;
   lastTestMessage: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export default function AdminProvidersPage() {
@@ -45,8 +46,9 @@ export default function AdminProvidersPage() {
 
       <div className="card mt-6 divide-y divide-border">
         {providers.map((provider) => {
-          const canTest = ["namesilo", "paypal", "hosting", "ai"].includes(provider.provider);
-          const verified = provider.provider === "hosting" ? provider.operational === true : provider.lastTestOk === true;
+          const canTest = ["namesilo", "paypal", "hosting", "email_hosting", "ai"].includes(provider.provider);
+          const hasOperationalGate = ["hosting", "email_hosting"].includes(provider.provider);
+          const verified = hasOperationalGate ? provider.operational === true : provider.lastTestOk === true;
           return (
             <div key={provider.provider} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -58,6 +60,9 @@ export default function AdminProvidersPage() {
                 {(provider.operationalReason || provider.lastTestMessage) && (
                   <p className={`mt-1 text-xs ${verified ? "text-success" : "text-danger"}`}>{provider.operationalReason || provider.lastTestMessage}</p>
                 )}
+                {provider.provider === "email_hosting" && verified && provider.metadata ? (
+                  <p className="mt-1 text-xs text-ink/50">Cluster {String(provider.metadata.cluster || "—")} · {String(provider.metadata.imapSmtpHost || "mail host unavailable")}</p>
+                ) : null}
               </div>
               <div className="flex items-center gap-2">
                 <StatusDot ok={provider.isConfigured ? verified : false} configured={provider.isConfigured} />
