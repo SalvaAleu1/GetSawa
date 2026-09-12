@@ -42,25 +42,22 @@ export function Navbar() {
     fetch("/api/auth/me", { signal: controller.signal })
       .then((response) => response.json())
       .then((data) => setUser(data.user ?? null))
-      .catch((error) => {
-        if (error?.name !== "AbortError") setUser(null);
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.name === "AbortError") return;
+        setUser(null);
       });
     return () => controller.abort();
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/90 bg-surface/92 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-border/90 bg-surface/95 backdrop-blur-xl">
       <div className="shell-container flex h-[72px] items-center justify-between gap-4">
         <BrandLogo />
 
         <nav className="hidden items-center gap-1 lg:flex" aria-label="Primary navigation">
           {NAV_GROUPS.map((group) => (
             <div key={group.label} className="group relative">
-              <button
-                type="button"
-                className="nav-trigger"
-                aria-haspopup="true"
-              >
+              <button type="button" className="nav-trigger" aria-haspopup="true">
                 {group.label}
                 <span aria-hidden="true" className="text-[10px] text-ink/35 transition group-hover:rotate-180">⌄</span>
               </button>
