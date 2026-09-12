@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { markRenewalPaid } from "@/lib/billing";
 import { finalizeOrderCredit, restoreOrderCredit } from "@/lib/credits";
 import { handlePaymentAttemptFailure } from "@/lib/payment-recovery";
-import { handleFullyRefundedHostingOrder } from "@/lib/hosting-billing";
+import { handleFullyRefundedServices } from "@/lib/service-refunds";
 import { recordPaymentDispute, recordPaymentSettlement, recordRefundSettlement } from "@/lib/finance";
 import { extractPayPalCaptureEconomics, extractPayPalRefundEconomics } from "@/lib/paypal-economics";
 
@@ -142,7 +142,7 @@ async function handleVerifiedEvent(event: Record<string, unknown>) {
 
       let refund = await prisma.refund.findFirst({ where: { providerRefundId: refundId } });
       if (!refund) {
-        const alreadyRefunded = payment.refunds.filter((row) => row.status === "COMPLETED").reduce((sum, row) => sum + row.amountCents, 0);
+        const alreadyRefunded = payment.refunds.filter((refundRow) => refundRow.status === "COMPLETED").reduce((sum, refundRow) => sum + refundRow.amountCents, 0);
         if (alreadyRefunded + economics.grossCents > payment.amountCents) {
           await prisma.payment.update({ where: { id: payment.id }, data: { status: "DISPUTED", failureReason: "PayPal reported refunds exceeding the captured payment." } });
           return;
@@ -158,7 +158,7 @@ async function handleVerifiedEvent(event: Record<string, unknown>) {
         await transitionOrderStatus({ orderId: payment.orderId, to: "REFUNDED", reason: "PayPal refund confirmed.", metadata: { provider: "paypal", refundId } }).catch(() => undefined);
         await prisma.invoice.updateMany({ where: { orderId: payment.orderId }, data: { status: "REFUNDED" } });
         await restoreOrderCredit(payment.orderId);
-        await handleFullyRefundedHostingOrder(payment.orderId).catch(() => undefined);
+        await handleFullyRefundedServices(payment.orderId);
       }
       await recordRefundSettlement({ refundId: refund.id, providerFeeCents: economics.providerFeeCents });
       break;
