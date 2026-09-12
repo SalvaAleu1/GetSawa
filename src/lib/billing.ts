@@ -4,7 +4,7 @@ import { computeTldPrice, generateInvoiceNumber, generateOrderNumber } from "@/l
 import { priceCart } from "@/lib/checkout";
 import { logAudit } from "@/lib/audit";
 import { notifyOrderLifecycle } from "@/lib/order-notifications";
-import { advanceHostingSubscriptionAfterPayment, createHostingRenewalOrder } from "@/lib/hosting-billing";
+import { advanceServiceSubscriptionAfterPayment, createServiceRenewalOrder } from "@/lib/service-billing";
 
 type SubscriptionStatus = "ACTIVE" | "PAST_DUE" | "CANCELLED" | "EXPIRED";
 interface BillingSubscriptionRow {
@@ -102,10 +102,7 @@ export async function setDomainAutoRenew(userId: string, domainId: string, enabl
 
 export async function listCustomerSubscriptions(userId: string): Promise<BillingSubscriptionRow[]> {
   const rows = await prisma.$queryRaw<Record<string, unknown>[]>`
-    SELECT bs.*
-    FROM "billing_subscriptions" bs
-    WHERE bs."user_id"=${userId}
-    ORDER BY bs."next_billing_at" ASC
+    SELECT bs.* FROM "billing_subscriptions" bs WHERE bs."user_id"=${userId} ORDER BY bs."next_billing_at" ASC
   `;
   return rows.map(mapSubscription);
 }
@@ -114,6 +111,7 @@ export async function listRenewalAttemptsForUser(userId: string) {
   return prisma.$queryRaw<Record<string, unknown>[]>`
     SELECT ra.*,bs."domain_id",bs."service_instance_id",d."name" AS domain_name,
            hp."name" AS product_name,hd."name" AS service_domain_name,
+           psi."provider_resource_id" AS service_address,psi."provider_name" AS service_provider,
            o."totalCents" AS order_total_cents,o."currency" AS order_currency,o."status" AS order_status
     FROM "billing_renewal_attempts" ra
     JOIN "billing_subscriptions" bs ON bs."id"=ra."subscription_id"
@@ -163,16 +161,7 @@ async function createDomainRenewalOrder(subscription: BillingSubscriptionRow): P
             totalCents: priced.totalCents,
             currency: priced.currency,
             idempotencyKey: crypto.randomUUID(),
-            items: { create: [{
-              productId: null,
-              domainId: domain.id,
-              description: line.description,
-              quantity: 1,
-              years: 1,
-              unitPriceCents: line.unitPriceCents,
-              discountCents: line.discountCents,
-              totalCents: line.totalCents,
-            }] },
+            items: { create: [{ productId: null, domainId: domain.id, description: line.description, quantity: 1, years: 1, unitPriceCents: line.unitPriceCents, discountCents: line.discountCents, totalCents: line.totalCents }] },
             invoice: { create: {
               invoiceNumber,
               userId: subscription.userId,
@@ -189,22 +178,15 @@ async function createDomainRenewalOrder(subscription: BillingSubscriptionRow): P
           },
         });
         await tx.$executeRaw`
-          INSERT INTO "billing_renewal_attempts"
-            ("id","subscription_id","period_end","status","order_id","idempotency_key","scheduled_at")
-          VALUES
-            (${crypto.randomUUID()},${subscription.id},${periodEnd},'ORDER_CREATED',${created.id},${idempotencyKey},${now})
+          INSERT INTO "billing_renewal_attempts" ("id","subscription_id","period_end","status","order_id","idempotency_key","scheduled_at")
+          VALUES (${crypto.randomUUID()},${subscription.id},${periodEnd},'ORDER_CREATED',${created.id},${idempotencyKey},${now})
           ON CONFLICT ("idempotency_key") DO NOTHING
         `;
         return created;
       });
 
       await prisma.$executeRaw`
-        UPDATE "billing_subscriptions" SET
-          "last_renewal_order_id"=${order.id},
-          "amount_cents"=${priced.totalCents},
-          "currency"=${priced.currency},
-          "updated_at"=CURRENT_TIMESTAMP
-        WHERE "id"=${subscription.id}
+        UPDATE "billing_subscriptions" SET "last_renewal_order_id"=${order.id},"amount_cents"=${priced.totalCents},"currency"=${priced.currency},"updated_at"=CURRENT_TIMESTAMP WHERE "id"=${subscription.id}
       `;
       await logAudit({ actorId: subscription.userId, action: "billing.renewal_order_created", resource: "order", resourceId: order.id, metadata: { subscriptionId: subscription.id, domainId: domain.id, pricingSource: line.pricingSource } });
       await notifyOrderLifecycle({
@@ -242,25 +224,21 @@ export async function processDueRenewals(limit = 100): Promise<RenewalResult> {
     const subscription = mapSubscription(raw);
     try {
       const renewal = subscription.serviceInstanceId
-        ? await createHostingRenewalOrder({ id: subscription.id, userId: subscription.userId, serviceInstanceId: subscription.serviceInstanceId, currentPeriodEnd: subscription.currentPeriodEnd, billingCycle: subscription.billingCycle })
+        ? await createServiceRenewalOrder({ id: subscription.id, userId: subscription.userId, serviceInstanceId: subscription.serviceInstanceId, currentPeriodEnd: subscription.currentPeriodEnd, billingCycle: subscription.billingCycle })
         : await createDomainRenewalOrder(subscription);
       if (renewal.created) result.created++; else result.skipped++;
       await prisma.$executeRaw`
         UPDATE "billing_subscriptions" SET
-          "status"='PAST_DUE',
-          "next_billing_at"=${new Date(Date.now() + 24 * 60 * 60_000)},
-          "grace_until"=COALESCE("grace_until",${new Date(subscription.currentPeriodEnd.getTime() + 7 * 86400000)}),
-          "updated_at"=CURRENT_TIMESTAMP
+          "status"='PAST_DUE',"next_billing_at"=${new Date(Date.now() + 24 * 60 * 60_000)},
+          "grace_until"=COALESCE("grace_until",${new Date(subscription.currentPeriodEnd.getTime() + 7 * 86400000)}),"updated_at"=CURRENT_TIMESTAMP
         WHERE "id"=${subscription.id}
       `;
     } catch (error) {
       result.failed++;
       await prisma.$executeRaw`
         UPDATE "billing_subscriptions" SET
-          "status"='PAST_DUE',
-          "next_billing_at"=${new Date(Date.now() + 24 * 60 * 60_000)},
-          "grace_until"=COALESCE("grace_until",${new Date(subscription.currentPeriodEnd.getTime() + 7 * 86400000)}),
-          "updated_at"=CURRENT_TIMESTAMP
+          "status"='PAST_DUE',"next_billing_at"=${new Date(Date.now() + 24 * 60 * 60_000)},
+          "grace_until"=COALESCE("grace_until",${new Date(subscription.currentPeriodEnd.getTime() + 7 * 86400000)}),"updated_at"=CURRENT_TIMESTAMP
         WHERE "id"=${subscription.id}
       `;
       await logAudit({ actorId: null, action: "billing.renewal_quote_failed", resource: "billing_subscription", resourceId: subscription.id, metadata: { reason: error instanceof Error ? error.message.slice(0, 300) : "Unknown renewal failure" } }).catch(() => undefined);
@@ -280,12 +258,10 @@ export async function markRenewalPaid(orderId: string): Promise<void> {
   const subscription = mapSubscription(subscriptionRows[0]);
 
   if (subscription.serviceInstanceId) {
-    const advanced = await advanceHostingSubscriptionAfterPayment(subscription.id);
-    if (!advanced) throw new Error("Hosting renewal subscription could not be advanced.");
+    const advanced = await advanceServiceSubscriptionAfterPayment(subscription.id, subscription.serviceInstanceId);
+    if (!advanced) throw new Error("Service renewal subscription could not be advanced.");
     await prisma.$executeRaw`
-      UPDATE "billing_renewal_attempts" SET
-        "status"='PAID',"attempted_at"=COALESCE("attempted_at",CURRENT_TIMESTAMP),"completed_at"=CURRENT_TIMESTAMP,"updated_at"=CURRENT_TIMESTAMP
-      WHERE "order_id"=${orderId}
+      UPDATE "billing_renewal_attempts" SET "status"='PAID',"attempted_at"=COALESCE("attempted_at",CURRENT_TIMESTAMP),"completed_at"=CURRENT_TIMESTAMP,"updated_at"=CURRENT_TIMESTAMP WHERE "order_id"=${orderId}
     `;
     return;
   }
@@ -301,9 +277,7 @@ export async function markRenewalPaid(orderId: string): Promise<void> {
     WHERE "id"=${subscription.id}
   `;
   await prisma.$executeRaw`
-    UPDATE "billing_renewal_attempts" SET
-      "status"='PAID',"attempted_at"=COALESCE("attempted_at",CURRENT_TIMESTAMP),"completed_at"=CURRENT_TIMESTAMP,"updated_at"=CURRENT_TIMESTAMP
-    WHERE "order_id"=${orderId}
+    UPDATE "billing_renewal_attempts" SET "status"='PAID',"attempted_at"=COALESCE("attempted_at",CURRENT_TIMESTAMP),"completed_at"=CURRENT_TIMESTAMP,"updated_at"=CURRENT_TIMESTAMP WHERE "order_id"=${orderId}
   `;
 }
 
