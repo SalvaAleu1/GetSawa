@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
+import { restoreOrderCredit } from "@/lib/credits";
 import { recordRefundSettlement } from "@/lib/finance";
 import { extractPayPalRefundEconomics } from "@/lib/paypal-economics";
 
@@ -39,19 +40,20 @@ export async function POST(req: NextRequest, context: RouteContext) {
     if (economics.grossCents != null && economics.grossCents !== amountCents) return jsonError("PayPal confirmed a different refund amount. Finance review is required.", 502);
     if (economics.currency && economics.currency !== payment.currency.toUpperCase()) return jsonError("PayPal confirmed the refund in a different currency. Finance review is required.", 502);
 
+    const fullyRefunded = alreadyRefunded + amountCents >= payment.amountCents;
     const refund = await prisma.$transaction(async (tx) => {
       const created = await tx.refund.create({ data: { paymentId: payment.id, amountCents, reason: parsed.data.reason || null, providerRefundId, status: "COMPLETED" } });
-      const newRefunded = alreadyRefunded + amountCents;
-      await tx.payment.update({ where: { id: payment.id }, data: { status: newRefunded >= payment.amountCents ? "REFUNDED" : "PARTIALLY_REFUNDED" } });
-      if (newRefunded >= payment.amountCents) {
+      await tx.payment.update({ where: { id: payment.id }, data: { status: fullyRefunded ? "REFUNDED" : "PARTIALLY_REFUNDED" } });
+      if (fullyRefunded) {
         await tx.order.update({ where: { id: payment.orderId }, data: { status: "REFUNDED" } });
         await tx.invoice.updateMany({ where: { orderId: payment.orderId }, data: { status: "REFUNDED" } });
       }
       return created;
     });
 
+    const restoredCreditCents = fullyRefunded ? await restoreOrderCredit(payment.orderId) : 0;
     await recordRefundSettlement({ refundId: refund.id, providerFeeCents: economics.providerFeeCents });
-    await logAudit({ actorId: admin.id, action: "payments.refund.completed", resource: "payment", resourceId: payment.id, metadata: { refundId: refund.id, providerRefundId, amountCents, reason: parsed.data.reason || null } });
-    return jsonOk({ refund });
+    await logAudit({ actorId: admin.id, action: "payments.refund.completed", resource: "payment", resourceId: payment.id, metadata: { refundId: refund.id, providerRefundId, amountCents, restoredCreditCents, reason: parsed.data.reason || null } });
+    return jsonOk({ refund, restoredCreditCents });
   } catch (error) { return handleError(error); }
 }
