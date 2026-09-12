@@ -29,8 +29,9 @@ function parseConfiguration(value: unknown): Record<string, string> {
 }
 
 /**
- * Browser configuration is deliberately validated separately from the pricing
- * schema. Prices never come from this sidecar; it only carries fulfilment data.
+ * Browser configuration is deliberately validated separately from pricing.
+ * Prices never come from this sidecar; it only carries server-validated
+ * fulfilment data such as the selected managed domain and mailbox local part.
  */
 export async function validateProductCheckoutConfigurations(
   rawBody: unknown,
@@ -56,7 +57,7 @@ export async function validateProductCheckoutConfigurations(
     if (!meta) throw new CheckoutError("Product commerce configuration is unavailable.");
 
     if (meta.requiresDomain) {
-      if (meta.provisioningContract !== "HOSTING_ACCOUNT") {
+      if (!["HOSTING_ACCOUNT", "EMAIL_MAILBOX"].includes(meta.provisioningContract || "")) {
         throw new CheckoutError("This service requires provider-specific configuration that is not yet available for checkout.");
       }
       try {
