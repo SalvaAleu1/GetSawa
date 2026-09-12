@@ -6,7 +6,9 @@ import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
 import { isEmailConfigured } from "@/lib/email";
 import { getAIProvider } from "@/lib/providers/ai/AIProviderFactory";
 import { getHostingProvider } from "@/lib/providers/hosting/HostingProvider";
+import { getEmailProvider } from "@/lib/providers/email/EmailProvider";
 import { getHostingOperationalState } from "@/lib/hosting-readiness";
+import { getEmailOperationalState } from "@/lib/email-readiness";
 
 /** Never returns secret values; only configuration and live-test state. */
 export async function GET() {
@@ -15,10 +17,12 @@ export async function GET() {
 
     const domainProvider = getDomainProvider();
     const hostingProvider = getHostingProvider();
+    const emailProvider = getEmailProvider();
     const dbHealthy = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
-    const [rows, hostingState] = await Promise.all([
+    const [rows, hostingState, emailState] = await Promise.all([
       prisma.providerCredential.findMany(),
       getHostingOperationalState(),
+      getEmailOperationalState(),
     ]);
     const byProvider = new Map(rows.map((row) => [row.provider, row]));
 
@@ -37,7 +41,7 @@ export async function GET() {
       },
       {
         provider: "smtp",
-        label: "Email (SMTP)",
+        label: "Transactional Email (SMTP)",
         isConfigured: isEmailConfigured(),
         ...pickStatus(byProvider.get("smtp")),
       },
@@ -51,8 +55,11 @@ export async function GET() {
       },
       {
         provider: "email_hosting",
-        label: "Business Email",
-        isConfigured: Boolean(process.env.EMAIL_PROVIDER_API_KEY),
+        label: "OpenSRS Hosted Email",
+        isConfigured: emailProvider.isConfigured(),
+        operational: emailState.verified,
+        operationalReason: emailState.reason,
+        metadata: emailState.verified ? { cluster: emailState.cluster, webmailUrl: emailState.webmailUrl, imapSmtpHost: emailState.imapSmtpHost } : null,
         ...pickStatus(byProvider.get("email_hosting")),
       },
       {
