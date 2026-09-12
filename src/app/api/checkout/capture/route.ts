@@ -11,6 +11,8 @@ import { logAudit } from "@/lib/audit";
 import { sendEmail, emailTemplates } from "@/lib/email";
 import { markRenewalPaid, markRenewalOrderPaymentFailed } from "@/lib/billing";
 import { DOMAIN_QUOTE_TTL_MS } from "@/lib/checkout";
+import { assertPremiumOrderReservations } from "@/lib/premium-checkout";
+import { releasePremiumReservationsForOrder } from "@/lib/premium-aftermarket";
 
 const schema = z.object({ orderId: z.string().min(1) });
 
@@ -32,30 +34,32 @@ export async function POST(req: NextRequest) {
     if (!order || order.userId !== user.id) return jsonError("Order not found.", 404);
     if (order.status !== "PENDING_PAYMENT") return jsonOk({ orderId: order.id, status: order.status });
 
-    const payment = order.payments.find((p) => p.status === "PENDING");
+    const payment = order.payments.find((item) => item.status === "PENDING");
     if (!payment?.providerOrderId) return jsonError("No pending payment found for this order.", 400);
 
-    // Domain wholesale quotes are intentionally short-lived. If the customer
-    // returns from the payment approval flow after the quote window, do not
-    // capture money at a potentially stale price; force a fresh checkout.
     const containsDomainPricing = order.items.some((item) =>
-      item.description.includes(" registration") || item.description.includes(" renewal") || item.description.endsWith(" transfer"),
+      item.description.includes(" registration") || item.description.includes(" renewal") || item.description.endsWith(" transfer") || item.description.includes("premium domain purchase"),
     );
     if (containsDomainPricing && Date.now() - order.createdAt.getTime() > DOMAIN_QUOTE_TTL_MS) {
       await prisma.$transaction([
-        prisma.payment.updateMany({
-          where: { id: payment.id, status: "PENDING" },
-          data: { status: "FAILED", failureReason: "Domain wholesale quote expired before payment capture." },
-        }),
-        prisma.order.updateMany({
-          where: { id: order.id, status: "PENDING_PAYMENT" },
-          data: { status: "CANCELLED", provisioningError: "Pricing quote expired before payment capture." },
-        }),
+        prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED", failureReason: "Domain price quote expired before payment capture." } }),
+        prisma.order.updateMany({ where: { id: order.id, status: "PENDING_PAYMENT" }, data: { status: "CANCELLED", provisioningError: "Pricing quote expired before payment capture." } }),
       ]);
+      await releasePremiumReservationsForOrder(order.id, user.id).catch(() => undefined);
       await logAudit({ actorId: user.id, action: "order.quote_expired", resource: "order", resourceId: order.id });
-      return jsonError("The domain price quote expired before payment capture. Your payment was not captured; please restart checkout for a fresh price.", 409, {
-        code: "PRICE_QUOTE_EXPIRED",
-      });
+      return jsonError("The domain price quote expired before payment capture. Your payment was not captured; please restart checkout for a fresh price.", 409, { code: "PRICE_QUOTE_EXPIRED" });
+    }
+
+    try {
+      await assertPremiumOrderReservations(order.id, user.id);
+    } catch (reservationError) {
+      const message = reservationError instanceof Error ? reservationError.message : "A premium-domain reservation is no longer valid.";
+      await prisma.$transaction([
+        prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED", failureReason: message.slice(0, 500) } }),
+        prisma.order.updateMany({ where: { id: order.id, status: "PENDING_PAYMENT" }, data: { status: "CANCELLED", provisioningError: message.slice(0, 500) } }),
+      ]);
+      await releasePremiumReservationsForOrder(order.id, user.id).catch(() => undefined);
+      return jsonError(message, 409, { code: "PREMIUM_RESERVATION_EXPIRED" });
     }
 
     let capture: any = null;
@@ -67,6 +71,7 @@ export async function POST(req: NextRequest) {
       const status = typeof capture?.status === "string" ? capture.status : "UNKNOWN";
       if (["VOIDED", "CANCELLED", "DENIED"].includes(status)) {
         await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED", failureReason: `PayPal status: ${status}` } });
+        await releasePremiumReservationsForOrder(order.id, user.id).catch(() => undefined);
         await markRenewalOrderPaymentFailed(order.id, `PayPal status: ${status}`).catch(() => undefined);
         try { await sendEmail({ to: order.user.email, ...emailTemplates.paymentFailed(order.orderNumber) }); } catch { /* notification is independent */ }
         return jsonError("Payment was not completed. Your order has not been charged.", 402);
