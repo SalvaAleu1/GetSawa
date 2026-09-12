@@ -13,6 +13,8 @@ import {
   DomainInfo,
   DnsRecordInput,
   DnsRecordResult,
+  DnssecRecord,
+  DnssecStatus,
   ProviderNotConfiguredError,
 } from "./DomainProvider";
 
@@ -177,7 +179,45 @@ export class NameSiloProvider implements DomainProvider {
     return { ...record, host: normalizeDnsHost(record.host, domain), providerRecordId };
   }
 
-  async deleteDnsRecord(domain: string, providerRecordId: string) { const reply = await this.call<any>("dnsDeleteRecord", { domain, rrid: providerRecordId }); if (!this.isSuccessCode(reply.code)) throw new Error(reply.detail || "Failed to delete DNS record."); }
+  async deleteDnsRecord(domain: string, providerRecordId: string) {
+    const reply = await this.call<any>("dnsDeleteRecord", { domain, rrid: providerRecordId });
+    if (!this.isSuccessCode(reply.code)) throw new Error(reply.detail || "Failed to delete DNS record.");
+  }
+
+  async getDnssecStatus(domain: string): Promise<DnssecStatus> {
+    const reply = await this.call<any>("dnsSecListRecords", { domain });
+    if (!this.isSuccessCode(reply.code)) {
+      return { supported: false, enabled: false, records: [], message: reply.detail || "DNSSEC is not available for this domain at the registrar." };
+    }
+    const records = normalizeList(reply.ds_record).map((record: any): DnssecRecord => ({
+      keyTag: Number(record.key_tag ?? record.keyTag),
+      algorithm: Number(record.algorithm ?? record.alg),
+      digestType: Number(record.digest_type ?? record.digestType),
+      digest: String(record.digest ?? ""),
+    })).filter((record) => Number.isFinite(record.keyTag) && Number.isFinite(record.algorithm) && Number.isFinite(record.digestType) && record.digest.length > 0);
+    return { supported: true, enabled: records.length > 0, records };
+  }
+
+  async enableDnssec(domain: string, records: DnssecRecord[]): Promise<DnssecStatus> {
+    const current = await this.getDnssecStatus(domain);
+    if (!current.supported) throw new Error(current.message || "DNSSEC is not supported for this domain.");
+    for (const record of records) {
+      const reply = await this.call<any>("dnsSecAddRecord", { domain, digest: record.digest, keyTag: record.keyTag, digestType: record.digestType, alg: record.algorithm });
+      if (!this.isSuccessCode(reply.code)) throw new Error(reply.detail || "The registrar rejected a DNSSEC DS record.");
+    }
+    return this.getDnssecStatus(domain);
+  }
+
+  async disableDnssec(domain: string): Promise<DnssecStatus> {
+    const current = await this.getDnssecStatus(domain);
+    if (!current.supported) throw new Error(current.message || "DNSSEC is not supported for this domain.");
+    for (const record of current.records) {
+      const reply = await this.call<any>("dnsSecDeleteRecord", { domain, digest: record.digest, keyTag: record.keyTag, digestType: record.digestType, alg: record.algorithm });
+      if (!this.isSuccessCode(reply.code)) throw new Error(reply.detail || "The registrar rejected a DNSSEC DS-record deletion.");
+    }
+    return this.getDnssecStatus(domain);
+  }
+
   async lockDomain(domain: string) { const reply = await this.call<any>("domainLock", { domain }); if (!this.isSuccessCode(reply.code)) throw new Error(reply.detail || "Failed to lock domain."); }
   async unlockDomain(domain: string) { const reply = await this.call<any>("domainUnlock", { domain }); if (!this.isSuccessCode(reply.code)) throw new Error(reply.detail || "Failed to unlock domain."); }
   async enableAutoRenew(domain: string) { const reply = await this.call<any>("addAutoRenewal", { domain }); const code = Number(reply.code); if (!this.isSuccessCode(code) && code !== 250) throw new Error(reply.detail || "Failed to enable auto-renewal."); }
