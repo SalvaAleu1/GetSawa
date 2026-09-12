@@ -21,18 +21,38 @@ const createSchema = z.object({
 export async function GET() {
   try {
     await requireAdmin();
-    const auctions = await prisma.$queryRaw<Record<string, unknown>[]>`
-      SELECT a.*, ai."premium_domain_id" AS "premiumDomainId", ai."source", ai."seller_user_id" AS "sellerUserId",
-             ai."outcome", ai."released_at" AS "releasedAt", pd."renewalPriceCents",
-             (SELECT COUNT(*)::int FROM "AuctionBid" b WHERE b."auctionId"=a."id") AS "bidCount",
-             (SELECT MAX(b."amountCents") FROM "AuctionBid" b WHERE b."auctionId"=a."id") AS "currentBidCents"
-      FROM "Auction" a
-      LEFT JOIN "auction_inventory" ai ON ai."auction_id"=a."id"
-      LEFT JOIN "PremiumDomain" pd ON pd."id"=ai."premium_domain_id"
-      ORDER BY a."createdAt" DESC
-      LIMIT 500
-    `;
-    return jsonOk({ auctions });
+    const [auctions, availableInventory] = await Promise.all([
+      prisma.$queryRaw<Record<string, unknown>[]>`
+        SELECT a.*, ai."premium_domain_id" AS "premiumDomainId", ai."source", ai."seller_user_id" AS "sellerUserId",
+               ai."outcome", ai."released_at" AS "releasedAt", pd."renewalPriceCents", pd."currency",
+               ao."status" AS "paymentStatus", ao."winner_user_id" AS "winnerUserId", ao."amount_cents" AS "winnerAmountCents",
+               ao."payment_deadline" AS "winnerPaymentDeadline", ao."order_id" AS "orderId", ao."registrar_reference" AS "registrarReference",
+               (SELECT COUNT(*)::int FROM "AuctionBid" b WHERE b."auctionId"=a."id") AS "bidCount",
+               (SELECT MAX(b."amountCents") FROM "AuctionBid" b WHERE b."auctionId"=a."id") AS "currentBidCents"
+        FROM "Auction" a
+        LEFT JOIN "auction_inventory" ai ON ai."auction_id"=a."id"
+        LEFT JOIN "PremiumDomain" pd ON pd."id"=ai."premium_domain_id"
+        LEFT JOIN "auction_orders" ao ON ao."auction_id"=a."id"
+        ORDER BY a."createdAt" DESC
+        LIMIT 500
+      `,
+      prisma.$queryRaw<Record<string, unknown>[]>`
+        SELECT pd."id", pd."domainName", pd."purchasePriceCents", pd."renewalPriceCents", pd."currency", pd."category",
+               pim."source", pim."acquisition_cost_cents" AS "acquisitionCostCents", pim."commission_bps" AS "commissionBps"
+        FROM "PremiumDomain" pd
+        JOIN "premium_inventory_meta" pim ON pim."premium_domain_id"=pd."id"
+        WHERE pd."status"='LISTED' AND pd."isAuction"=FALSE
+          AND pim."ownership_verified_at" IS NOT NULL AND pim."sold_at" IS NULL
+          AND pim."source" IN ('GETSAWA_INVENTORY','CUSTOMER_CUSTODY')
+          AND (pim."reserved_until" IS NULL OR pim."reserved_until" < CURRENT_TIMESTAMP)
+          AND NOT EXISTS (
+            SELECT 1 FROM "auction_inventory" ai JOIN "Auction" a ON a."id"=ai."auction_id"
+            WHERE ai."premium_domain_id"=pd."id" AND ai."released_at" IS NULL
+          )
+        ORDER BY pd."domainName" ASC
+      `,
+    ]);
+    return jsonOk({ auctions, availableInventory });
   } catch (err) {
     return handleError(err);
   }
