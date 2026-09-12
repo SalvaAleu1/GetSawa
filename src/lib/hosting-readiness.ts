@@ -2,6 +2,14 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getHostingProvider } from "@/lib/providers/hosting/HostingProvider";
 
+export interface HostingOperationalState {
+  configured: boolean;
+  verified: boolean;
+  provider: string;
+  reason: string | null;
+  lastTestedAt: Date | null;
+}
+
 export function currentHostingCredentialFingerprint(): string | null {
   const baseUrl = process.env.WHM_BASE_URL?.trim();
   const username = process.env.WHM_USERNAME?.trim();
@@ -10,11 +18,17 @@ export function currentHostingCredentialFingerprint(): string | null {
   return crypto.createHash("sha256").update(`${baseUrl}|${username}|${token}`).digest("hex");
 }
 
-export async function getHostingOperationalState() {
+export async function getHostingOperationalState(): Promise<HostingOperationalState> {
   const provider = getHostingProvider();
   const fingerprint = currentHostingCredentialFingerprint();
   if (!provider.isConfigured() || !fingerprint) {
-    return { configured: false, verified: false, provider: provider.name, reason: "cPanel/WHM environment variables are incomplete." };
+    return {
+      configured: false,
+      verified: false,
+      provider: provider.name,
+      reason: "cPanel/WHM environment variables are incomplete.",
+      lastTestedAt: null,
+    };
   }
 
   const row = await prisma.providerCredential.findUnique({ where: { provider: "hosting" } });
