@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 interface Subscription { id:string; domainId:string|null; status:string; billingCycle:string; amountCents:number; currency:string; currentPeriodEnd:string; nextBillingAt:string; autoRenew:boolean; failedPaymentCount:number; }
 interface Renewal { id:string; status:string; order_id:string|null; domain_name:string|null; scheduled_at:string; period_end:string; order_total_cents?:number|null; order_currency?:string|null; order_status?:string|null; }
 interface Invoice { id:string; invoiceNumber:string; orderId:string; totalCents:number; currency:string; status:string; paidAt:string|null; createdAt:string; }
-interface BillingData { subscriptions:Subscription[]; renewals:Renewal[]; invoices:Invoice[]; creditBalanceCents:number; paymentMethods:{paypal:{enabled:boolean};directCardGateway:{enabled:boolean;reason:string}}; }
+interface BillingData { subscriptions:Subscription[]; renewals:Renewal[]; invoices:Invoice[]; creditBalanceCents:number; availableCreditCents:number; paymentMethods:{paypal:{enabled:boolean};directCardGateway:{enabled:boolean;reason:string}}; }
 
 function money(cents:number,currency="USD"){return new Intl.NumberFormat(undefined,{style:"currency",currency}).format(cents/100);}
 function date(value:string){return new Intl.DateTimeFormat(undefined,{dateStyle:"medium"}).format(new Date(value));}
@@ -18,12 +18,12 @@ export default function BillingPage(){
  async function pay(orderId:string){setBusy(orderId);setError("");try{const res=await fetch(`/api/dashboard/billing/orders/${orderId}/pay`,{method:"POST"});const body=await res.json();if(!res.ok)throw new Error(body.error||"Unable to start payment.");if(body.data?.approveUrl)window.location.href=body.data.approveUrl;else if(body.approveUrl)window.location.href=body.approveUrl;else throw new Error("PayPal did not return an approval URL.");}catch(e){setError(e instanceof Error?e.message:"Unable to start payment.");setBusy("");}}
  if(loading)return <main className="mx-auto max-w-6xl p-6"><p>Loading billing…</p></main>;
  if(error&&!data)return <main className="mx-auto max-w-6xl p-6"><div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div></main>;
- const subscriptions=data?.subscriptions??[];const renewals=data?.renewals??[];const invoices=data?.invoices??[];
+ const subscriptions=data?.subscriptions??[];const renewals=data?.renewals??[];const invoices=data?.invoices??[];const availableCredit=data?.availableCreditCents??0;const totalCredit=data?.creditBalanceCents??0;const reservedCredit=Math.max(0,totalCredit-availableCredit);
  return <main className="mx-auto max-w-6xl space-y-8 p-6">
   <header><p className="text-sm font-medium">Account</p><h1 className="text-3xl font-bold">Billing & renewals</h1><p className="mt-2 max-w-3xl text-sm text-gray-600">Review renewal automation, fresh registrar-priced invoices, payments and account credits. GetSawa never charges an unverified renewal price.</p></header>
   {error&&<div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
   <section className="grid gap-4 md:grid-cols-3">
-   <div className="rounded-2xl border p-5"><p className="text-sm text-gray-500">GetSawa credit</p><p className="mt-2 text-2xl font-semibold">{money(data?.creditBalanceCents??0)}</p><p className="mt-1 text-xs text-gray-500">Account adjustments issued by GetSawa finance.</p></div>
+   <div className="rounded-2xl border p-5"><p className="text-sm text-gray-500">Available GetSawa credit</p><p className="mt-2 text-2xl font-semibold">{money(availableCredit)}</p><p className="mt-1 text-xs text-gray-500">{reservedCredit>0?`${money(reservedCredit)} is reserved by a pending checkout.`:"No credit is currently reserved by another checkout."}</p></div>
    <div className="rounded-2xl border p-5"><p className="text-sm text-gray-500">PayPal</p><p className="mt-2 text-lg font-semibold">{data?.paymentMethods.paypal.enabled?"Available":"Unavailable"}</p><p className="mt-1 text-xs text-gray-500">Payment availability is verified server-side before handoff.</p></div>
    <div className="rounded-2xl border p-5"><p className="text-sm text-gray-500">Direct card gateway</p><p className="mt-2 text-lg font-semibold">Not configured</p><p className="mt-1 text-xs text-gray-500">We do not show a direct-card option until a production gateway is genuinely enabled.</p></div>
   </section>
