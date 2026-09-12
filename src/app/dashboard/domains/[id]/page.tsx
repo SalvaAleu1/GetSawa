@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { DnsManager } from "@/components/domain/DnsManager";
+import { DnssecManager } from "@/components/domain/DnssecManager";
 import { DomainLifecycleManager } from "@/components/domain/DomainLifecycleManager";
 
 interface DomainDetail {
@@ -27,7 +28,7 @@ interface DomainDetail {
   websiteProjects: Array<{ id: string; name: string; slug: string; status: string; domainConnectionStatus: string | null; updatedAt: string }>;
 }
 
-type Tab = "overview" | "lifecycle" | "dns" | "nameservers" | "activity";
+type Tab = "overview" | "lifecycle" | "dns" | "dnssec" | "nameservers" | "activity";
 
 export default function DomainDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -75,7 +76,7 @@ export default function DomainDetailPage() {
             <span className={domain.status === "ACTIVE" ? "badge-success" : domain.status === "EXPIRED" || domain.status === "REGISTRATION_FAILED" ? "badge-danger" : "badge-warning"}>{domain.status.replace(/_/g, " ")}</span>
             {domain.isPremium ? <span className="badge-warning">Premium</span> : null}
           </div>
-          <p className="page-subtitle">Registrar: {domain.providerName}. Reconcile registrar state before time-sensitive lifecycle or DNS changes.</p>
+          <p className="page-subtitle">Manage registration, renewal, DNS, DNSSEC, nameservers and connected services from one workspace.</p>
         </div>
         <div className="flex flex-wrap gap-2"><button onClick={syncRegistrar} disabled={busy} className="btn-secondary">{busy ? "Working…" : "Sync registrar"}</button><Link href="/domains/search" className="btn-primary">Register another</Link></div>
       </div>
@@ -91,11 +92,12 @@ export default function DomainDetailPage() {
         <Summary label="WHOIS privacy" value={domain.privacyEnabled ? "Enabled" : "Disabled"} sub={domain.privacyEnabled ? "Registrant details protected" : "Availability depends on TLD/provider"} />
       </div>
 
-      <div className="overflow-x-auto border-b border-border"><div className="flex min-w-max gap-1">{(["overview", "lifecycle", "dns", "nameservers", "activity"] as Tab[]).map((item) => <button key={item} onClick={() => setTab(item)} className={`border-b-2 px-4 py-3 text-sm font-semibold capitalize ${tab === item ? "border-brand-500 text-brand-600" : "border-transparent text-ink/50 hover:text-ink"}`}>{item === "dns" ? "DNS" : item}</button>)}</div></div>
+      <div className="overflow-x-auto border-b border-border"><div className="flex min-w-max gap-1">{(["overview", "lifecycle", "dns", "dnssec", "nameservers", "activity"] as Tab[]).map((item) => <button key={item} onClick={() => setTab(item)} className={`border-b-2 px-4 py-3 text-sm font-semibold capitalize ${tab === item ? "border-brand-500 text-brand-600" : "border-transparent text-ink/50 hover:text-ink"}`}>{item === "dns" ? "DNS" : item === "dnssec" ? "DNSSEC" : item}</button>)}</div></div>
 
       {tab === "overview" ? <Overview domain={domain} /> : null}
       {tab === "lifecycle" ? <DomainLifecycleManager domainId={id} /> : null}
       {tab === "dns" ? <DnsManager domainId={id} /> : null}
+      {tab === "dnssec" ? <DnssecManager domainId={id} /> : null}
       {tab === "nameservers" ? <NameserversTab domainId={id} current={domain.nameservers} onChange={loadDomain} /> : null}
       {tab === "activity" ? <ActivityTab domain={domain} /> : null}
     </div>
@@ -109,7 +111,7 @@ function Overview({ domain }: { domain: DomainDetail }) {
       <Row label="Expires" value={domain.expiresAt ? new Date(domain.expiresAt).toLocaleDateString() : "Not confirmed"} />
       <Row label="Current renewal estimate" value={money(domain.renewalPriceCents, domain.currency)} />
       <Row label="Wholesale-cost protection" value={domain.wholesaleProtected ? "Active" : "Wholesale snapshot incomplete"} />
-      <div className="px-5 py-4"><p className="font-semibold">Lifecycle controls moved into one protected workspace</p><p className="mt-1 text-xs leading-5 text-ink/50">Use the Lifecycle tab for renewals, auto-renew, WHOIS privacy, transfer lock and EPP-code requests.</p></div>
+      <div className="px-5 py-4"><p className="font-semibold">Domain protection</p><p className="mt-1 text-xs leading-5 text-ink/50">Renewal, privacy, transfer lock and authorization-code controls are available under Lifecycle. DNS and DNSSEC are managed separately to reduce accidental service disruption.</p></div>
     </section>
     <section className="panel p-5"><p className="eyebrow">Connected services</p><h2 className="section-heading mt-2">Websites using this domain</h2>{domain.websiteProjects.length === 0 ? <p className="mt-4 text-sm text-ink/55">No GetSawa website project is connected to this domain.</p> : <div className="mt-4 space-y-3">{domain.websiteProjects.map((project) => <Link key={project.id} href="/dashboard/websites" className="block rounded-xl border border-border p-4 hover:bg-paper"><div className="flex items-center justify-between gap-3"><p className="font-semibold">{project.name}</p><span className="badge-neutral">{project.status}</span></div><p className="mt-1 text-xs text-ink/50">Connection: {project.domainConnectionStatus || "Not configured"}</p></Link>)}</div>}</section>
   </div>;
@@ -125,7 +127,7 @@ function Summary({ label, value, sub }: { label: string; value: string; sub: str
 function Row({ label, value }: { label: string; value: string }) { return <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><span className="text-sm text-ink/55">{label}</span><span className="font-semibold">{value}</span></div>; }
 
 function ActivityTab({ domain }: { domain: DomainDetail }) {
-  return <section className="panel"><div className="border-b border-border p-5"><h2 className="section-heading">Recent domain commerce activity</h2><p className="mt-1 text-sm text-ink/50">Orders linked to this domain. Registrar and DNS operations are preserved separately in audit history.</p></div><div className="divide-y divide-border">{domain.recentOrders.length === 0 ? <p className="p-5 text-sm text-ink/55">No linked order activity is available yet.</p> : domain.recentOrders.map((item) => <div key={item.id} className="flex flex-col gap-2 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">{item.description}</p><p className="mt-1 text-xs text-ink/45">{item.order.orderNumber} · {new Date(item.createdAt).toLocaleString()}</p></div><div className="text-left sm:text-right"><p className="font-semibold">{money(item.totalCents, domain.currency)}</p><p className="text-xs text-ink/45">{item.order.status.replace(/_/g, " ")} · {item.provisioningStatus}</p></div></div>)}</div></section>;
+  return <section className="panel"><div className="border-b border-border p-5"><h2 className="section-heading">Recent domain activity</h2><p className="mt-1 text-sm text-ink/50">Orders and lifecycle events associated with this domain.</p></div><div className="divide-y divide-border">{domain.recentOrders.length === 0 ? <p className="p-5 text-sm text-ink/55">No linked order activity is available yet.</p> : domain.recentOrders.map((item) => <div key={item.id} className="flex flex-col gap-2 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">{item.description}</p><p className="mt-1 text-xs text-ink/45">{item.order.orderNumber} · {new Date(item.createdAt).toLocaleString()}</p></div><div className="text-left sm:text-right"><p className="font-semibold">{money(item.totalCents, domain.currency)}</p><p className="text-xs text-ink/45">{item.order.status.replace(/_/g, " ")} · {item.provisioningStatus}</p></div></div>)}</div></section>;
 }
 
 function NameserversTab({ domainId, current, onChange }: { domainId: string; current: string[]; onChange: () => Promise<void> | void }) {
@@ -144,7 +146,7 @@ function NameserversTab({ domainId, current, onChange }: { domainId: string; cur
     } catch (err) { setError(err instanceof Error ? err.message : "Could not update nameservers."); } finally { setSubmitting(false); }
   }
 
-  return <section className="panel p-5"><div className="max-w-3xl"><h2 className="section-heading">Authoritative nameservers</h2><p className="mt-2 text-sm text-ink/55">Nameserver changes move DNS authority. Keep the previous zone available during migration and verify the target zone before saving.</p><div className="mt-5 space-y-3">{nameservers.map((value, index) => <div key={index} className="flex gap-2"><input className="input" placeholder={`Nameserver ${index + 1}`} value={value} onChange={(e) => setNameservers(nameservers.map((item, i) => i === index ? e.target.value : item))} />{nameservers.length > 2 ? <button type="button" onClick={() => setNameservers(nameservers.filter((_, i) => i !== index))} className="btn-secondary">Remove</button> : null}</div>)}</div><div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={nameservers.length >= 13} onClick={() => setNameservers([...nameservers, ""])} className="btn-secondary">Add nameserver</button><button type="button" onClick={save} disabled={submitting} className="btn-primary">{submitting ? "Saving…" : "Save nameservers"}</button></div>{error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}</div></section>;
+  return <section className="panel p-5"><div className="max-w-3xl"><h2 className="section-heading">Authoritative nameservers</h2><p className="mt-2 text-sm text-ink/55">Nameserver changes move DNS authority. Verify the destination zone before switching.</p><div className="mt-5 space-y-3">{nameservers.map((value, index) => <div key={index} className="flex gap-2"><input className="input" placeholder={`Nameserver ${index + 1}`} value={value} onChange={(e) => setNameservers(nameservers.map((item, i) => i === index ? e.target.value : item))} />{nameservers.length > 2 ? <button type="button" onClick={() => setNameservers(nameservers.filter((_, i) => i !== index))} className="btn-secondary">Remove</button> : null}</div>)}</div><div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={nameservers.length >= 13} onClick={() => setNameservers([...nameservers, ""])} className="btn-secondary">Add nameserver</button><button type="button" onClick={save} disabled={submitting} className="btn-primary">{submitting ? "Saving…" : "Save nameservers"}</button></div>{error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}</div></section>;
 }
 
 function money(cents: number, currency: string) { return (cents / 100).toLocaleString(undefined, { style: "currency", currency }); }
