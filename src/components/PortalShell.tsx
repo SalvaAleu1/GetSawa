@@ -81,13 +81,13 @@ export function PortalShell({ children, navGroups, mode = "customer" }: PortalSh
                           ? "bg-white/10 text-white shadow-sm"
                           : "bg-brand-50 text-brand-700"
                         : isAdmin
-                          ? "text-white/58 hover:bg-white/5 hover:text-white"
-                          : "text-ink/62 hover:bg-paper hover:text-ink"
+                          ? "text-white/60 hover:bg-white/5 hover:text-white"
+                          : "text-ink/60 hover:bg-paper hover:text-ink"
                     }`}
                   >
                     <span>{item.label}</span>
                     {item.badge ? (
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] ${isAdmin ? "bg-white/10 text-white/65" : "bg-ink/5 text-ink/55"}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] ${isAdmin ? "bg-white/10 text-white/60" : "bg-ink/5 text-ink/55"}`}>
                         {item.badge}
                       </span>
                     ) : null}
@@ -110,7 +110,7 @@ export function PortalShell({ children, navGroups, mode = "customer" }: PortalSh
           type="button"
           onClick={handleLogout}
           className={`w-full rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
-            isAdmin ? "text-white/45 hover:bg-danger/15 hover:text-red-200" : "text-danger hover:bg-danger/5"
+            isAdmin ? "text-white/45 hover:bg-danger/10 hover:text-red-200" : "text-danger hover:bg-danger/5"
           }`}
         >
           Sign out
@@ -128,7 +128,7 @@ export function PortalShell({ children, navGroups, mode = "customer" }: PortalSh
           <button
             type="button"
             aria-label="Close navigation"
-            className="absolute inset-0 bg-ink/45 backdrop-blur-sm"
+            className="absolute inset-0 bg-ink/40 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
           <div className="relative h-full w-[286px] shadow-2xl">{sidebar}</div>
@@ -136,7 +136,7 @@ export function PortalShell({ children, navGroups, mode = "customer" }: PortalSh
       ) : null}
 
       <div className="lg:pl-[286px]">
-        <header className="sticky top-0 z-30 flex h-[72px] items-center justify-between border-b border-border bg-surface/92 px-4 backdrop-blur md:px-7">
+        <header className="sticky top-0 z-30 flex h-[72px] items-center justify-between border-b border-border bg-surface/95 px-4 backdrop-blur md:px-7">
           <div className="flex min-w-0 items-center gap-3">
             <button
               type="button"
