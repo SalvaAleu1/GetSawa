@@ -7,7 +7,8 @@ export type OrderNotificationType =
   | "ORDER_ACTIVE"
   | "ORDER_FULFILMENT_FAILED"
   | "DOMAIN_RENEWAL_INVOICE"
-  | "HOSTING_RENEWAL_INVOICE";
+  | "HOSTING_RENEWAL_INVOICE"
+  | "EMAIL_RENEWAL_INVOICE";
 
 /**
  * Creates a durable in-app notification once per order/status and optionally
