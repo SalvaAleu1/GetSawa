@@ -32,7 +32,7 @@ const LABELS: Record<string, string> = {
 
 const DESCRIPTIONS: Record<string, string> = {
   HOSTING: "Production cPanel hosting plans appear only after GetSawa has verified the WHM provider, protected the plan economics, and confirmed the fulfilment path.",
-  EMAIL: "Business email products only appear here when they are active in the GetSawa catalog.",
+  EMAIL: "Professional mailboxes powered by a live-verified OpenSRS Hosted Email reseller account. Every mailbox is attached to a domain you manage in GetSawa, and mail DNS is changed only after you explicitly approve the cutover.",
   SECURITY: "Security and protection add-ons currently enabled for sale.",
   AI: "AI-enabled products that are currently active in the catalog.",
   WEBSITE: "Website-related services currently activated for customers.",
@@ -46,17 +46,24 @@ function billingSuffix(cycle: string) {
   return "";
 }
 
+function validMailboxLocalPart(value: string) {
+  return /^[a-z0-9][a-z0-9._-]{0,62}[a-z0-9]$|^[a-z0-9]$/.test(value);
+}
+
 export default function ProductCategoryPage() {
   const { category } = useParams<{ category: string }>();
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [domains, setDomains] = useState<ManagedDomain[]>([]);
   const [selectedDomainId, setSelectedDomainId] = useState("");
+  const [mailboxLocalPart, setMailboxLocalPart] = useState("");
   const [domainAuthRequired, setDomainAuthRequired] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const upperCategory = category.toUpperCase();
   const label = LABELS[upperCategory] ?? category;
+  const needsManagedDomain = ["HOSTING", "EMAIL"].includes(upperCategory);
+  const selectedDomain = domains.find((domain) => domain.id === selectedDomainId) ?? null;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -70,14 +77,15 @@ export default function ProductCategoryPage() {
         return data.data?.products ?? data.products ?? [];
       });
 
-    const domainsPromise = upperCategory === "HOSTING"
-      ? fetch("/api/dashboard/domains?status=ACTIVE&sort=name", { signal: controller.signal, cache: "no-store" })
+    const domainsPromise = needsManagedDomain
+      ? fetch("/api/dashboard/domains?sort=name", { signal: controller.signal, cache: "no-store" })
           .then(async (response) => {
             if (response.status === 401) { setDomainAuthRequired(true); return []; }
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || "Could not load your domains.");
             setDomainAuthRequired(false);
-            return data.data?.domains ?? data.domains ?? [];
+            const available = (data.data?.domains ?? data.domains ?? []).filter((domain: ManagedDomain) => ["ACTIVE", "EXPIRING"].includes(domain.status));
+            return available;
           })
       : Promise.resolve([]);
 
@@ -96,19 +104,29 @@ export default function ProductCategoryPage() {
       });
 
     return () => controller.abort();
-  }, [upperCategory]);
+  }, [upperCategory, needsManagedDomain]);
 
   function handleBuy(product: Product) {
-    if (upperCategory === "HOSTING") {
+    if (needsManagedDomain) {
       if (domainAuthRequired) {
         router.push(`/login?next=${encodeURIComponent(`/products/${category}`)}`);
         return;
       }
       if (!selectedDomainId) {
-        setError("Select an active domain from your GetSawa account before adding hosting to the cart.");
+        setError(`Select an active domain from your GetSawa account before adding ${upperCategory === "EMAIL" ? "business email" : "hosting"} to the cart.`);
         return;
       }
+    }
+
+    if (upperCategory === "HOSTING") {
       addToCart({ kind: "PRODUCT", sku: product.sku, quantity: 1, domainId: selectedDomainId, configuration: {} });
+    } else if (upperCategory === "EMAIL") {
+      const localPart = mailboxLocalPart.trim().toLowerCase();
+      if (!validMailboxLocalPart(localPart)) {
+        setError("Enter a valid mailbox name using letters, numbers, dots, hyphens or underscores.");
+        return;
+      }
+      addToCart({ kind: "PRODUCT", sku: product.sku, quantity: 1, domainId: selectedDomainId, configuration: { localPart } });
     } else {
       addToCart({ kind: "PRODUCT", sku: product.sku, quantity: 1 });
     }
@@ -142,17 +160,35 @@ export default function ProductCategoryPage() {
             </div>
           ) : (
             <>
-              {upperCategory === "HOSTING" ? (
+              {needsManagedDomain ? (
                 <div className="mb-7 rounded-2xl border border-border bg-paper p-5">
-                  <p className="font-bold">Choose the domain this hosting account will serve</p>
-                  <p className="mt-1 text-sm text-ink/55">Only active domains already managed in your GetSawa account can be attached. The server verifies ownership again before payment.</p>
+                  <p className="font-bold">{upperCategory === "EMAIL" ? "Choose your email address" : "Choose the domain this hosting account will serve"}</p>
+                  <p className="mt-1 text-sm text-ink/55">Only active or expiring domains already managed in your GetSawa account can be attached. The server verifies ownership again before payment.</p>
                   {domainAuthRequired ? (
                     <div className="mt-4"><Link href={`/login?next=${encodeURIComponent(`/products/${category}`)}`} className="btn-primary">Sign in to choose a domain</Link></div>
                   ) : domains.length > 0 ? (
-                    <select className="input mt-4 max-w-lg" value={selectedDomainId} onChange={(event) => { setSelectedDomainId(event.target.value); setError(null); }}>
-                      <option value="">Select a domain</option>
-                      {domains.map((domain) => <option key={domain.id} value={domain.id}>{domain.name}</option>)}
-                    </select>
+                    <div className="mt-4 grid max-w-3xl gap-4 sm:grid-cols-2">
+                      {upperCategory === "EMAIL" ? (
+                        <label className="block">
+                          <span className="text-xs font-bold uppercase tracking-wide text-ink/50">Mailbox name</span>
+                          <input className="input mt-2" value={mailboxLocalPart} onChange={(event) => { setMailboxLocalPart(event.target.value.toLowerCase()); setError(null); }} placeholder="hello" autoComplete="off" />
+                        </label>
+                      ) : null}
+                      <label className="block">
+                        <span className="text-xs font-bold uppercase tracking-wide text-ink/50">Managed domain</span>
+                        <select className="input mt-2" value={selectedDomainId} onChange={(event) => { setSelectedDomainId(event.target.value); setError(null); }}>
+                          <option value="">Select a domain</option>
+                          {domains.map((domain) => <option key={domain.id} value={domain.id}>{domain.name}</option>)}
+                        </select>
+                      </label>
+                      {upperCategory === "EMAIL" ? (
+                        <div className="sm:col-span-2 rounded-xl bg-brand-50 p-4 text-sm">
+                          <span className="text-ink/55">Mailbox preview</span>
+                          <p className="mt-1 font-bold text-brand-700">{mailboxLocalPart.trim().toLowerCase() || "mailbox"}@{selectedDomain?.name || "your-domain.com"}</p>
+                          <p className="mt-2 text-xs leading-5 text-ink/50">You will set the mailbox password securely from your GetSawa dashboard after provisioning. Mail routing is not changed until you explicitly approve the DNS cutover.</p>
+                        </div>
+                      ) : null}
+                    </div>
                   ) : (
                     <div className="mt-4 flex flex-wrap items-center gap-3"><p className="text-sm text-ink/60">You do not currently have an active managed domain.</p><Link href="/domains/search" className="btn-secondary">Register a domain</Link></div>
                   )}
@@ -170,7 +206,7 @@ export default function ProductCategoryPage() {
                     <div className="mt-6 border-t border-border pt-5">
                       <div className="flex items-baseline gap-1"><span className="text-2xl font-bold">{formatCents(product.retailPriceCents, product.currency)}</span><span className="text-sm text-ink/45">{billingSuffix(product.billingCycle)}</span></div>
                       {product.billingCycle !== "ONE_TIME" && product.renewalPriceCents != null ? <p className="mt-1 text-xs text-ink/45">Renews at {formatCents(product.renewalPriceCents, product.currency)}{billingSuffix(product.billingCycle)}</p> : null}
-                      <button type="button" onClick={() => handleBuy(product)} className="btn-primary mt-4 w-full">{upperCategory === "HOSTING" ? "Add hosting to cart" : "Add to cart"}</button>
+                      <button type="button" onClick={() => handleBuy(product)} className="btn-primary mt-4 w-full">{upperCategory === "HOSTING" ? "Add hosting to cart" : upperCategory === "EMAIL" ? "Add mailbox to cart" : "Add to cart"}</button>
                     </div>
                   </article>
                 ))}
