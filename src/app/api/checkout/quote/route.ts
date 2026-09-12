@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { checkoutSchema, priceCart, CheckoutError } from "@/lib/checkout";
+import { validateDomainLifecycleCheckout } from "@/lib/checkout-domain-guard";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -11,6 +12,7 @@ export async function POST(req: NextRequest) {
     if (!rl.allowed) return jsonError("Too many quote requests. Please wait a moment and try again.", 429);
 
     const input = checkoutSchema.parse(await req.json());
+    await validateDomainLifecycleCheckout(input, user.id);
     const priced = await priceCart(input, user.id);
 
     return jsonOk({
