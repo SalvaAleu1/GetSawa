@@ -26,13 +26,14 @@ export async function GET() {
       next_billing_at: Date | null;
       grace_until: Date | null;
       auto_renew: boolean | null;
+      cancel_at_period_end: boolean | null;
       amount_cents: number | null;
       currency: string | null;
     }>>`
       SELECT psi."id",psi."status",psi."provider_resource_id",psi."metadata",psi."created_at",
              p."id" AS product_id,p."name" AS product_name,p."billingCycle" AS billing_cycle,
              d."id" AS domain_id,d."name" AS domain_name,
-             bs."id" AS subscription_id,bs."status" AS subscription_status,bs."current_period_end",bs."next_billing_at",bs."grace_until",bs."auto_renew",bs."amount_cents",bs."currency"
+             bs."id" AS subscription_id,bs."status" AS subscription_status,bs."current_period_end",bs."next_billing_at",bs."grace_until",bs."auto_renew",bs."cancel_at_period_end",bs."amount_cents",bs."currency"
       FROM "product_service_instances" psi
       JOIN "Product" p ON p."id"=psi."product_id"
       LEFT JOIN "Domain" d ON d."id"=psi."domain_id"
@@ -72,6 +73,7 @@ export async function GET() {
           nextBillingAt: service.next_billing_at,
           graceUntil: service.grace_until,
           autoRenew: service.auto_renew,
+          cancelAtPeriodEnd: service.cancel_at_period_end,
           amountCents: service.amount_cents,
           currency: service.currency,
         } : null,
