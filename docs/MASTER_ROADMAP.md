@@ -35,16 +35,16 @@ Professional cart review, server-authoritative quote preview, protected line pri
 ### Phase 7 — Customer onboarding, account and security — DONE
 Account profile, onboarding checklist, email-verification visibility, password controls, active sessions, revoke-all behavior, TOTP MFA setup/verification/disable controls, recent login history, security status and account notifications.
 
-### Phase 8 — Domain portfolio and lifecycle dashboard — CURRENT
+### Phase 8 — Domain portfolio and lifecycle dashboard — DONE
 Domain portfolio, search/filter/sort, expiration health, auto-renew state, bulk actions, registrar state synchronization, detail pages, timelines and operational warnings.
 
-### Phase 9 — DNS, nameservers and DNS security — UPCOMING
-Complete DNS record editor, templates, validation, nameservers, DNSSEC, propagation guidance, import/export, record history, safe destructive actions and provider reconciliation.
+### Phase 9 — DNS, nameservers and DNS security — DONE
+Complete DNS record editor, validation, nameservers, DNSSEC/DS record management where supported, propagation guidance, import/export, record history, safe destructive actions and provider reconciliation.
 
-### Phase 10 — Transfers, renewals, locks and privacy — UPCOMING
-Transfer-in/out workflows, authorization codes, transfer status, domain locks, WHOIS privacy, renewal pricing, multi-year renewals, expiry/grace-state handling and reminder controls.
+### Phase 10 — Transfers, renewals, locks and privacy — DONE
+Transfer-in/out workflows, authorization codes, transfer status and recovery, domain locks, WHOIS privacy, renewal pricing, multi-year renewals, expiry-state handling and lifecycle controls.
 
-### Phase 11 — Premium domains and aftermarket — UPCOMING
+### Phase 11 — Premium domains and aftermarket — CURRENT
 Separate registry-premium domains from GetSawa-owned/aftermarket inventory, authoritative premium quoting, acquisition cost vs retail price, renewal premium handling, premium search/browse, offers and safe fulfillment.
 
 ### Phase 12 — Domain auctions — UPCOMING
@@ -113,7 +113,8 @@ Add secondary registrars/providers where commercially useful, premium-quote-capa
 2. Never replace a working provider flow with mock/sandbox behavior in production code.
 3. Pricing and checkout must fail safe when wholesale cost or provider state is uncertain.
 4. UI labels must not claim a service is live until its backend/provider provisioning is live.
-5. Prefer shared primitives and provider abstractions over duplicated one-off code.
-6. Every phase should leave documentation, operational behavior and error states clearer than before.
-7. Cloudflare is the target production runtime; Vercel remains transitional until Phase 29 is verified.
-8. While GitHub Actions quota is exhausted, do not block development on Actions. Use static review/local checks where available, and treat the Cloudflare build/deployment as the runtime build gate.
+5. Customer-facing pages must never expose README text, developer instructions, implementation notes, placeholder copy, fake data or setup guidance. Public UI must contain polished product copy backed by real state and real actions.
+6. Prefer shared primitives and provider abstractions over duplicated one-off code.
+7. Every phase should leave documentation, operational behavior and error states clearer than before.
+8. Cloudflare is the target production runtime; Vercel remains transitional until Phase 29 is verified.
+9. While GitHub Actions quota is exhausted, do not block development on Actions. Use static review/local checks where available, and treat the Cloudflare build/deployment as the runtime build gate.
