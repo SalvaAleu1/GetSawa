@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { checkoutSchema, priceCart, CheckoutError } from "@/lib/checkout";
 import { validateDomainLifecycleCheckout } from "@/lib/checkout-domain-guard";
 import { validatePricedPremiumCart } from "@/lib/premium-checkout";
+import { assertCatalogPriceFloors, validateCatalogCheckout } from "@/lib/catalog-checkout-guard";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -14,8 +15,10 @@ export async function POST(req: NextRequest) {
 
     const input = checkoutSchema.parse(await req.json());
     await validateDomainLifecycleCheckout(input, user.id);
+    const catalogFloors = await validateCatalogCheckout(input);
     const priced = await priceCart(input, user.id);
     await validatePricedPremiumCart(priced, user.id);
+    assertCatalogPriceFloors(priced, catalogFloors);
 
     return jsonOk({
       items: priced.items.map((item) => ({
