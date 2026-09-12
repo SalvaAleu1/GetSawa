@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/auth";
 import { checkoutSchema, priceCart, CheckoutError } from "@/lib/checkout";
+import { validateDomainLifecycleCheckout } from "@/lib/checkout-domain-guard";
 import { generateOrderNumber } from "@/lib/pricing";
 import { encryptSecret } from "@/lib/crypto";
 import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
@@ -18,6 +19,9 @@ export async function POST(req: NextRequest) {
     if (!rl.allowed) return jsonError("Too many checkout attempts. Please slow down.", 429);
 
     const input = checkoutSchema.parse(await req.json());
+    // Transfer eligibility and TLD-specific renewal terms are checked again at
+    // final order creation. A prior quote or browser state is never trusted.
+    await validateDomainLifecycleCheckout(input, user.id);
     const priced = await priceCart(input, user.id);
 
     if (priced.totalCents <= 0) {
@@ -115,7 +119,7 @@ export async function POST(req: NextRequest) {
 
     await logAudit({ actorId: user.id, action: "order.created", resource: "order", resourceId: order.id, ipAddress: ip });
 
-    const approveLink = paypalOrder.links?.find((l: any) => l.rel === "approve")?.href;
+    const approveLink = paypalOrder.links?.find((link: any) => link.rel === "approve")?.href;
 
     return jsonOk({
       orderId: order.id,
