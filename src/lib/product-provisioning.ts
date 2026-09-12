@@ -2,10 +2,12 @@ import crypto from "crypto";
 import type { Order, OrderItem, Product, User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getProductReadiness, validateProductConfiguration } from "@/lib/product-readiness";
+import { generateInitialMailboxPassword, getEmailProvider } from "@/lib/providers/email/EmailProvider";
 import { getHostingProvider } from "@/lib/providers/hosting/HostingProvider";
-import { getEmailProvider } from "@/lib/providers/email/EmailProvider";
 import { ensureHostingSubscription, getHostingRenewalServiceForOrder } from "@/lib/hosting-billing";
+import { ensureEmailSubscription, getEmailRenewalServiceForOrder } from "@/lib/email-billing";
 import { getHostingOperationalState } from "@/lib/hosting-readiness";
+import { getEmailOperationalState } from "@/lib/email-readiness";
 import { logAudit } from "@/lib/audit";
 
 export async function provisionCatalogProduct(params: { order: Order & { user: User }; item: OrderItem }) {
@@ -22,10 +24,22 @@ export async function provisionCatalogProduct(params: { order: Order & { user: U
     });
   }
 
+  const emailRenewal = await getEmailRenewalServiceForOrder(params.order.id);
+  if (emailRenewal) {
+    return fulfillExistingEmailRenewal({
+      orderId: params.order.id,
+      itemId: params.item.id,
+      productId: params.item.productId,
+      userId: params.order.userId,
+      serviceInstanceId: emailRenewal.serviceInstanceId,
+    });
+  }
+
   const product = await prisma.product.findUnique({ where: { id: params.item.productId } });
   if (!product) throw new Error("Catalog product no longer exists.");
   const readiness = await getProductReadiness(product);
   if (!readiness.purchasable) throw new Error(readiness.reasons[0] || "Product fulfillment is not ready.");
+
   const configRows = await prisma.$queryRaw<Array<{ domain_id: string | null; configuration: unknown }>>`
     SELECT "domain_id","configuration" FROM "product_order_configuration" WHERE "order_item_id"=${params.item.id} LIMIT 1
   `;
@@ -36,12 +50,15 @@ export async function provisionCatalogProduct(params: { order: Order & { user: U
   const validated = await validateProductConfiguration({ product, userId: params.order.userId, domainId: configRow?.domain_id ?? undefined, configuration: configObject });
   const meta = validated.meta;
 
-  const existing = await prisma.$queryRaw<Array<{ id: string; provider_resource_id: string; status: string }>>`
-    SELECT "id","provider_resource_id","status" FROM "product_service_instances" WHERE "order_item_id"=${params.item.id} LIMIT 1
+  const existing = await prisma.$queryRaw<Array<{ id: string; provider_resource_id: string; provider_name: string; status: string }>>`
+    SELECT "id","provider_resource_id","provider_name","status" FROM "product_service_instances" WHERE "order_item_id"=${params.item.id} LIMIT 1
   `;
   if (existing[0]) {
     if (["MONTHLY", "YEARLY"].includes(product.billingCycle) && meta.renewalContract === "HOSTING_RENEWAL" && meta.provisioningContract === "HOSTING_ACCOUNT") {
       await ensureHostingSubscription(existing[0].id);
+    }
+    if (["MONTHLY", "YEARLY"].includes(product.billingCycle) && meta.renewalContract === "EMAIL_RENEWAL" && meta.provisioningContract === "EMAIL_MAILBOX") {
+      await ensureEmailSubscription(existing[0].id);
     }
     await markCatalogItemProvisioned(params.item.id, "Provider service reconciled from existing service instance.");
     return existing[0];
@@ -77,14 +94,57 @@ export async function provisionCatalogProduct(params: { order: Order & { user: U
 
   if (meta.provisioningContract === "EMAIL_MAILBOX") {
     if (!validated.domain) throw new Error("Mailbox fulfillment requires a managed domain.");
+    const operational = await getEmailOperationalState();
+    if (!operational.verified || !operational.cluster) throw new Error(operational.reason || "OpenSRS Hosted Email has not passed its live verification gate.");
     const provider = getEmailProvider();
-    if (!provider.isConfigured()) throw new Error("Business email provider is not configured.");
     const localPart = String(validated.configuration.localPart || "");
     const storageMb = Number(meta.providerConfig.storageMb);
-    const result = await provider.createMailbox({ domain: validated.domain.name, localPart, customerEmail: params.order.user.email, storageMb, idempotencyKey: params.item.id });
-    if (!result.success || !result.providerMailboxId) throw new Error(result.errorMessage || "Email provider did not return a mailbox reference.");
-    const service = await persistServiceInstance({ item: params.item, product, userId: params.order.userId, domainId: validated.domain.id, providerName: provider.name, providerResourceId: result.providerMailboxId, metadata: { address: `${localPart}@${validated.domain.name}`, storageMb } });
-    await markCatalogItemProvisioned(params.item.id, `Provisioned with ${provider.name}. Provider reference recorded.`);
+    const address = `${localPart}@${validated.domain.name}`.toLowerCase();
+
+    const duplicate = await prisma.$queryRaw<Array<{ id: string; order_item_id: string; user_id: string }>>`
+      SELECT "id","order_item_id","user_id" FROM "product_service_instances"
+      WHERE "provider_name"='opensrs_hosted_email' AND LOWER("provider_resource_id")=${address} LIMIT 1
+    `;
+    if (duplicate[0]) throw new Error("This mailbox address is already managed by an existing GetSawa service.");
+
+    const initialPassword = generateInitialMailboxPassword(params.item.id);
+    const result = await provider.createMailbox({
+      domain: validated.domain.name,
+      localPart,
+      customerEmail: params.order.user.email,
+      storageMb,
+      idempotencyKey: params.item.id,
+      initialPassword,
+    });
+    if (!result.success || !result.providerMailboxId) throw new Error(result.errorMessage || "OpenSRS did not return a mailbox reference.");
+
+    await ensureTrackedEmailDomain({
+      userId: params.order.userId,
+      domainId: validated.domain.id,
+      domainName: validated.domain.name,
+      providerName: provider.name,
+      cluster: operational.cluster,
+    });
+
+    const service = await persistServiceInstance({
+      item: params.item,
+      product,
+      userId: params.order.userId,
+      domainId: validated.domain.id,
+      providerName: provider.name,
+      providerResourceId: result.providerMailboxId.toLowerCase(),
+      metadata: {
+        address: result.providerMailboxId.toLowerCase(),
+        storageMb,
+        cluster: operational.cluster,
+        passwordResetRequired: true,
+        dnsCutoverRequired: true,
+      },
+    });
+    if (["MONTHLY", "YEARLY"].includes(product.billingCycle) && meta.renewalContract === "EMAIL_RENEWAL") {
+      await ensureEmailSubscription(service.id);
+    }
+    await markCatalogItemProvisioned(params.item.id, `Mailbox provisioned with ${provider.name}. Set a customer password and complete the explicit email DNS cutover before use.`);
     return service;
   }
 
@@ -126,6 +186,49 @@ async function fulfillExistingHostingRenewal(params: { orderId: string; itemId: 
   return { id: service.id, providerResourceId: service.provider_resource_id, status: "ACTIVE" };
 }
 
+async function fulfillExistingEmailRenewal(params: { orderId: string; itemId: string; productId: string; userId: string; serviceInstanceId: string }) {
+  const rows = await prisma.$queryRaw<Array<{
+    id: string;
+    user_id: string;
+    product_id: string;
+    provider_name: string;
+    provider_resource_id: string;
+    status: string;
+  }>>`
+    SELECT "id","user_id","product_id","provider_name","provider_resource_id","status"
+    FROM "product_service_instances" WHERE "id"=${params.serviceInstanceId} LIMIT 1
+  `;
+  const service = rows[0];
+  if (!service) throw new Error("Email renewal service instance was not found.");
+  if (service.user_id !== params.userId || service.product_id !== params.productId) throw new Error("Email renewal service linkage failed integrity validation.");
+  if (service.provider_name !== "opensrs_hosted_email") throw new Error("Email renewal is not backed by OpenSRS Hosted Email.");
+  if (service.status === "TERMINATED") throw new Error("A terminated mailbox cannot be renewed.");
+
+  if (service.status === "SUSPENDED") {
+    const operational = await getEmailOperationalState();
+    if (!operational.verified) throw new Error(operational.reason || "OpenSRS Hosted Email is not operational for mailbox reactivation.");
+    await getEmailProvider().reactivateMailbox(service.provider_resource_id);
+    await prisma.$executeRaw`
+      UPDATE "product_service_instances" SET "status"='ACTIVE',"updated_at"=CURRENT_TIMESTAMP
+      WHERE "id"=${service.id} AND "status"='SUSPENDED'
+    `;
+    await logAudit({ actorId: params.userId, action: "email.reactivated_after_payment", resource: "email_service", resourceId: service.id, metadata: { orderId: params.orderId } }).catch(() => undefined);
+  } else if (service.status !== "ACTIVE") {
+    throw new Error(`Mailbox cannot be renewed from ${service.status}.`);
+  }
+
+  await markCatalogItemProvisioned(params.itemId, "Existing OpenSRS mailbox renewed; no duplicate mailbox was created.");
+  return { id: service.id, providerResourceId: service.provider_resource_id, status: "ACTIVE" };
+}
+
+async function ensureTrackedEmailDomain(params: { userId: string; domainId: string; domainName: string; providerName: string; cluster: "A" | "B" }) {
+  await prisma.$executeRaw`
+    INSERT INTO "email_domain_services" ("id","user_id","domain_id","provider_name","provider_domain","cluster","status")
+    VALUES (${crypto.randomUUID()},${params.userId},${params.domainId},${params.providerName},${params.domainName.toLowerCase()},${params.cluster},'DNS_PENDING')
+    ON CONFLICT ("domain_id","provider_name") DO NOTHING
+  `;
+}
+
 async function markCatalogItemProvisioned(itemId: string, note: string) {
   const updated = await prisma.orderItem.updateMany({
     where: { id: itemId, provisioningStatus: "PROVISIONING" },
@@ -139,17 +242,24 @@ async function markCatalogItemProvisioned(itemId: string, note: string) {
 
 async function persistServiceInstance(params: { item: OrderItem; product: Product; userId: string; domainId: string | null; providerName: string; providerResourceId: string; metadata: Record<string, unknown> }) {
   const serviceId = crypto.randomUUID();
-  await prisma.$executeRaw`
-    INSERT INTO "product_service_instances" ("id","order_item_id","user_id","product_id","domain_id","provider_name","provider_resource_id","status","metadata")
-    VALUES (${serviceId},${params.item.id},${params.userId},${params.product.id},${params.domainId},${params.providerName},${params.providerResourceId},'ACTIVE',${JSON.stringify(params.metadata)}::jsonb)
-    ON CONFLICT ("order_item_id") DO NOTHING
-  `;
-  const rows = await prisma.$queryRaw<Array<{ id: string; provider_resource_id: string; status: string }>>`
-    SELECT "id","provider_resource_id","status" FROM "product_service_instances" WHERE "order_item_id"=${params.item.id} LIMIT 1
+  try {
+    await prisma.$executeRaw`
+      INSERT INTO "product_service_instances" ("id","order_item_id","user_id","product_id","domain_id","provider_name","provider_resource_id","status","metadata")
+      VALUES (${serviceId},${params.item.id},${params.userId},${params.product.id},${params.domainId},${params.providerName},${params.providerResourceId},'ACTIVE',${JSON.stringify(params.metadata)}::jsonb)
+      ON CONFLICT ("order_item_id") DO NOTHING
+    `;
+  } catch (error: any) {
+    if (error?.code === "P2002" || String(error?.message || "").includes("product_service_provider_resource_key")) {
+      throw new Error("The provider resource is already linked to another GetSawa service.");
+    }
+    throw error;
+  }
+  const rows = await prisma.$queryRaw<Array<{ id: string; provider_resource_id: string; provider_name: string; status: string }>>`
+    SELECT "id","provider_resource_id","provider_name","status" FROM "product_service_instances" WHERE "order_item_id"=${params.item.id} LIMIT 1
   `;
   const persisted = rows[0];
   if (!persisted) throw new Error("Provider service instance could not be persisted.");
-  return { id: persisted.id, providerResourceId: persisted.provider_resource_id, status: persisted.status };
+  return { id: persisted.id, providerResourceId: persisted.provider_resource_id, providerName: persisted.provider_name, status: persisted.status };
 }
 
 export async function getCustomerServiceInstances(userId: string) {
