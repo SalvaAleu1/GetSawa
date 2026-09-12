@@ -3,15 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-
-interface DnsRecord {
-  id: string;
-  type: string;
-  host: string;
-  value: string;
-  ttl: number;
-  priority?: number | null;
-}
+import { DnsManager } from "@/components/domain/DnsManager";
 
 interface DomainDetail {
   id: string;
@@ -48,7 +40,6 @@ export default function DomainDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [tab, setTab] = useState<Tab>("overview");
   const [domain, setDomain] = useState<DomainDetail | null>(null);
-  const [records, setRecords] = useState<DnsRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,65 +58,39 @@ export default function DomainDetailPage() {
     }
   }, [id]);
 
-  const loadRecords = useCallback(async () => {
-    const res = await fetch(`/api/dashboard/domains/${id}/dns`, { cache: "no-store" });
-    const data = await res.json();
-    if (res.ok) setRecords(data.records || []);
-  }, [id]);
-
   useEffect(() => { loadDomain(); }, [loadDomain]);
-  useEffect(() => { if (tab === "dns") loadRecords(); }, [tab, loadRecords]);
 
   async function syncRegistrar() {
-    setBusy(true);
-    setError(null);
+    setBusy(true); setError(null);
     try {
       const res = await fetch(`/api/dashboard/domains/${id}/sync`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Registrar sync failed.");
       setSyncedAt(data.syncedAt);
       await loadDomain();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Registrar sync failed.");
-    } finally {
-      setBusy(false);
-    }
+    } catch (err) { setError(err instanceof Error ? err.message : "Registrar sync failed."); } finally { setBusy(false); }
   }
 
   async function toggleLock() {
     if (!domain) return;
-    setBusy(true);
-    setError(null);
+    setBusy(true); setError(null);
     try {
-      const res = await fetch(`/api/dashboard/domains/${id}/lock`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ locked: !domain.isLocked }),
-      });
+      const res = await fetch(`/api/dashboard/domains/${id}/lock`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ locked: !domain.isLocked }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not update the domain lock.");
       await loadDomain();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update the domain lock.");
-    } finally { setBusy(false); }
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not update the domain lock."); } finally { setBusy(false); }
   }
 
   async function toggleAutoRenew() {
     if (!domain) return;
-    setBusy(true);
-    setError(null);
+    setBusy(true); setError(null);
     try {
-      const res = await fetch(`/api/dashboard/domains/${id}/autorenew`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ autoRenew: !domain.autoRenew }),
-      });
+      const res = await fetch(`/api/dashboard/domains/${id}/autorenew`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ autoRenew: !domain.autoRenew }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not update auto-renew.");
       await loadDomain();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update auto-renew.");
-    } finally { setBusy(false); }
+    } catch (err) { setError(err instanceof Error ? err.message : "Could not update auto-renew."); } finally { setBusy(false); }
   }
 
   if (loading) return <div className="skeleton h-96" />;
@@ -141,7 +106,7 @@ export default function DomainDetailPage() {
             <span className={domain.status === "ACTIVE" ? "badge-success" : domain.status === "EXPIRED" || domain.status === "REGISTRATION_FAILED" ? "badge-danger" : "badge-warning"}>{domain.status.replace(/_/g, " ")}</span>
             {domain.isPremium ? <span className="badge-warning">Premium</span> : null}
           </div>
-          <p className="page-subtitle">Registrar: {domain.providerName}. Use sync to reconcile GetSawa with the authoritative registrar state before making time-sensitive changes.</p>
+          <p className="page-subtitle">Registrar: {domain.providerName}. Reconcile registrar state before making time-sensitive lifecycle or DNS changes.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={syncRegistrar} disabled={busy} className="btn-secondary">{busy ? "Working…" : "Sync registrar"}</button>
@@ -151,7 +116,6 @@ export default function DomainDetailPage() {
 
       {syncedAt ? <div className="rounded-2xl border border-success/20 bg-success/5 p-4 text-sm text-success">Registrar state reconciled at {new Date(syncedAt).toLocaleString()}.</div> : null}
       {error ? <div className="rounded-2xl border border-danger/20 bg-danger/5 p-4 text-sm text-danger">{error}</div> : null}
-
       <LifecycleAlert domain={domain} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -164,9 +128,7 @@ export default function DomainDetailPage() {
       <div className="overflow-x-auto border-b border-border">
         <div className="flex min-w-max gap-1">
           {(["overview", "dns", "nameservers", "activity"] as Tab[]).map((item) => (
-            <button key={item} onClick={() => setTab(item)} className={`border-b-2 px-4 py-3 text-sm font-semibold capitalize ${tab === item ? "border-brand-500 text-brand-600" : "border-transparent text-ink/50 hover:text-ink"}`}>
-              {item === "dns" ? "DNS" : item}
-            </button>
+            <button key={item} onClick={() => setTab(item)} className={`border-b-2 px-4 py-3 text-sm font-semibold capitalize ${tab === item ? "border-brand-500 text-brand-600" : "border-transparent text-ink/50 hover:text-ink"}`}>{item === "dns" ? "DNS" : item}</button>
           ))}
         </div>
       </div>
@@ -178,34 +140,14 @@ export default function DomainDetailPage() {
             <Row label="Expires" value={domain.expiresAt ? new Date(domain.expiresAt).toLocaleDateString() : "Not confirmed"} />
             <Row label="Current renewal estimate" value={money(domain.renewalPriceCents, domain.currency)} />
             <Row label="Wholesale-cost protection" value={domain.wholesaleProtected ? "Active" : "Wholesale snapshot incomplete"} />
-            <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div><p className="font-semibold">Auto-renew</p><p className="text-xs text-ink/50">Registrar setting and GetSawa state are updated together.</p></div>
-              <button onClick={toggleAutoRenew} disabled={busy} className={domain.autoRenew ? "btn-secondary" : "btn-primary"}>{domain.autoRenew ? "Disable auto-renew" : "Enable auto-renew"}</button>
-            </div>
-            <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div><p className="font-semibold">Transfer lock</p><p className="text-xs text-ink/50">Keep locked unless you intentionally need to transfer the domain away.</p></div>
-              <button onClick={toggleLock} disabled={busy} className={domain.isLocked ? "btn-secondary" : "btn-primary"}>{domain.isLocked ? "Unlock domain" : "Lock domain"}</button>
-            </div>
+            <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">Auto-renew</p><p className="text-xs text-ink/50">Registrar setting and GetSawa state are updated together.</p></div><button onClick={toggleAutoRenew} disabled={busy} className={domain.autoRenew ? "btn-secondary" : "btn-primary"}>{domain.autoRenew ? "Disable auto-renew" : "Enable auto-renew"}</button></div>
+            <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">Transfer lock</p><p className="text-xs text-ink/50">Keep locked unless you intentionally need to transfer the domain away.</p></div><button onClick={toggleLock} disabled={busy} className={domain.isLocked ? "btn-secondary" : "btn-primary"}>{domain.isLocked ? "Unlock domain" : "Lock domain"}</button></div>
           </section>
-
-          <section className="panel p-5">
-            <p className="eyebrow">Connected services</p>
-            <h2 className="section-heading mt-2">Websites using this domain</h2>
-            {domain.websiteProjects.length === 0 ? <p className="mt-4 text-sm text-ink/55">No GetSawa website project is connected to this domain.</p> : (
-              <div className="mt-4 space-y-3">
-                {domain.websiteProjects.map((project) => (
-                  <Link key={project.id} href="/dashboard/websites" className="block rounded-xl border border-border p-4 hover:bg-paper">
-                    <div className="flex items-center justify-between gap-3"><p className="font-semibold">{project.name}</p><span className="badge-neutral">{project.status}</span></div>
-                    <p className="mt-1 text-xs text-ink/50">Connection: {project.domainConnectionStatus || "Not configured"}</p>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </section>
+          <section className="panel p-5"><p className="eyebrow">Connected services</p><h2 className="section-heading mt-2">Websites using this domain</h2>{domain.websiteProjects.length === 0 ? <p className="mt-4 text-sm text-ink/55">No GetSawa website project is connected to this domain.</p> : <div className="mt-4 space-y-3">{domain.websiteProjects.map((project) => <Link key={project.id} href="/dashboard/websites" className="block rounded-xl border border-border p-4 hover:bg-paper"><div className="flex items-center justify-between gap-3"><p className="font-semibold">{project.name}</p><span className="badge-neutral">{project.status}</span></div><p className="mt-1 text-xs text-ink/50">Connection: {project.domainConnectionStatus || "Not configured"}</p></Link>)}</div>}</section>
         </div>
       ) : null}
 
-      {tab === "dns" ? <DnsTab domainId={id} records={records} onChange={loadRecords} /> : null}
+      {tab === "dns" ? <DnsManager domainId={id} /> : null}
       {tab === "nameservers" ? <NameserversTab domainId={id} current={domain.nameservers} onChange={loadDomain} /> : null}
       {tab === "activity" ? <ActivityTab domain={domain} /> : null}
     </div>
@@ -215,78 +157,17 @@ export default function DomainDetailPage() {
 function LifecycleAlert({ domain }: { domain: DomainDetail }) {
   if (domain.lifecycle === "healthy") return null;
   const critical = domain.lifecycle === "expired" || domain.lifecycle === "critical" || domain.lifecycle === "attention";
-  return (
-    <div className={`rounded-2xl border p-4 ${critical ? "border-danger/25 bg-danger/5" : "border-amber-300 bg-amber-50"}`}>
-      <p className={`font-semibold ${critical ? "text-danger" : "text-amber-700"}`}>{domain.lifecycle === "expired" ? "Domain has expired" : domain.lifecycle === "critical" ? "Expiry is very close" : domain.lifecycle === "warning" ? "Domain expires within 30 days" : domain.lifecycle === "attention" ? "Domain needs operational attention" : "Registrar lifecycle is still pending"}</p>
-      <p className="mt-1 text-sm text-ink/60">{domain.autoRenew ? "Auto-renew is enabled, but payment and registrar readiness still need to succeed at renewal time." : "Auto-renew is disabled. Review renewal before the expiration deadline."}</p>
-    </div>
-  );
+  return <div className={`rounded-2xl border p-4 ${critical ? "border-danger/25 bg-danger/5" : "border-amber-300 bg-amber-50"}`}><p className={`font-semibold ${critical ? "text-danger" : "text-amber-700"}`}>{domain.lifecycle === "expired" ? "Domain has expired" : domain.lifecycle === "critical" ? "Expiry is very close" : domain.lifecycle === "warning" ? "Domain expires within 30 days" : domain.lifecycle === "attention" ? "Domain needs operational attention" : "Registrar lifecycle is still pending"}</p><p className="mt-1 text-sm text-ink/60">{domain.autoRenew ? "Auto-renew is enabled, but payment and registrar readiness still need to succeed at renewal time." : "Auto-renew is disabled. Review renewal before the expiration deadline."}</p></div>;
 }
 
-function Summary({ label, value, sub }: { label: string; value: string; sub: string }) {
-  return <div className="metric-card"><p className="eyebrow">{label}</p><p className="mt-2 text-lg font-bold">{value}</p><p className="mt-1 text-xs text-ink/45">{sub}</p></div>;
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><span className="text-sm text-ink/55">{label}</span><span className="font-semibold">{value}</span></div>;
-}
+function Summary({ label, value, sub }: { label: string; value: string; sub: string }) { return <div className="metric-card"><p className="eyebrow">{label}</p><p className="mt-2 text-lg font-bold">{value}</p><p className="mt-1 text-xs text-ink/45">{sub}</p></div>; }
+function Row({ label, value }: { label: string; value: string }) { return <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><span className="text-sm text-ink/55">{label}</span><span className="font-semibold">{value}</span></div>; }
 
 function ActivityTab({ domain }: { domain: DomainDetail }) {
-  return (
-    <section className="panel">
-      <div className="border-b border-border p-5"><h2 className="section-heading">Recent domain commerce activity</h2><p className="mt-1 text-sm text-ink/50">Orders linked to this domain. Registrar reconciliation events are also preserved in the audit log for staff operations.</p></div>
-      <div className="divide-y divide-border">
-        {domain.recentOrders.length === 0 ? <p className="p-5 text-sm text-ink/55">No linked order activity is available yet.</p> : domain.recentOrders.map((item) => (
-          <div key={item.id} className="flex flex-col gap-2 p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="font-semibold">{item.description}</p><p className="mt-1 text-xs text-ink/45">{item.order.orderNumber} · {new Date(item.createdAt).toLocaleString()}</p></div>
-            <div className="text-left sm:text-right"><p className="font-semibold">{money(item.totalCents, domain.currency)}</p><p className="text-xs text-ink/45">{item.order.status.replace(/_/g, " ")} · {item.provisioningStatus}</p></div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
+  return <section className="panel"><div className="border-b border-border p-5"><h2 className="section-heading">Recent domain commerce activity</h2><p className="mt-1 text-sm text-ink/50">Orders linked to this domain. Registrar and DNS operations are preserved separately in audit history.</p></div><div className="divide-y divide-border">{domain.recentOrders.length === 0 ? <p className="p-5 text-sm text-ink/55">No linked order activity is available yet.</p> : domain.recentOrders.map((item) => <div key={item.id} className="flex flex-col gap-2 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold">{item.description}</p><p className="mt-1 text-xs text-ink/45">{item.order.orderNumber} · {new Date(item.createdAt).toLocaleString()}</p></div><div className="text-left sm:text-right"><p className="font-semibold">{money(item.totalCents, domain.currency)}</p><p className="text-xs text-ink/45">{item.order.status.replace(/_/g, " ")} · {item.provisioningStatus}</p></div></div>)}</div></section>;
 }
 
-function DnsTab({ domainId, records, onChange }: { domainId: string; records: DnsRecord[]; onChange: () => void }) {
-  const [form, setForm] = useState({ type: "A", host: "@", value: "", ttl: 3600, priority: "" });
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  async function handleAdd(e: React.FormEvent) {
-    e.preventDefault(); setSubmitting(true); setError(null);
-    try {
-      const res = await fetch(`/api/dashboard/domains/${domainId}/dns`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: form.type, host: form.host, value: form.value, ttl: form.ttl, priority: form.priority ? Number(form.priority) : undefined }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not create the DNS record.");
-      setForm({ type: "A", host: "@", value: "", ttl: 3600, priority: "" }); onChange();
-    } catch (err) { setError(err instanceof Error ? err.message : "Could not create the DNS record."); } finally { setSubmitting(false); }
-  }
-
-  async function handleDelete(recordId: string) {
-    if (!window.confirm("Delete this DNS record? DNS changes can make websites or email unavailable.")) return;
-    const res = await fetch(`/api/dashboard/domains/${domainId}/dns/${recordId}`, { method: "DELETE" });
-    if (!res.ok) { const data = await res.json(); setError(data.error || "Could not delete the record."); return; }
-    onChange();
-  }
-
-  return (
-    <div className="space-y-5">
-      <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">DNS changes can interrupt websites, email and verification records. Phase 9 adds editing, templates, provider reconciliation and safer DNS workflows.</div>
-      <div className="table-shell overflow-x-auto"><table className="w-full min-w-[700px] text-left text-sm"><thead className="border-b border-border bg-paper text-xs uppercase tracking-[0.08em] text-ink/40"><tr><th className="px-4 py-3">Type</th><th className="px-4 py-3">Host</th><th className="px-4 py-3">Value</th><th className="px-4 py-3">TTL</th><th className="px-4 py-3"></th></tr></thead><tbody className="divide-y divide-border">{records.length === 0 ? <tr><td colSpan={5} className="px-4 py-6 text-center text-ink/50">No DNS records stored in GetSawa.</td></tr> : records.map((record) => <tr key={record.id}><td className="px-4 py-3 font-mono text-xs font-semibold text-brand-600">{record.type}</td><td className="px-4 py-3">{record.host}</td><td className="max-w-sm truncate px-4 py-3 text-ink/60">{record.value}</td><td className="px-4 py-3">{record.ttl}</td><td className="px-4 py-3 text-right"><button onClick={() => handleDelete(record.id)} className="text-sm font-semibold text-danger">Delete</button></td></tr>)}</tbody></table></div>
-      <form onSubmit={handleAdd} className="panel grid gap-3 p-5 md:grid-cols-2 xl:grid-cols-6">
-        <div><label className="label">Type</label><select className="select" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>{["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SRV", "CAA"].map((type) => <option key={type}>{type}</option>)}</select></div>
-        <div><label className="label">Host</label><input className="input" value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} /></div>
-        <div className="md:col-span-2"><label className="label">Value</label><input className="input" required value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} /></div>
-        <div><label className="label">TTL</label><input className="input" type="number" min={300} max={86400} value={form.ttl} onChange={(e) => setForm({ ...form, ttl: Number(e.target.value) })} /></div>
-        <div><label className="label">Priority</label><input className="input" type="number" min={0} max={65535} value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} /></div>
-        <div className="md:col-span-2 xl:col-span-6"><button disabled={submitting} className="btn-primary">{submitting ? "Adding…" : "Add DNS record"}</button></div>
-      </form>
-      {error ? <p className="text-sm text-danger">{error}</p> : null}
-    </div>
-  );
-}
-
-function NameserversTab({ domainId, current, onChange }: { domainId: string; current: string[]; onChange: () => void }) {
+function NameserversTab({ domainId, current, onChange }: { domainId: string; current: string[]; onChange: () => Promise<void> | void }) {
   const [ns, setNs] = useState<string[]>(current.length ? current : ["", ""]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -294,6 +175,7 @@ function NameserversTab({ domainId, current, onChange }: { domainId: string; cur
 
   async function handleSave() {
     const cleaned = ns.map((value) => value.trim().toLowerCase()).filter(Boolean);
+    if (!window.confirm("Change authoritative nameservers? Make sure the destination DNS zone already contains the required records.")) return;
     setSubmitting(true); setError(null);
     try {
       const res = await fetch(`/api/dashboard/domains/${domainId}/nameservers`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ nameservers: cleaned }) });
@@ -301,11 +183,7 @@ function NameserversTab({ domainId, current, onChange }: { domainId: string; cur
     } catch (err) { setError(err instanceof Error ? err.message : "Could not update nameservers."); } finally { setSubmitting(false); }
   }
 
-  return (
-    <section className="panel p-5"><div className="max-w-3xl"><h2 className="section-heading">Authoritative nameservers</h2><p className="mt-2 text-sm text-ink/55">Changing nameservers can move DNS authority away from the current provider. Verify the destination DNS zone exists before saving.</p><div className="mt-5 space-y-3">{ns.map((value, index) => <div key={index} className="flex gap-2"><input className="input" placeholder={`Nameserver ${index + 1}`} value={value} onChange={(e) => setNs(ns.map((item, i) => i === index ? e.target.value : item))} />{ns.length > 2 ? <button type="button" onClick={() => setNs(ns.filter((_, i) => i !== index))} className="btn-secondary">Remove</button> : null}</div>)}</div><div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={ns.length >= 13} onClick={() => setNs([...ns, ""])} className="btn-secondary">Add nameserver</button><button type="button" onClick={handleSave} disabled={submitting} className="btn-primary">{submitting ? "Saving…" : "Save nameservers"}</button></div>{error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}</div></section>
-  );
+  return <section className="panel p-5"><div className="max-w-3xl"><h2 className="section-heading">Authoritative nameservers</h2><p className="mt-2 text-sm text-ink/55">Nameserver changes move DNS authority. Keep the previous zone available during migration and verify the target zone before saving.</p><div className="mt-5 space-y-3">{ns.map((value, index) => <div key={index} className="flex gap-2"><input className="input" placeholder={`Nameserver ${index + 1}`} value={value} onChange={(e) => setNs(ns.map((item, i) => i === index ? e.target.value : item))} />{ns.length > 2 ? <button type="button" onClick={() => setNs(ns.filter((_, i) => i !== index))} className="btn-secondary">Remove</button> : null}</div>)}</div><div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={ns.length >= 13} onClick={() => setNs([...ns, ""])} className="btn-secondary">Add nameserver</button><button type="button" onClick={handleSave} disabled={submitting} className="btn-primary">{submitting ? "Saving…" : "Save nameservers"}</button></div>{error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}</div></section>;
 }
 
-function money(cents: number, currency: string) {
-  return (cents / 100).toLocaleString(undefined, { style: "currency", currency });
-}
+function money(cents: number, currency: string) { return (cents / 100).toLocaleString(undefined, { style: "currency", currency }); }
