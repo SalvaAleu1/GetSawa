@@ -8,11 +8,12 @@ import { recordCommissionForOrder } from "@/lib/affiliates";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
 import { sendEmail, emailTemplates } from "@/lib/email";
-import { markRenewalPaid, markRenewalOrderPaymentFailed } from "@/lib/billing";
+import { markRenewalPaid } from "@/lib/billing";
 import { DOMAIN_QUOTE_TTL_MS } from "@/lib/checkout";
 import { assertPremiumOrderReservations, releaseOrRestorePremiumOrderReservations } from "@/lib/premium-checkout";
 import { assertOrderCreditReservation, finalizeOrderCredit, releaseOrderCredit } from "@/lib/credits";
 import { recordPaymentSettlement } from "@/lib/finance";
+import { handlePaymentAttemptFailure } from "@/lib/payment-recovery";
 import { extractPayPalCaptureEconomics } from "@/lib/paypal-economics";
 
 const schema = z.object({ orderId: z.string().min(1) });
@@ -87,10 +88,7 @@ export async function POST(req: NextRequest) {
     if (!details.completed) {
       const status = typeof capture?.status === "string" ? capture.status : "UNKNOWN";
       if (["VOIDED", "CANCELLED", "DENIED"].includes(status)) {
-        await prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED", failureReason: `PayPal status: ${status}` } });
-        await releaseOrderCredit(order.id).catch(() => undefined);
-        await releaseOrRestorePremiumOrderReservations(order.id, user.id).catch(() => undefined);
-        await markRenewalOrderPaymentFailed(order.id, `PayPal status: ${status}`).catch(() => undefined);
+        await handlePaymentAttemptFailure({ paymentId: payment.id, orderId: order.id, message: `PayPal status: ${status}`, providerStatus: status });
         try { await sendEmail({ to: order.user.email, ...emailTemplates.paymentFailed(order.orderNumber) }); } catch { /* notification is independent */ }
         return jsonError("Payment was not completed. Your order has not been charged.", 402);
       }
