@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
+import { adjustCustomerCredit, getCustomerCreditBalance } from "@/lib/credits";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -18,12 +19,13 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
         orders: { orderBy: { createdAt: "desc" }, take: 20 },
         invoices: { orderBy: { createdAt: "desc" }, take: 20 },
         supportTickets: true,
-        credits: true,
+        credits: { orderBy: { createdAt: "desc" } },
       },
     });
     if (!customer) return jsonError("Customer not found.", 404);
+    const creditBalanceCents = await getCustomerCreditBalance(customer.id);
     const { passwordHash, mfaSecret, ...safe } = customer;
-    return jsonOk({ customer: safe });
+    return jsonOk({ customer: { ...safe, creditBalanceCents } });
   } catch (err) {
     return handleError(err);
   }
@@ -32,7 +34,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 const actionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("suspend"), reason: z.string().min(1).max(500) }),
   z.object({ action: z.literal("reactivate") }),
-  z.object({ action: z.literal("issue_credit"), amountCents: z.number().int(), reason: z.string().min(1).max(300) }),
+  z.object({ action: z.literal("issue_credit"), amountCents: z.number().int().refine((value) => value !== 0), reason: z.string().min(1).max(300) }),
 ]);
 
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
@@ -53,14 +55,14 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
       return jsonOk({ customer: { id: customer.id, isSuspended: customer.isSuspended } });
     }
     if (input.action === "issue_credit") {
-      if (!["SUPER_ADMIN", "ADMIN", "FINANCE"].includes(admin.adminRole!)) return jsonError("You do not have permission to issue credits.", 403);
-      const credit = await prisma.$transaction(async (tx) => {
-        const c = await tx.customerCredit.create({ data: { userId: id, amountCents: input.amountCents, reason: input.reason, issuedByAdminId: admin.id } });
-        await tx.ledgerEntry.create({ data: { userId: id, creditCents: input.amountCents > 0 ? input.amountCents : 0, debitCents: input.amountCents < 0 ? Math.abs(input.amountCents) : 0, source: "credit", reference: c.id, description: input.reason } });
-        return c;
-      });
-      await logAudit({ actorId: admin.id, action: "customer.credit_issued", resource: "user", resourceId: id, metadata: { amountCents: input.amountCents, reason: input.reason } });
-      return jsonOk({ credit });
+      if (!["SUPER_ADMIN", "ADMIN", "FINANCE"].includes(admin.adminRole!)) return jsonError("You do not have permission to adjust credits.", 403);
+      try {
+        const result = await adjustCustomerCredit({ userId: id, amountCents: input.amountCents, reason: input.reason, adminId: admin.id });
+        await logAudit({ actorId: admin.id, action: "customer.credit_adjusted", resource: "user", resourceId: id, metadata: { amountCents: input.amountCents, reason: input.reason, balanceCents: result.balanceCents } });
+        return jsonOk(result);
+      } catch (error) {
+        return jsonError(error instanceof Error ? error.message : "Credit adjustment failed.", 409);
+      }
     }
     return jsonError("Unsupported action.", 400);
   } catch (err) {
