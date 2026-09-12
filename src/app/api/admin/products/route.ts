@@ -54,7 +54,14 @@ export async function GET(req: NextRequest) {
       orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
     });
     const states = await Promise.all(products.map(getProductAdminState));
-    return jsonOk({ products: states });
+    return jsonOk({
+      products: states.map(({ product, commerce, readiness, activationReadiness }) => ({
+        ...product,
+        commerce,
+        readiness,
+        activationReadiness,
+      })),
+    });
   } catch (err) {
     return handleError(err);
   }
