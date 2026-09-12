@@ -22,8 +22,9 @@ const NAV: PortalNavGroup[] = [
     ],
   },
   {
-    section: "Websites",
+    section: "Websites & Hosting",
     items: [
+      { href: "/dashboard/hosting", label: "Web Hosting" },
       { href: "/dashboard/websites", label: "My Websites" },
     ],
   },
