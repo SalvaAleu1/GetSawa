@@ -6,44 +6,149 @@
   html {
     @apply bg-paper text-ink;
   }
+
   body {
-    @apply antialiased;
+    @apply min-h-screen bg-paper antialiased;
   }
-  h1, h2, h3, h4 {
-    @apply font-display;
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display tracking-tight;
+  }
+
+  ::selection {
+    @apply bg-brand-100 text-brand-900;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-400 ring-offset-2 ring-offset-white;
   }
 }
 
 @layer components {
+  .shell-container {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .page-stack {
+    @apply space-y-6 lg:space-y-8;
+  }
+
+  .page-heading {
+    @apply text-2xl font-bold text-ink sm:text-3xl;
+  }
+
+  .page-subtitle {
+    @apply mt-1 max-w-3xl text-sm leading-6 text-ink/55;
+  }
+
+  .section-heading {
+    @apply text-lg font-bold text-ink sm:text-xl;
+  }
+
+  .eyebrow {
+    @apply text-[10px] font-bold uppercase tracking-[0.16em] text-ink/40;
+  }
+
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 disabled:pointer-events-none;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:pointer-events-none disabled:opacity-50;
   }
+
   .btn-primary {
-    @apply btn bg-brand-500 text-white hover:bg-brand-600;
+    @apply btn bg-brand-500 text-white shadow-sm hover:bg-brand-600;
   }
+
   .btn-secondary {
-    @apply btn bg-white text-ink border border-border hover:bg-paper;
+    @apply btn border border-border bg-white text-ink hover:border-ink/15 hover:bg-paper;
   }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-ink/65 hover:bg-ink/5 hover:text-ink;
+  }
+
   .btn-amber {
     @apply btn bg-amber-400 text-ink hover:bg-amber-500;
   }
+
   .btn-danger {
     @apply btn bg-danger text-white hover:opacity-90;
   }
+
+  .icon-button {
+    @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-white text-ink/70 transition hover:bg-paper hover:text-ink;
+  }
+
+  .nav-trigger {
+    @apply inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-ink/65 transition hover:bg-ink/5 hover:text-ink;
+  }
+
   .card {
     @apply rounded-2xl border border-border bg-surface shadow-card;
   }
+
+  .panel {
+    @apply rounded-2xl border border-border bg-surface;
+  }
+
+  .panel-muted {
+    @apply rounded-2xl border border-border bg-paper;
+  }
+
+  .metric-card {
+    @apply rounded-2xl border border-border bg-surface p-5 shadow-card;
+  }
+
+  .table-shell {
+    @apply overflow-hidden rounded-2xl border border-border bg-surface;
+  }
+
   .input {
-    @apply w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-400;
+    @apply w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink/35 focus:border-brand-400 focus:ring-2 focus:ring-brand-100;
   }
+
+  .select {
+    @apply input appearance-none pr-9;
+  }
+
+  .textarea {
+    @apply input min-h-28 resize-y;
+  }
+
   .label {
-    @apply mb-1.5 block text-sm font-medium text-ink/80;
+    @apply mb-1.5 block text-sm font-semibold text-ink/75;
   }
+
+  .help-text {
+    @apply mt-1.5 text-xs leading-5 text-ink/45;
+  }
+
   .badge {
     @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold;
   }
-  .badge-success { @apply badge bg-success/10 text-success; }
-  .badge-warning { @apply badge bg-amber-400/15 text-amber-500; }
-  .badge-danger { @apply badge bg-danger/10 text-danger; }
-  .badge-neutral { @apply badge bg-border text-muted; }
+
+  .badge-success {
+    @apply badge bg-success/10 text-success;
+  }
+
+  .badge-warning {
+    @apply badge bg-amber-400/15 text-amber-500;
+  }
+
+  .badge-danger {
+    @apply badge bg-danger/10 text-danger;
+  }
+
+  .badge-neutral {
+    @apply badge bg-border text-muted;
+  }
+
+  .empty-state {
+    @apply flex min-h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-surface px-6 py-10 text-center;
+  }
+
+  .skeleton {
+    @apply animate-pulse rounded-lg bg-ink/5;
+  }
 }
