@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { completePremiumFulfillment } from "@/lib/premium-aftermarket";
 import { provisionOrder } from "@/lib/provisioning";
+import { markAuctionFulfilled } from "@/lib/auctions";
 import { logAudit } from "@/lib/audit";
 
 const schema = z.object({
@@ -23,16 +24,17 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     if (item.provisioningStatus !== "MANUAL_REVIEW") return jsonError("This premium item is not awaiting ownership verification.", 409);
 
     const result = await completePremiumFulfillment({ orderItemId, adminUserId: admin.id, registrarReference: input.registrarReference });
+    const auctionCompleted = await markAuctionFulfilled(orderItemId, input.registrarReference);
     await logAudit({
       actorId: admin.id,
-      action: "premium_sale.fulfilled",
+      action: auctionCompleted ? "auction.fulfilled" : "premium_sale.fulfilled",
       resource: "order_item",
       resourceId: orderItemId,
-      metadata: { listingId: result.listingId, domainId: result.domainId, saleId: result.saleId, registrarReference: input.registrarReference },
+      metadata: { listingId: result.listingId, domainId: result.domainId, saleId: result.saleId, registrarReference: input.registrarReference, auctionCompleted },
     });
     await provisionOrder(item.orderId);
     const order = await prisma.order.findUnique({ where: { id: item.orderId }, select: { status: true, orderNumber: true } });
-    return jsonOk({ result, order });
+    return jsonOk({ result, auctionCompleted, order });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not complete premium-domain fulfillment.";
     if (message.includes("premium") || message.includes("domain") || message.includes("inventory") || message.includes("fulfillment") || message.includes("registrar")) return jsonError(message, 400);
