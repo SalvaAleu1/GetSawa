@@ -3,7 +3,9 @@ import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
 import { provisionOrder } from "@/lib/provisioning";
 import { transitionOrderStatus } from "@/lib/order-lifecycle";
 import { notifyOrderLifecycle } from "@/lib/order-notifications";
-import { markRenewalPaid, markRenewalOrderPaymentFailed } from "@/lib/billing";
+import { markRenewalPaid } from "@/lib/billing";
+import { finalizeOrderCredit } from "@/lib/credits";
+import { handlePaymentAttemptFailure } from "@/lib/payment-recovery";
 import { logAudit } from "@/lib/audit";
 import { recordPaymentDispute, recordPaymentSettlement } from "@/lib/finance";
 import { extractPayPalCaptureEconomics } from "@/lib/paypal-economics";
@@ -90,6 +92,7 @@ export async function reconcilePendingPayPalPayments(limit = 50): Promise<Reconc
         if (claimed.count === 1) {
           await transitionOrderStatus({ orderId: payment.orderId, to: "PAYMENT_CONFIRMED", reason: "Payment reconciled from PayPal order state.", metadata: { provider: "paypal", paypalOrderId: payment.providerOrderId } });
         }
+        await finalizeOrderCredit(payment.orderId);
         await recordPaymentSettlement({ paymentId: payment.id, providerReference: details.captureId, providerFeeCents: details.providerFeeCents });
         if (claimed.count === 1) {
           await notifyOrderLifecycle({
@@ -112,13 +115,12 @@ export async function reconcilePendingPayPalPayments(limit = 50): Promise<Reconc
       }
 
       if (["VOIDED", "CANCELLED", "DENIED"].includes(status)) {
-        await prisma.payment.updateMany({ where: { id: payment.id, status: { in: ["PENDING", "AUTHORIZED"] } }, data: { status: "FAILED", failureReason: `PayPal order is ${status.toLowerCase()}.` } });
         const auction = await findAuctionOrder(payment.orderId);
         if (auction) {
+          await prisma.payment.updateMany({ where: { id: payment.id, status: { in: ["PENDING", "AUTHORIZED"] } }, data: { status: "FAILED", failureReason: `PayPal order is ${status.toLowerCase()}.` } });
           await logAudit({ actorId: null, action: "auction.payment_attempt_failed", resource: "auction", resourceId: auction.auction_id, metadata: { orderId: payment.orderId, paypalStatus: status } }).catch(() => undefined);
         } else {
-          await markRenewalOrderPaymentFailed(payment.orderId, `PayPal order is ${status.toLowerCase()}.`);
-          await transitionOrderStatus({ orderId: payment.orderId, to: "FAILED", reason: "PayPal payment was not completed.", metadata: { provider: "paypal", paypalOrderId: payment.providerOrderId, paypalStatus: status } }).catch(() => undefined);
+          await handlePaymentAttemptFailure({ paymentId: payment.id, orderId: payment.orderId, message: `PayPal order is ${status.toLowerCase()}.`, providerStatus: status });
         }
         result.failed++;
         continue;
