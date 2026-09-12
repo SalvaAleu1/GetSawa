@@ -6,6 +6,7 @@ import { checkoutSchema, priceCart, CheckoutError } from "@/lib/checkout";
 import { validateDomainLifecycleCheckout } from "@/lib/checkout-domain-guard";
 import { reservePricedPremiumCart, validatePricedPremiumCart, type ReservedPremiumItem } from "@/lib/premium-checkout";
 import { releasePremiumReservation } from "@/lib/premium-aftermarket";
+import { assertCatalogPriceFloors, validateCatalogCheckout } from "@/lib/catalog-checkout-guard";
 import { generateOrderNumber } from "@/lib/pricing";
 import { encryptSecret } from "@/lib/crypto";
 import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
@@ -29,8 +30,10 @@ export async function POST(req: NextRequest) {
 
     const input = checkoutSchema.parse(await req.json());
     await validateDomainLifecycleCheckout(input, user.id);
+    const catalogFloors = await validateCatalogCheckout(input);
     const priced = await priceCart(input, user.id);
     await validatePricedPremiumCart(priced, user.id);
+    assertCatalogPriceFloors(priced, catalogFloors);
 
     if (priced.totalCents <= 0) return jsonError("Order total must be greater than zero.", 400);
     if (!PayPalProvider.isConfigured()) {
