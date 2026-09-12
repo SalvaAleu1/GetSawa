@@ -228,8 +228,7 @@ export async function advanceHostingSubscriptionAfterPayment(subscriptionId: str
   await prisma.$executeRaw`
     UPDATE "billing_subscriptions" SET
       "status"='ACTIVE',"current_period_start"=${periodStart},"current_period_end"=${periodEnd},"next_billing_at"=${nextAt},
-      "grace_until"=NULL,"failed_payment_count"=0,"last_payment_at"=CURRENT_TIMESTAMP,"cancel_at_period_end"=FALSE,
-      "auto_renew"=TRUE,"updated_at"=CURRENT_TIMESTAMP
+      "grace_until"=NULL,"failed_payment_count"=0,"last_payment_at"=CURRENT_TIMESTAMP,"updated_at"=CURRENT_TIMESTAMP
     WHERE "id"=${subscriptionId}
   `;
   return true;
@@ -316,7 +315,7 @@ export async function enforceHostingPastDue(limit = 100) {
       AND (
         psi."status"='SUSPENSION_PENDING'
         OR (bs."status"='PAST_DUE' AND bs."grace_until" IS NOT NULL AND bs."grace_until"<=CURRENT_TIMESTAMP)
-        OR (bs."status"='ACTIVE' AND bs."cancel_at_period_end"=TRUE AND bs."current_period_end"<=CURRENT_TIMESTAMP)
+        OR (bs."status" IN ('ACTIVE','PAST_DUE') AND bs."cancel_at_period_end"=TRUE AND bs."current_period_end"<=CURRENT_TIMESTAMP)
       )
     ORDER BY COALESCE(bs."grace_until",bs."current_period_end",CURRENT_TIMESTAMP) ASC LIMIT ${limit}
   `;
