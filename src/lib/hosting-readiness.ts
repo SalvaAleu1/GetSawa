@@ -8,6 +8,7 @@ export interface HostingOperationalState {
   provider: string;
   reason: string | null;
   lastTestedAt: Date | null;
+  creatablePlanCodes: string[];
 }
 
 export function currentHostingCredentialFingerprint(): string | null {
@@ -28,6 +29,7 @@ export async function getHostingOperationalState(): Promise<HostingOperationalSt
       provider: provider.name,
       reason: "cPanel/WHM environment variables are incomplete.",
       lastTestedAt: null,
+      creatablePlanCodes: [],
     };
   }
 
@@ -36,6 +38,8 @@ export async function getHostingOperationalState(): Promise<HostingOperationalSt
     ? row.metadata as Record<string, unknown>
     : {};
   const testedFingerprint = typeof metadata.credentialFingerprint === "string" ? metadata.credentialFingerprint : null;
+  const rawPlans = Array.isArray(metadata.creatablePlanCodes) ? metadata.creatablePlanCodes : [];
+  const creatablePlanCodes = rawPlans.filter((value): value is string => typeof value === "string" && value.length > 0);
   const verified = row?.lastTestOk === true && row.isConfigured === true && testedFingerprint === fingerprint;
 
   return {
@@ -43,6 +47,7 @@ export async function getHostingOperationalState(): Promise<HostingOperationalSt
     verified,
     provider: provider.name,
     lastTestedAt: row?.lastTestedAt ?? null,
+    creatablePlanCodes: verified ? creatablePlanCodes : [],
     reason: verified ? null : testedFingerprint && testedFingerprint !== fingerprint
       ? "Hosting credentials changed after the last successful live test. Run the provider test again."
       : row?.lastTestMessage || "Run a successful live WHM provider test before activating hosting products.",
