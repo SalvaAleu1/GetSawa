@@ -6,7 +6,9 @@ import { provisionOrder } from "@/lib/provisioning";
 import { transitionOrderStatus } from "@/lib/order-lifecycle";
 import { notifyOrderLifecycle } from "@/lib/order-notifications";
 import { prisma } from "@/lib/prisma";
-import { markRenewalPaid, markRenewalOrderPaymentFailed } from "@/lib/billing";
+import { markRenewalPaid } from "@/lib/billing";
+import { finalizeOrderCredit, restoreOrderCredit } from "@/lib/credits";
+import { handlePaymentAttemptFailure } from "@/lib/payment-recovery";
 import { recordPaymentDispute, recordPaymentSettlement, recordRefundSettlement } from "@/lib/finance";
 import { extractPayPalCaptureEconomics, extractPayPalRefundEconomics } from "@/lib/paypal-economics";
 
@@ -91,6 +93,7 @@ async function handleVerifiedEvent(event: Record<string, unknown>) {
       if (claimed.count === 1) {
         await transitionOrderStatus({ orderId: payment.orderId, to: "PAYMENT_CONFIRMED", reason: "PayPal capture verified and payment confirmed.", metadata: { provider: "paypal", captureId } });
       }
+      await finalizeOrderCredit(payment.orderId);
       await recordPaymentSettlement({ paymentId: payment.id, providerReference: captureId, providerFeeCents: economics.providerFeeCents });
 
       const order = await prisma.order.findUnique({ where: { id: payment.orderId }, include: { user: true } });
@@ -119,9 +122,7 @@ async function handleVerifiedEvent(event: Record<string, unknown>) {
       let payment = captureId ? await prisma.payment.findFirst({ where: { providerCaptureId: captureId } }) : null;
       if (!payment && paypalOrderId) payment = await prisma.payment.findFirst({ where: { providerOrderId: paypalOrderId } });
       if (payment && payment.status !== "PAID") {
-        await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED", failureReason: "Denied by PayPal" } });
-        await markRenewalOrderPaymentFailed(payment.orderId, "PayPal denied the renewal payment.");
-        await transitionOrderStatus({ orderId: payment.orderId, to: "FAILED", reason: "PayPal capture was denied.", metadata: { provider: "paypal", captureId } }).catch(() => undefined);
+        await handlePaymentAttemptFailure({ paymentId: payment.id, orderId: payment.orderId, message: "Denied by PayPal", providerStatus: "DENIED" });
       }
       break;
     }
@@ -155,6 +156,7 @@ async function handleVerifiedEvent(event: Record<string, unknown>) {
       if (fullyRefunded) {
         await transitionOrderStatus({ orderId: payment.orderId, to: "REFUNDED", reason: "PayPal refund confirmed.", metadata: { provider: "paypal", refundId } }).catch(() => undefined);
         await prisma.invoice.updateMany({ where: { orderId: payment.orderId }, data: { status: "REFUNDED" } });
+        await restoreOrderCredit(payment.orderId);
       }
       await recordRefundSettlement({ refundId: refund.id, providerFeeCents: economics.providerFeeCents });
       break;
