@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     const containsDomainPricing = order.items.some((item) =>
       item.description.includes(" registration") || item.description.includes(" renewal") || item.description.endsWith(" transfer") || item.description.includes("premium domain purchase"),
     );
-    if (containsDomainPricing && Date.now() - order.createdAt.getTime() > DOMAIN_QUOTE_TTL_MS) {
+    if (containsDomainPricing && Date.now() - payment.createdAt.getTime() > DOMAIN_QUOTE_TTL_MS) {
       await prisma.$transaction([
         prisma.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "FAILED", failureReason: "Domain price quote expired before payment capture." } }),
         prisma.order.updateMany({ where: { id: order.id, status: "PENDING_PAYMENT" }, data: { status: "CANCELLED", provisioningError: "Pricing quote expired before payment capture." } }),
