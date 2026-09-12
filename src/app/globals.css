@@ -41,7 +41,7 @@
   }
 
   .page-subtitle {
-    @apply mt-1 max-w-3xl text-sm leading-6 text-ink/55;
+    @apply mt-1 max-w-3xl text-sm leading-6 text-ink/50;
   }
 
   .section-heading {
@@ -61,11 +61,11 @@
   }
 
   .btn-secondary {
-    @apply btn border border-border bg-white text-ink hover:border-ink/15 hover:bg-paper;
+    @apply btn border border-border bg-white text-ink hover:border-ink/20 hover:bg-paper;
   }
 
   .btn-ghost {
-    @apply btn bg-transparent text-ink/65 hover:bg-ink/5 hover:text-ink;
+    @apply btn bg-transparent text-ink/60 hover:bg-ink/5 hover:text-ink;
   }
 
   .btn-amber {
@@ -81,7 +81,7 @@
   }
 
   .nav-trigger {
-    @apply inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-ink/65 transition hover:bg-ink/5 hover:text-ink;
+    @apply inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-ink/60 transition hover:bg-ink/5 hover:text-ink;
   }
 
   .card {
@@ -105,7 +105,7 @@
   }
 
   .input {
-    @apply w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink/35 focus:border-brand-400 focus:ring-2 focus:ring-brand-100;
+    @apply w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink/40 focus:border-brand-400 focus:ring-2 focus:ring-brand-100;
   }
 
   .select {
@@ -121,7 +121,7 @@
   }
 
   .help-text {
-    @apply mt-1.5 text-xs leading-5 text-ink/45;
+    @apply mt-1.5 text-xs leading-5 text-ink/50;
   }
 
   .badge {
@@ -133,7 +133,7 @@
   }
 
   .badge-warning {
-    @apply badge bg-amber-400/15 text-amber-500;
+    @apply badge bg-amber-400/20 text-amber-500;
   }
 
   .badge-danger {
