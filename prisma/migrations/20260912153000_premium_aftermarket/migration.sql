@@ -68,6 +68,9 @@ CREATE TABLE IF NOT EXISTS "premium_sales" (
   "platform_revenue_cents" INTEGER NOT NULL,
   "currency" TEXT NOT NULL DEFAULT 'USD',
   "settlement_status" TEXT NOT NULL DEFAULT 'NOT_APPLICABLE',
+  "settlement_reference" TEXT,
+  "settled_at" TIMESTAMP(3),
+  "settled_by_user_id" TEXT,
   "fulfilled_at" TIMESTAMP(3),
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "premium_sales_amount_check" CHECK ("gross_cents" >= 0 AND "seller_proceeds_cents" >= 0),
@@ -77,6 +80,7 @@ CREATE TABLE IF NOT EXISTS "premium_sales" (
 CREATE INDEX IF NOT EXISTS "premium_sales_listing_idx" ON "premium_sales" ("premium_domain_id");
 CREATE INDEX IF NOT EXISTS "premium_sales_buyer_idx" ON "premium_sales" ("buyer_user_id");
 CREATE INDEX IF NOT EXISTS "premium_sales_seller_idx" ON "premium_sales" ("seller_user_id");
+CREATE INDEX IF NOT EXISTS "premium_sales_settlement_idx" ON "premium_sales" ("settlement_status");
 
 ALTER TABLE "premium_inventory_meta"
   ADD CONSTRAINT "premium_inventory_meta_premium_domain_id_fkey"
@@ -129,6 +133,9 @@ ALTER TABLE "premium_sales"
 ALTER TABLE "premium_sales"
   ADD CONSTRAINT "premium_sales_seller_user_id_fkey"
   FOREIGN KEY ("seller_user_id") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "premium_sales"
+  ADD CONSTRAINT "premium_sales_settled_by_user_id_fkey"
+  FOREIGN KEY ("settled_by_user_id") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- Legacy premium rows did not prove registrar custody or distinguish cost from retail.
 -- Take them offline until an administrator verifies the underlying domain and fulfillment path.
