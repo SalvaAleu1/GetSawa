@@ -51,13 +51,13 @@ Separate registry-premium domains from GetSawa-owned and customer-custody afterm
 Auction discovery, verified-inventory eligibility, verified-account bidder controls, self-bid prevention, serializable bidding, anti-sniping, reserve logic, closing, winner payment windows, inventory reservation/release, PayPal capture, registrar-verified fulfillment, seller proceeds, admin controls, cancellation notifications and reconciliation/audit paths.
 
 ### Phase 13 — Product catalog, bundles and add-ons — DONE
-Production catalog governance for hosting, email, SSL/security, DNS/Anycast, WHOIS privacy, AI builder and other add-ons; verified wholesale-cost metadata, protected retail floors, provider/fulfillment/billing readiness, bundle economics and eligibility, provider service-instance state and checkout-time revalidation. Products or bundles without real provider/provisioning readiness remain non-purchasable, and recurring catalog billing remains closed until Phase 14.
+Production catalog governance for hosting, email, SSL/security, DNS/Anycast, WHOIS privacy, AI builder and other add-ons; verified wholesale-cost metadata, protected retail floors, provider/fulfillment/billing readiness, bundle economics and eligibility, provider service-instance state and checkout-time revalidation. Products or bundles without real provider/provisioning readiness remain non-purchasable.
 
-### Phase 14 — Payments, billing, invoices, refunds and credits — CURRENT
-Harden PayPal and card-compatible payment paths, payment reconciliation, refunds, credits, invoices, subscriptions/renewals, failed-payment recovery, financial ledger, provider fees and finance reporting.
+### Phase 14 — Payments, billing, invoices, refunds and credits — DONE
+Production PayPal payment lifecycle with amount/currency verification, webhook and reconciliation convergence, idempotent finance events, invoices, provider-fee capture, refunds and disputes, registrar-priced domain-renewal invoices, retry-safe failed payments, account-credit reservation/application/refund controls, finance reporting and truthful payment-method capability reporting. A separate direct-card gateway remains fail-closed until a real production provider is configured. Build verification evidence is documented in `docs/PHASE14_VERIFICATION.md`; the authoritative runtime build remains the Cloudflare gate.
 
-### Phase 15 — Web hosting product — UPCOMING
-Select and integrate a real hosting provider, plans, provisioning, suspension/reactivation, storage/bandwidth state, sites, backups, SFTP/deployment controls where supported, usage visibility and billing lifecycle.
+### Phase 15 — Web hosting product — CURRENT
+Select and integrate a real hosting provider, plans, provisioning, suspension/reactivation, storage/bandwidth state, sites, backups, SFTP/deployment controls where supported, usage visibility and billing lifecycle. No hosting plan may become purchasable until a concrete provider and fulfilment contract are configured and verified.
 
 ### Phase 16 — Business email product — UPCOMING
 Select and integrate a real email provider; domain verification, mailbox creation, aliases, forwarding, quotas, password reset, DNS records, suspension, renewal and admin/customer management.
