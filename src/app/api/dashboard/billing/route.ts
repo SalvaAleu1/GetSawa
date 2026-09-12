@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth";
 import { jsonOk, handleError } from "@/lib/api";
 import { listCustomerSubscriptions, listRenewalAttemptsForUser } from "@/lib/billing";
@@ -35,7 +36,7 @@ export async function GET() {
             FROM "product_service_instances" psi
             JOIN "Product" p ON p."id"=psi."product_id"
             LEFT JOIN "Domain" d ON d."id"=psi."domain_id"
-            WHERE psi."user_id"=${user.id} AND psi."id" IN (${PrismaJoin(serviceIds)})
+            WHERE psi."user_id"=${user.id} AND psi."id" IN (${Prisma.join(serviceIds)})
           `
         : Promise.resolve([]),
     ]);
@@ -64,11 +65,4 @@ export async function GET() {
   } catch (error) {
     return handleError(error);
   }
-}
-
-// Prisma's tagged template does not accept an arbitrary array directly. This
-// helper is intentionally local so service IDs remain parameterized, not string-concatenated SQL.
-function PrismaJoin(values: string[]) {
-  const { Prisma } = require("@prisma/client") as typeof import("@prisma/client");
-  return Prisma.join(values);
 }
