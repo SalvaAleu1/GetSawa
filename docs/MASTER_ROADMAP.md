@@ -20,10 +20,10 @@ Make the existing Next.js application build successfully for Cloudflare Workers 
 ### Phase 2 — Loss-proof commerce and domain pricing — DONE
 Use live registrar wholesale pricing, automatic sync, tiered markup, payment-fee recovery, FX reserve, minimum profit and margin floors, promotion/coupon protection, short-lived quotes, and fail-closed registry-premium handling.
 
-### Phase 3 — Design system and application shells — CURRENT
+### Phase 3 — Design system and application shells — DONE
 Create reusable brand primitives, responsive public navigation/footer, customer and admin portal shells, page/section patterns, cards, tables, forms, status treatments, empty/loading states, spacing and accessibility conventions. Replace fragile one-off layouts with shared components.
 
-### Phase 4 — Public storefront and information architecture — UPCOMING
+### Phase 4 — Public storefront and information architecture — CURRENT
 Rebuild the homepage and public navigation into a complete storefront with product discovery, trust content, service explanations, pricing entry points, support pathways, promotional CMS slots, footer architecture, and responsive mobile presentation.
 
 ### Phase 5 — Domain discovery and registration experience — UPCOMING
