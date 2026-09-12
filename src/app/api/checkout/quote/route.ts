@@ -5,6 +5,7 @@ import { checkoutSchema, priceCart, CheckoutError } from "@/lib/checkout";
 import { validateDomainLifecycleCheckout } from "@/lib/checkout-domain-guard";
 import { validatePricedPremiumCart } from "@/lib/premium-checkout";
 import { assertCatalogPriceFloors, validateCatalogCheckout } from "@/lib/catalog-checkout-guard";
+import { validateProductCheckoutConfigurations } from "@/lib/product-checkout-config";
 import { getAvailableCustomerCredit } from "@/lib/credits";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -17,8 +18,10 @@ export async function POST(req: NextRequest) {
     const rl = checkRateLimit("checkout-quote", user.id, { max: 30, windowMs: 60_000 });
     if (!rl.allowed) return jsonError("Too many quote requests. Please wait a moment and try again.", 429);
 
-    const input = quoteSchema.parse(await req.json());
+    const rawBody = await req.json();
+    const input = quoteSchema.parse(rawBody);
     await validateDomainLifecycleCheckout(input, user.id);
+    await validateProductCheckoutConfigurations(rawBody, input, user.id);
     const catalogFloors = await validateCatalogCheckout(input);
     const priced = await priceCart(input, user.id);
     await validatePricedPremiumCart(priced, user.id);
