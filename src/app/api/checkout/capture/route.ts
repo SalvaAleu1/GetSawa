@@ -5,20 +5,27 @@ import { requireUser } from "@/lib/auth";
 import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
 import { provisionOrder } from "@/lib/provisioning";
 import { recordCommissionForOrder } from "@/lib/affiliates";
-import { generateInvoiceNumber } from "@/lib/pricing";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
 import { sendEmail, emailTemplates } from "@/lib/email";
 import { markRenewalPaid, markRenewalOrderPaymentFailed } from "@/lib/billing";
 import { DOMAIN_QUOTE_TTL_MS } from "@/lib/checkout";
 import { assertPremiumOrderReservations, releaseOrRestorePremiumOrderReservations } from "@/lib/premium-checkout";
+import { recordPaymentSettlement } from "@/lib/finance";
+import { extractPayPalCaptureEconomics } from "@/lib/paypal-economics";
 
 const schema = z.object({ orderId: z.string().min(1) });
 
 function captureDetails(payload: any) {
+  const economics = extractPayPalCaptureEconomics(payload && typeof payload === "object" ? payload : {});
   const node = payload?.purchase_units?.[0]?.payments?.captures?.[0];
-  const amount = Number(node?.amount?.value);
-  return { node, completed: payload?.status === "COMPLETED" && node?.status === "COMPLETED", cents: Number.isFinite(amount) ? Math.round(amount * 100) : -1, currency: typeof node?.amount?.currency_code === "string" ? node.amount.currency_code.toUpperCase() : "" };
+  return {
+    node,
+    completed: payload?.status === "COMPLETED" && node?.status === "COMPLETED",
+    cents: economics.grossCents ?? -1,
+    currency: economics.currency ?? "",
+    providerFeeCents: economics.providerFeeCents,
+  };
 }
 
 async function reconcilePayPalOrder(providerOrderId: string) {
@@ -31,7 +38,11 @@ export async function POST(req: NextRequest) {
     const { orderId } = schema.parse(await req.json());
     const order = await prisma.order.findUnique({ where: { id: orderId }, include: { payments: true, user: true, items: true } });
     if (!order || order.userId !== user.id) return jsonError("Order not found.", 404);
-    if (order.status !== "PENDING_PAYMENT") return jsonOk({ orderId: order.id, status: order.status });
+    if (order.status !== "PENDING_PAYMENT") {
+      const paid = order.payments.find((item) => item.status === "PAID");
+      if (paid) await recordPaymentSettlement({ paymentId: paid.id, providerReference: paid.providerCaptureId }).catch(() => undefined);
+      return jsonOk({ orderId: order.id, status: order.status });
+    }
 
     const payment = order.payments.find((item) => item.status === "PENDING");
     if (!payment?.providerOrderId) return jsonError("No pending payment found for this order.", 400);
@@ -90,14 +101,10 @@ export async function POST(req: NextRequest) {
       const claimed = await tx.payment.updateMany({ where: { id: payment.id, status: "PENDING" }, data: { status: "PAID", providerCaptureId: captureId, failureReason: null } });
       if (claimed.count !== 1) return false;
       await tx.order.updateMany({ where: { id: order.id, status: "PENDING_PAYMENT" }, data: { status: "PAYMENT_CONFIRMED" } });
-      const existingInvoice = await tx.invoice.findUnique({ where: { orderId: order.id } });
-      if (!existingInvoice) {
-        const invoiceCount = await tx.invoice.count();
-        await tx.invoice.create({ data: { invoiceNumber: generateInvoiceNumber(invoiceCount + 1), orderId: order.id, userId: order.userId, subtotalCents: order.subtotalCents, discountCents: order.discountCents, taxCents: order.taxCents, totalCents: order.totalCents, currency: order.currency, status: "PAID", paidAt: new Date(), billingName: `${order.user.firstName} ${order.user.lastName}`, billingEmail: order.user.email, billingCountry: order.user.country ?? undefined } });
-      }
-      await tx.ledgerEntry.create({ data: { userId: order.userId, creditCents: order.totalCents, source: "order", reference: order.id, description: `Payment received for order ${order.orderNumber}` } });
       return true;
     });
+
+    await recordPaymentSettlement({ paymentId: payment.id, providerReference: captureId, providerFeeCents: details.providerFeeCents });
 
     if (committed) {
       await logAudit({ actorId: user.id, action: "order.paid", resource: "order", resourceId: order.id });
