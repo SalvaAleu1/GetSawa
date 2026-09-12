@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Prisma publishes a workerd-specific entrypoint. Keeping these packages
+  // external lets OpenNext/Workers resolve the correct runtime build instead
+  // of bundling the Node.js condition selected by Next during compilation.
+  serverExternalPackages: ["@prisma/client", ".prisma/client"],
   eslint: {
     // Linting is run separately in CI; do not block production builds on it.
     ignoreDuringBuilds: true,

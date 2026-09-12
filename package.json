@@ -14,7 +14,11 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "setup:admin": "tsx scripts/create-admin.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:cloudflare": "opennextjs-cloudflare build",
+    "preview:cloudflare": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy:cloudflare": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
@@ -27,6 +31,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.20.6",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.14.15",
     "@types/nodemailer": "^6.4.16",
@@ -38,6 +43,7 @@
     "tsx": "^4.19.1",
     "prisma": "^5.20.0",
     "typescript": "^5.5.4",
-    "vitest": "^2.1.1"
+    "vitest": "^2.1.1",
+    "wrangler": "^4.129.1"
   }
 }
