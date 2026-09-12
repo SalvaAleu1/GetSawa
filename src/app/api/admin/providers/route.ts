@@ -5,21 +5,22 @@ import { getDomainProvider } from "@/lib/providers/domains/DomainProviderFactory
 import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
 import { isEmailConfigured } from "@/lib/email";
 import { getAIProvider } from "@/lib/providers/ai/AIProviderFactory";
+import { getHostingProvider } from "@/lib/providers/hosting/HostingProvider";
+import { getHostingOperationalState } from "@/lib/hosting-readiness";
 
-/**
- * Returns configuration status for every provider. This never returns
- * secret values — only whether each integration is configured, and
- * (if a live test was previously run) whether it last succeeded.
- */
+/** Never returns secret values; only configuration and live-test state. */
 export async function GET() {
   try {
     await requireAdmin();
 
     const domainProvider = getDomainProvider();
+    const hostingProvider = getHostingProvider();
     const dbHealthy = await prisma.$queryRaw`SELECT 1`.then(() => true).catch(() => false);
-
-    const rows = await prisma.providerCredential.findMany();
-    const byProvider = new Map(rows.map((r) => [r.provider, r]));
+    const [rows, hostingState] = await Promise.all([
+      prisma.providerCredential.findMany(),
+      getHostingOperationalState(),
+    ]);
+    const byProvider = new Map(rows.map((row) => [row.provider, row]));
 
     const providers = [
       {
@@ -42,8 +43,10 @@ export async function GET() {
       },
       {
         provider: "hosting",
-        label: "Hosting",
-        isConfigured: Boolean(process.env.HOSTING_API_KEY),
+        label: "cPanel / WHM Hosting",
+        isConfigured: hostingProvider.isConfigured(),
+        operational: hostingState.verified,
+        operationalReason: hostingState.reason,
         ...pickStatus(byProvider.get("hosting")),
       },
       {
