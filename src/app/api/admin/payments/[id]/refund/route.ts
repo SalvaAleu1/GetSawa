@@ -9,7 +9,7 @@ import { logAudit } from "@/lib/audit";
 import { restoreOrderCredit } from "@/lib/credits";
 import { recordRefundSettlement } from "@/lib/finance";
 import { extractPayPalRefundEconomics } from "@/lib/paypal-economics";
-import { handleFullyRefundedHostingOrder } from "@/lib/hosting-billing";
+import { handleFullyRefundedServices } from "@/lib/service-refunds";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,9 +35,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
         prisma.order.update({ where: { id: payment.orderId }, data: { status: "REFUNDED" } }),
         prisma.invoice.updateMany({ where: { orderId: payment.orderId }, data: { status: "REFUNDED" } }),
       ]);
-      const hosting = await handleFullyRefundedHostingOrder(payment.orderId).catch(() => undefined);
-      await logAudit({ actorId: admin.id, action: "payments.credit_refund.completed", resource: "payment", resourceId: payment.id, metadata: { restoredCreditCents, hosting, reason: parsed.data.reason || null } });
-      return jsonOk({ creditRefund: true, restoredCreditCents, hosting });
+      const services = await handleFullyRefundedServices(payment.orderId);
+      await logAudit({ actorId: admin.id, action: "payments.credit_refund.completed", resource: "payment", resourceId: payment.id, metadata: { restoredCreditCents, services, reason: parsed.data.reason || null } });
+      return jsonOk({ creditRefund: true, restoredCreditCents, services });
     }
 
     if (payment.provider !== "paypal" || !payment.providerCaptureId) return jsonError("This payment cannot be refunded through the configured provider.", 409);
@@ -68,9 +68,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
     });
 
     const restoredCreditCents = fullyRefunded ? await restoreOrderCredit(payment.orderId) : 0;
-    const hosting = fullyRefunded ? await handleFullyRefundedHostingOrder(payment.orderId).catch(() => undefined) : undefined;
+    const services = fullyRefunded ? await handleFullyRefundedServices(payment.orderId) : undefined;
     await recordRefundSettlement({ refundId: refund.id, providerFeeCents: economics.providerFeeCents });
-    await logAudit({ actorId: admin.id, action: "payments.refund.completed", resource: "payment", resourceId: payment.id, metadata: { refundId: refund.id, providerRefundId, amountCents, restoredCreditCents, hosting, reason: parsed.data.reason || null } });
-    return jsonOk({ refund, restoredCreditCents, hosting });
+    await logAudit({ actorId: admin.id, action: "payments.refund.completed", resource: "payment", resourceId: payment.id, metadata: { refundId: refund.id, providerRefundId, amountCents, restoredCreditCents, services, reason: parsed.data.reason || null } });
+    return jsonOk({ refund, restoredCreditCents, services });
   } catch (error) { return handleError(error); }
 }
