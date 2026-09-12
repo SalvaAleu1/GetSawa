@@ -6,6 +6,7 @@ import { formatCents } from "@/lib/money";
 import { transitionOrderStatus } from "@/lib/order-lifecycle";
 import { notifyOrderLifecycle } from "@/lib/order-notifications";
 import { logAudit } from "@/lib/audit";
+import { getPremiumOrderLink, markPremiumItemAwaitingFulfillment } from "@/lib/premium-aftermarket";
 
 const STALE_CLAIM_MS = 15 * 60 * 1000;
 
@@ -37,13 +38,20 @@ export async function provisionOrder(orderId: string): Promise<void> {
   });
 
   for (const item of order.items) {
-    if (item.provisioningStatus === "PROVISIONED") continue;
+    if (item.provisioningStatus === "PROVISIONED" || item.provisioningStatus === "MANUAL_REVIEW") continue;
 
     const claimed = await claimProvisioningItem(item);
     if (!claimed) continue;
 
     try {
-      if (!item.productId && !item.domainId && !item.domainTransferId && item.years) {
+      // Aftermarket premium inventory already exists at the registrar. Never
+      // send it through the new-registration API. Payment reserves the asset;
+      // registrar-side ownership/contact transfer is explicitly verified by
+      // staff before the order item is released to the buyer.
+      const premiumLink = await getPremiumOrderLink(item.id);
+      if (premiumLink) {
+        await markPremiumItemAwaitingFulfillment(item.id, order.userId);
+      } else if (!item.productId && !item.domainId && !item.domainTransferId && item.years) {
         await provisionDomainRegistration(order, item);
       } else if (!item.productId && item.domainId && item.years) {
         await provisionDomainRenewal(order, item);
@@ -76,9 +84,10 @@ export async function provisionOrder(orderId: string): Promise<void> {
   }
 
   const refreshed = await prisma.orderItem.findMany({ where: { orderId: order.id } });
-  const allProvisioned = refreshed.length > 0 && refreshed.every((i) => i.provisioningStatus === "PROVISIONED");
-  const anyFailed = refreshed.some((i) => i.provisioningStatus === "FAILED");
-  const anyInProgress = refreshed.some((i) => i.provisioningStatus === "PROVISIONING");
+  const allProvisioned = refreshed.length > 0 && refreshed.every((item) => item.provisioningStatus === "PROVISIONED");
+  const anyFailed = refreshed.some((item) => item.provisioningStatus === "FAILED");
+  const anyInProgress = refreshed.some((item) => item.provisioningStatus === "PROVISIONING");
+  const anyManualReview = refreshed.some((item) => item.provisioningStatus === "MANUAL_REVIEW");
 
   if (allProvisioned) {
     await transitionOrderStatus({ orderId: order.id, to: "ACTIVE", reason: "All paid order items were provisioned successfully." });
@@ -93,7 +102,7 @@ export async function provisionOrder(orderId: string): Promise<void> {
       emailSubject: `Order ${order.orderNumber} is complete`,
       emailHtml: `<p>All services in order <strong>${escapeHtml(order.orderNumber)}</strong> have been successfully provisioned and are now active.</p><p>Total paid: ${escapeHtml(formatCents(order.totalCents, order.currency))}.</p>`,
     });
-  } else if (anyFailed && !anyInProgress) {
+  } else if (anyFailed && !anyInProgress && !anyManualReview) {
     await transitionOrderStatus({ orderId: order.id, to: "FAILED", reason: "One or more paid order items failed fulfilment." });
     await notifyOrderLifecycle({
       orderId: order.id,
@@ -173,7 +182,7 @@ async function provisionDomainRegistration(order: Order, item: OrderItem) {
       tldId: tldRecord.id,
       name: domainName,
       status: "ACTIVE",
-      isPremium: Boolean(await prisma.premiumDomain.findUnique({ where: { domainName } }).then((p) => p?.status === "LISTED")),
+      isPremium: Boolean(availability?.isPremium),
       providerName: provider.name,
       providerOrderId: result.providerOrderId,
       registeredAt: new Date(),
@@ -183,6 +192,7 @@ async function provisionDomainRegistration(order: Order, item: OrderItem) {
     },
     update: {
       status: "ACTIVE",
+      isPremium: Boolean(availability?.isPremium),
       registeredAt: new Date(),
       expiresAt: result.expiresAt ? new Date(result.expiresAt) : undefined,
       providerName: provider.name,
@@ -190,7 +200,6 @@ async function provisionDomainRegistration(order: Order, item: OrderItem) {
     },
   });
 
-  await prisma.premiumDomain.updateMany({ where: { domainName, status: "LISTED" }, data: { status: "SOLD" } });
   await prisma.orderItem.updateMany({ where: { id: item.id, provisioningStatus: "PROVISIONING" }, data: { domainId: domain.id, provisioningStatus: "PROVISIONED", provisioningNote: "Domain registered and reconciled with registrar." } });
 }
 
@@ -233,5 +242,5 @@ async function provisionDomainTransfer(order: Order, item: OrderItem) {
 }
 
 function escapeHtml(input: string): string {
-  return input.replace(/[&<>\"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '\"': "&quot;", "'": "&#39;" }[c] as string));
+  return input.replace(/[&<>\"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '\"': "&quot;", "'": "&#39;" }[character] as string));
 }
