@@ -6,6 +6,7 @@
     { "path": "/api/cron/billing-renewals", "schedule": "13 * * * *" },
     { "path": "/api/cron/payment-reconciliation", "schedule": "*/15 * * * *" },
     { "path": "/api/cron/renewal-reminders", "schedule": "23 6 * * *" },
-    { "path": "/api/cron/auction-close", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/auction-close", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/pricing-sync", "schedule": "7 */6 * * *" }
   ]
 }

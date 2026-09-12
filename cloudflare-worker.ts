@@ -10,6 +10,7 @@ const CRON_ROUTES: Record<string, string> = {
   "*/15 * * * *": "/api/cron/payment-reconciliation",
   "23 6 * * *": "/api/cron/renewal-reminders",
   "*/5 * * * *": "/api/cron/auction-close",
+  "7 */6 * * *": "/api/cron/pricing-sync",
 };
 
 type WorkerEnv = {

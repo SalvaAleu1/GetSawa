@@ -3,6 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { computeTldPrice } from "@/lib/pricing";
 import { addCents, clampCents } from "@/lib/money";
 import { applyPromotionDiscounts, selectApplicablePromotions, CartItemContext, PromotionContext } from "@/lib/promotions";
+import { getPricingSafetyPolicy } from "@/lib/pricing-policy";
+import { computeSafeRetailPrice, enforceRetailFloor } from "@/lib/pricing-safety";
+import { fetchLiveWholesalePricing } from "@/lib/domain-pricing-sync";
+import { getDomainProvider } from "@/lib/providers/domains/DomainProviderFactory";
+
+export const DOMAIN_QUOTE_TTL_MS = 10 * 60 * 1000;
 
 export const cartItemSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -53,6 +59,11 @@ export interface PricedItem {
   unitPriceCents: number;
   discountCents: number;
   totalCents: number;
+  /** Minimum amount this line may be reduced to without violating cost/margin safeguards. */
+  minimumTotalCents?: number;
+  /** Provider cost snapshot used to calculate the margin floor. */
+  wholesaleCostCents?: number;
+  pricingSource?: string;
 }
 
 export interface PricedCart {
@@ -63,56 +74,171 @@ export interface PricedCart {
   currency: string;
   appliedPromotionId: string | null;
   appliedCouponCode: string | null;
+  quotedAt: string;
+  quoteExpiresAt: string;
+}
+
+function applyItemMarginFloors(items: PricedItem[]) {
+  for (const item of items) {
+    if (item.minimumTotalCents == null) continue;
+    const full = item.unitPriceCents * item.quantity;
+    const floor = Math.min(full, item.minimumTotalCents);
+    if (item.totalCents >= floor) continue;
+    item.totalCents = floor;
+    item.discountCents = Math.max(0, full - floor);
+  }
 }
 
 /**
- * Recomputes the entire cart from the database. This is the ONLY function
- * allowed to determine what a customer pays — client-submitted prices are
- * never trusted (spec sections 17, 76).
+ * Recomputes the entire cart from authoritative server-side sources. Domain
+ * transactions use a fresh registrar wholesale snapshot, then GetSawa's
+ * pricing safety policy is applied before any promotion or coupon.
  */
 export async function priceCart(input: CheckoutInput, userId: string): Promise<PricedCart> {
   const currency = "USD";
   const items: PricedItem[] = [];
+  const quotedAt = new Date();
+  const quoteExpiresAt = new Date(quotedAt.getTime() + DOMAIN_QUOTE_TTL_MS);
+  const safetyPolicy = await getPricingSafetyPolicy();
+
+  const hasDomainItems = input.items.some((item) => item.kind !== "PRODUCT");
+  const activeTlds = hasDomainItems
+    ? await prisma.tld.findMany({ where: { isActive: true } })
+    : [];
+  const tldByExtension = new Map(activeTlds.map((tld) => [tld.extension.toLowerCase(), tld]));
+
+  let liveWholesale = new Map<string, { tld: string; registerCents: number; renewCents: number; transferCents: number | null; currency: string }>();
+  const provider = getDomainProvider();
+  if (hasDomainItems) {
+    if (!provider.isConfigured()) {
+      throw new CheckoutError("Domain checkout is temporarily unavailable because the registrar is not configured.");
+    }
+    const snapshot = await fetchLiveWholesalePricing(activeTlds);
+    liveWholesale = snapshot.byTld;
+  }
 
   for (const raw of input.items) {
     if (raw.kind === "DOMAIN_REGISTRATION") {
-      const parts = raw.domain.toLowerCase().split(".");
+      const normalizedDomain = raw.domain.toLowerCase();
+      const parts = normalizedDomain.split(".");
       const ext = parts.slice(1).join(".");
-      const tld = await prisma.tld.findUnique({ where: { extension: ext } });
+      const tld = tldByExtension.get(ext) ?? await prisma.tld.findUnique({ where: { extension: ext } });
       if (!tld || !tld.isActive) {
         throw new CheckoutError(`.${ext} is not currently available for registration.`);
       }
-      const premium = await prisma.premiumDomain.findUnique({ where: { domainName: raw.domain.toLowerCase() } });
-      const isPremium = Boolean(premium && premium.status === "LISTED");
-      const price = isPremium
-        ? { registerCents: premium!.purchasePriceCents, renewCents: premium!.renewalPriceCents }
-        : computeTldPrice(tld);
 
-      // Premium acquisition price is a flat one-time figure, not a
-      // per-year wholesale rate — it is never multiplied by the requested
-      // term the way a standard registration is.
-      const unit = isPremium ? price.registerCents : price.registerCents * raw.years;
+      // GetSawa-managed premium/aftermarket inventory has an explicit listed
+      // customer price and therefore does not inherit the ordinary TLD rate.
+      const premiumListing = await prisma.premiumDomain.findUnique({ where: { domainName: normalizedDomain } });
+      const isListedPremium = Boolean(premiumListing && premiumListing.status === "LISTED");
+
+      if (isListedPremium) {
+        const unit = premiumListing!.purchasePriceCents;
+        items.push({
+          kind: "DOMAIN_REGISTRATION",
+          description: `${normalizedDomain} premium domain purchase`,
+          domain: normalizedDomain,
+          tld: ext,
+          years: 1,
+          privacy: raw.privacy,
+          autoRenew: raw.autoRenew,
+          isPremium: true,
+          quantity: 1,
+          unitPriceCents: unit,
+          discountCents: 0,
+          totalCents: unit,
+          pricingSource: "GETSAWA_PREMIUM_LISTING",
+        });
+        continue;
+      }
+
+      // NameSilo's documented standard price list does not provide the
+      // registry's exact cart-time premium quote. TLDs marked premium-capable
+      // therefore fail closed unless the active provider explicitly supports
+      // authoritative exact premium pricing.
+      const exactPremiumPricingSupported = provider.supportsExactPremiumPricing?.() ?? false;
+      if (tld.supportsPremium && !exactPremiumPricingSupported) {
+        throw new CheckoutError(
+          `.${ext} can contain registry-premium domains, but ${provider.name} cannot provide an authoritative exact premium quote before payment. Instant checkout is disabled for this extension until a premium-quote-capable registrar is configured.`,
+        );
+      }
+
+      const availability = (await provider.checkAvailability([normalizedDomain]))[0];
+      if (!availability?.available) {
+        throw new CheckoutError(`${normalizedDomain} is no longer available. Please choose another domain.`);
+      }
+
+      if (availability.isPremium) {
+        if (availability.premiumPriceCents == null) {
+          throw new CheckoutError(`The registrar identified ${normalizedDomain} as premium but did not provide a verified price.`);
+        }
+        if (raw.years !== 1) {
+          throw new CheckoutError("Registry-premium domains must be quoted one year at a time.");
+        }
+        const safe = computeSafeRetailPrice(availability.premiumPriceCents, safetyPolicy);
+        items.push({
+          kind: "DOMAIN_REGISTRATION",
+          description: `${normalizedDomain} premium registration — 1 year`,
+          domain: normalizedDomain,
+          tld: ext,
+          years: 1,
+          privacy: raw.privacy,
+          autoRenew: raw.autoRenew,
+          isPremium: true,
+          quantity: 1,
+          unitPriceCents: safe.retailCents,
+          discountCents: 0,
+          totalCents: safe.retailCents,
+          minimumTotalCents: safe.retailCents,
+          wholesaleCostCents: availability.premiumPriceCents,
+          pricingSource: `${provider.name.toUpperCase()}_EXACT_PREMIUM_QUOTE`,
+        });
+        continue;
+      }
+
+      const live = liveWholesale.get(ext);
+      if (!live) throw new CheckoutError(`The registrar did not return a current wholesale price for .${ext}.`);
+      if (live.currency.toUpperCase() !== currency) {
+        throw new CheckoutError(`.${ext} is quoted by the registrar in ${live.currency}; currency conversion is not configured for this checkout.`);
+      }
+
+      const configured = computeTldPrice(tld).registerCents * raw.years;
+      const wholesaleTotal = live.registerCents * raw.years;
+      const unit = enforceRetailFloor(configured, wholesaleTotal, safetyPolicy);
+      const safeFloor = computeSafeRetailPrice(wholesaleTotal, safetyPolicy).retailCents;
       items.push({
         kind: "DOMAIN_REGISTRATION",
-        description: `${raw.domain} registration — ${raw.years} year${raw.years > 1 ? "s" : ""}`,
-        domain: raw.domain.toLowerCase(),
+        description: `${normalizedDomain} registration — ${raw.years} year${raw.years > 1 ? "s" : ""}`,
+        domain: normalizedDomain,
         tld: ext,
         years: raw.years,
         privacy: raw.privacy,
         autoRenew: raw.autoRenew,
-        isPremium,
+        isPremium: false,
         quantity: 1,
         unitPriceCents: unit,
         discountCents: 0,
         totalCents: unit,
+        minimumTotalCents: safeFloor,
+        wholesaleCostCents: wholesaleTotal,
+        pricingSource: `${provider.name.toUpperCase()}_LIVE_WHOLESALE`,
       });
     } else if (raw.kind === "DOMAIN_RENEWAL") {
       const domain = await prisma.domain.findUnique({ where: { id: raw.domainId }, include: { tld: true } });
       if (!domain || domain.userId !== userId) {
         throw new CheckoutError("Domain not found in your account.");
       }
-      const price = computeTldPrice(domain.tld);
-      const unit = price.renewCents * raw.years;
+      if (domain.isPremium && domain.tld.supportsPremium && !(provider.supportsExactPremiumPricing?.() ?? false)) {
+        throw new CheckoutError(
+          `${domain.name} is a premium domain. Its renewal price must be verified by a registrar that supports exact premium renewal quotes before payment.`,
+        );
+      }
+      const live = liveWholesale.get(domain.tld.extension.toLowerCase());
+      if (!live) throw new CheckoutError(`The registrar did not return a current renewal price for .${domain.tld.extension}.`);
+      const configured = computeTldPrice(domain.tld).renewCents * raw.years;
+      const wholesaleTotal = live.renewCents * raw.years;
+      const unit = enforceRetailFloor(configured, wholesaleTotal, safetyPolicy);
+      const safeFloor = computeSafeRetailPrice(wholesaleTotal, safetyPolicy).retailCents;
       items.push({
         kind: "DOMAIN_RENEWAL",
         description: `${domain.name} renewal — ${raw.years} year${raw.years > 1 ? "s" : ""}`,
@@ -120,37 +246,54 @@ export async function priceCart(input: CheckoutInput, userId: string): Promise<P
         domainId: domain.id,
         tld: domain.tld.extension,
         years: raw.years,
+        isPremium: domain.isPremium,
         quantity: 1,
         unitPriceCents: unit,
         discountCents: 0,
         totalCents: unit,
+        minimumTotalCents: safeFloor,
+        wholesaleCostCents: wholesaleTotal,
+        pricingSource: `${provider.name.toUpperCase()}_LIVE_WHOLESALE`,
       });
     } else if (raw.kind === "DOMAIN_TRANSFER") {
-      const parts = raw.domain.toLowerCase().split(".");
+      const normalizedDomain = raw.domain.toLowerCase();
+      const parts = normalizedDomain.split(".");
       const ext = parts.slice(1).join(".");
-      const tld = await prisma.tld.findUnique({ where: { extension: ext } });
+      const tld = tldByExtension.get(ext) ?? await prisma.tld.findUnique({ where: { extension: ext } });
       if (!tld || !tld.isActive) {
         throw new CheckoutError(`.${ext} is not currently available.`);
       }
-      const price = computeTldPrice(tld);
-      if (price.transferCents == null) {
+      if (tld.supportsPremium && !(provider.supportsExactPremiumPricing?.() ?? false)) {
+        throw new CheckoutError(
+          `.${ext} transfers can carry registry-premium pricing, but the current registrar cannot verify the exact premium transfer price before payment.`,
+        );
+      }
+      const live = liveWholesale.get(ext);
+      if (!live || live.transferCents == null) {
         throw new CheckoutError(`Transfers are not currently available for .${ext} domains.`);
       }
+      const configuredTransfer = computeTldPrice(tld).transferCents;
+      const configured = configuredTransfer ?? 0;
+      const unit = enforceRetailFloor(configured, live.transferCents, safetyPolicy);
+      const safeFloor = computeSafeRetailPrice(live.transferCents, safetyPolicy).retailCents;
       items.push({
         kind: "DOMAIN_TRANSFER",
-        description: `${raw.domain.toLowerCase()} transfer`,
-        domain: raw.domain.toLowerCase(),
+        description: `${normalizedDomain} transfer`,
+        domain: normalizedDomain,
         tld: ext,
         authCode: raw.authCode,
         quantity: 1,
-        unitPriceCents: price.transferCents,
+        unitPriceCents: unit,
         discountCents: 0,
-        totalCents: price.transferCents,
+        totalCents: unit,
+        minimumTotalCents: safeFloor,
+        wholesaleCostCents: live.transferCents,
+        pricingSource: `${provider.name.toUpperCase()}_LIVE_WHOLESALE`,
       });
     } else if (raw.kind === "PRODUCT") {
       const product = await prisma.product.findUnique({ where: { sku: raw.sku } });
       if (!product || product.status !== "ACTIVE") {
-        throw new CheckoutError(`This product is not currently available.`);
+        throw new CheckoutError("This product is not currently available.");
       }
       const unit = product.retailPriceCents;
       const total = unit * raw.quantity;
@@ -163,6 +306,7 @@ export async function priceCart(input: CheckoutInput, userId: string): Promise<P
         unitPriceCents: unit,
         discountCents: 0,
         totalCents: total,
+        pricingSource: "PRODUCT_CATALOG",
       });
     }
   }
@@ -198,8 +342,9 @@ export async function priceCart(input: CheckoutInput, userId: string): Promise<P
     }
     if (discounts.length > 0) appliedPromotionId = promo.id;
   }
+  applyItemMarginFloors(items);
 
-  // ---- Coupon -----------------------------------------------------------------
+  // ---- Coupon ---------------------------------------------------------------
   let appliedCouponCode: string | null = null;
   if (input.couponCode) {
     const coupon = await prisma.coupon.findUnique({ where: { code: input.couponCode.toUpperCase() } });
@@ -226,7 +371,6 @@ export async function priceCart(input: CheckoutInput, userId: string): Promise<P
     if (coupon.maxDiscountCents) couponDiscount = Math.min(couponDiscount, coupon.maxDiscountCents);
     couponDiscount = Math.min(couponDiscount, subtotal);
 
-    // Spread coupon discount proportionally across items.
     let remaining = couponDiscount;
     items.forEach((item, i) => {
       if (item.totalCents <= 0) return;
@@ -236,15 +380,26 @@ export async function priceCart(input: CheckoutInput, userId: string): Promise<P
       item.totalCents -= applied;
       remaining -= applied;
     });
+    applyItemMarginFloors(items);
 
     appliedCouponCode = coupon.code;
   }
 
   const subtotalCents = addCents(...items.map((i) => i.unitPriceCents * i.quantity));
-  const discountCents = addCents(...items.map((i) => i.discountCents));
-  const totalCents = clampCents(subtotalCents - discountCents);
+  const totalCents = addCents(...items.map((i) => i.totalCents));
+  const discountCents = clampCents(subtotalCents - totalCents);
 
-  return { items, subtotalCents, discountCents, totalCents, currency, appliedPromotionId, appliedCouponCode };
+  return {
+    items,
+    subtotalCents,
+    discountCents,
+    totalCents,
+    currency,
+    appliedPromotionId,
+    appliedCouponCode,
+    quotedAt: quotedAt.toISOString(),
+    quoteExpiresAt: quoteExpiresAt.toISOString(),
+  };
 }
 
 export class CheckoutError extends Error {}

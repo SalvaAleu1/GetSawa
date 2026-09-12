@@ -2,16 +2,18 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getDomainProvider } from "@/lib/providers/domains/DomainProviderFactory";
 import { ProviderNotConfiguredError } from "@/lib/providers/domains/DomainProvider";
-import { computeTldPrice } from "@/lib/pricing";
+import { computeProtectedTldPrice } from "@/lib/pricing";
+import { computeSafeRetailPrice } from "@/lib/pricing-safety";
+import { getPricingSafetyPolicy } from "@/lib/pricing-policy";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 /**
  * GET /api/domains/search?q=example&tlds=com,net,org
  *
- * Availability always comes live from the configured domain provider.
- * There is no cached/fake availability path. If the provider is not
- * configured, we say so explicitly instead of guessing.
+ * Availability always comes live from the configured domain provider. Retail
+ * display prices use GetSawa's protected pricing floor over the latest cached
+ * wholesale snapshot. Checkout independently refreshes wholesale pricing.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -38,7 +40,7 @@ export async function GET(req: NextRequest) {
     const requestedExt = searchParams.get("tlds");
     const tldsToCheck = requestedExt
       ? activeTlds.filter((t) => requestedExt.split(",").includes(t.extension))
-      : activeTlds.slice(0, 12); // cap unsolicited fan-out
+      : activeTlds.slice(0, 12);
 
     const provider = getDomainProvider();
     if (!provider.isConfigured()) {
@@ -52,24 +54,53 @@ export async function GET(req: NextRequest) {
 
     const candidates = tldsToCheck.map((t) => `${query}.${t.extension}`);
     const availability = await provider.checkAvailability(candidates);
+    const policy = await getPricingSafetyPolicy();
+    const exactPremiumPricingSupported = provider.supportsExactPremiumPricing?.() ?? false;
 
-    const priceByTld = new Map(activeTlds.map((t) => [t.extension, computeTldPrice(t)]));
+    const tldByExtension = new Map(tldsToCheck.map((t) => [t.extension, t]));
+    const protectedPriceByTld = new Map(
+      tldsToCheck.map((t) => [t.extension, computeProtectedTldPrice(t, policy)]),
+    );
 
     const results = availability.map((a) => {
-      const price = priceByTld.get(a.tld);
+      const tld = tldByExtension.get(a.tld);
+      const protectedPrice = protectedPriceByTld.get(a.tld);
+      const exactPremiumRetail = a.isPremium && a.premiumPriceCents != null
+        ? computeSafeRetailPrice(a.premiumPriceCents, policy).retailCents
+        : null;
+      const requiresPremiumVerification = Boolean(
+        tld?.supportsPremium && !exactPremiumPricingSupported && !a.isPremium,
+      );
+      const premiumQuoteMissing = Boolean(a.isPremium && a.premiumPriceCents == null);
+      const checkoutEligible = Boolean(
+        a.available && protectedPrice?.wholesaleAvailable && !requiresPremiumVerification && !premiumQuoteMissing,
+      );
+
       return {
         domain: a.domain,
         tld: a.tld,
         available: a.available,
         isPremium: a.isPremium,
         reason: a.reason,
-        registerPriceCents: a.isPremium ? a.premiumPriceCents : price?.registerCents,
-        renewPriceCents: price?.renewCents,
-        currency: price?.currency ?? "USD",
+        registerPriceCents: exactPremiumRetail ?? protectedPrice?.registerCents,
+        renewPriceCents: a.isPremium ? undefined : protectedPrice?.renewCents,
+        currency: protectedPrice?.currency ?? "USD",
+        checkoutEligible,
+        requiresPremiumVerification,
+        premiumQuoteMissing,
+        pricingProtected: Boolean(exactPremiumRetail != null || protectedPrice?.wholesaleAvailable),
+        wholesaleUpdatedAt: tld?.wholesaleUpdatedAt?.toISOString() ?? null,
+        provider: provider.name,
       };
     });
 
-    return jsonOk({ query, configured: true, results });
+    return jsonOk({
+      query,
+      configured: true,
+      provider: provider.name,
+      exactPremiumPricingSupported,
+      results,
+    });
   } catch (err) {
     if (err instanceof ProviderNotConfiguredError) {
       return jsonOk({ configured: false, message: err.message, results: [] });
