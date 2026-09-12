@@ -35,6 +35,7 @@ export interface HostingAccountSummary {
   suspended: boolean;
   diskUsedMb: number | null;
   diskLimitMb: number | null;
+  bandwidthUsedMb: number | null;
   email: string | null;
   serverIp: string | null;
 }
@@ -105,10 +106,12 @@ function mbFromPossiblyHumanValue(value: unknown): number | null {
   return null;
 }
 
+function bytesToMb(value: unknown): number | null {
+  const bytes = finiteNumber(value);
+  return bytes === null || bytes < 0 ? null : bytes / (1024 * 1024);
+}
+
 function deriveUsername(domain: string, idempotencyKey: string) {
-  // cPanel limits usernames to 16 characters and requires the first eight
-  // characters to be unique. Prefix + seven hash characters makes retries
-  // deterministic without depending on the customer's domain label.
   const digest = crypto.createHash("sha256").update(`${domain}:${idempotencyKey}`).digest("hex");
   const suffix = domain.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8).padEnd(8, "x");
   return `g${digest.slice(0, 7)}${suffix}`.slice(0, 16);
@@ -155,7 +158,10 @@ class CpanelWhmHostingProvider implements HostingProvider {
     if (!this.isConfigured()) return { ok: false, provider: this.name, message: "WHM_BASE_URL, WHM_USERNAME and WHM_API_TOKEN are required.", plans: [] };
     try {
       const plans = await this.listPlans();
-      return { ok: true, provider: this.name, message: `Connected to WHM. ${plans.length} creatable hosting plan${plans.length === 1 ? "" : "s"} found.`, plans };
+      // Phase 15 promises live bandwidth visibility. showbw is read-only and
+      // doubles as an ACL check for the reseller/API token.
+      await this.call("showbw", { showres: process.env.WHM_USERNAME });
+      return { ok: true, provider: this.name, message: `Connected to WHM. ${plans.length} creatable hosting plan${plans.length === 1 ? "" : "s"} found; bandwidth reporting is available.`, plans };
     } catch (error) {
       return { ok: false, provider: this.name, message: error instanceof Error ? error.message : "WHM connection failed.", plans: [] };
     }
@@ -202,9 +208,6 @@ class CpanelWhmHostingProvider implements HostingProvider {
         planCode: typeof data.package === "string" ? data.package : req.planCode,
       };
     } catch (creationError) {
-      // createacct itself is not idempotent. If the provider completed account
-      // creation but the response was lost, a retry receives a duplicate-user
-      // failure. Reconcile the deterministic username before declaring failure.
       try {
         const existing = await this.getAccountSummary(username);
         if (existing && existing.domain.toLowerCase() === domain) {
@@ -223,6 +226,19 @@ class CpanelWhmHostingProvider implements HostingProvider {
       const accounts = Array.isArray(body.data?.acct) ? body.data!.acct : [];
       const account = accounts[0];
       if (!account) return null;
+
+      let bandwidthUsedMb: number | null = null;
+      try {
+        const escapedUser = providerAccountId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const bandwidth = await this.call("showbw", { searchtype: "user", search: `^${escapedUser}$`, showres: process.env.WHM_USERNAME });
+        const rows = Array.isArray(bandwidth.data?.acct) ? bandwidth.data!.acct : [];
+        const usage = rows.find((candidate: any) => String(candidate?.user ?? "") === providerAccountId) ?? rows[0];
+        bandwidthUsedMb = usage ? bytesToMb(usage.totalbytes) : null;
+      } catch {
+        // Account identity/status remains authoritative even if usage reporting
+        // is temporarily unavailable. Health checks surface persistent ACL loss.
+      }
+
       return {
         username: String(account.user ?? account.username ?? providerAccountId),
         domain: String(account.domain ?? ""),
@@ -230,6 +246,7 @@ class CpanelWhmHostingProvider implements HostingProvider {
         suspended: String(account.suspended ?? "0") === "1",
         diskUsedMb: mbFromPossiblyHumanValue(account.diskused),
         diskLimitMb: mbFromPossiblyHumanValue(account.disklimit),
+        bandwidthUsedMb,
         email: typeof account.email === "string" ? account.email : null,
         serverIp: typeof account.ip === "string" ? account.ip : null,
       };
