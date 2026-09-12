@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
 import { decidePremiumOffer } from "@/lib/premium-aftermarket";
+import { validatePremiumMarketplaceEconomics } from "@/lib/premium-economics";
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("ACCEPT") }),
@@ -18,11 +19,34 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     const admin = await requireAdmin(["SUPER_ADMIN", "ADMIN", "PRODUCT_MANAGER"]);
     const { id } = await params;
     const input = schema.parse(await req.json());
-    const current = await prisma.$queryRaw<Array<{ premium_domain_id: string; buyer_user_id: string }>>`
-      SELECT "premium_domain_id","buyer_user_id" FROM "premium_offers" WHERE "id"=${id} LIMIT 1
+    const current = await prisma.$queryRaw<Array<{
+      premium_domain_id: string;
+      buyer_user_id: string;
+      amount_cents: number;
+      source: string;
+      acquisition_cost_cents: number | null;
+      commission_bps: number;
+    }>>`
+      SELECT po."premium_domain_id", po."buyer_user_id", po."amount_cents",
+             pim."source", pim."acquisition_cost_cents", pim."commission_bps"
+      FROM "premium_offers" po
+      JOIN "premium_inventory_meta" pim ON pim."premium_domain_id"=po."premium_domain_id"
+      WHERE po."id"=${id}
+      LIMIT 1
     `;
     const offer = current[0];
     if (!offer) return jsonError("Offer not found.", 404);
+
+    if (input.action === "ACCEPT" || input.action === "COUNTER") {
+      const proposed = input.action === "COUNTER" ? input.counterAmountCents : Number(offer.amount_cents);
+      if (offer.source !== "GETSAWA_INVENTORY" && offer.source !== "CUSTOMER_CUSTODY") return jsonError("This inventory source is not eligible for negotiated aftermarket sales.", 409);
+      await validatePremiumMarketplaceEconomics({
+        source: offer.source,
+        salePriceCents: proposed,
+        acquisitionCostCents: offer.acquisition_cost_cents,
+        commissionBps: Number(offer.commission_bps),
+      });
+    }
 
     await decidePremiumOffer({ offerId: id, adminUserId: admin.id, action: input.action, counterAmountCents: input.action === "COUNTER" ? input.counterAmountCents : undefined });
 
@@ -62,7 +86,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return jsonOk({ success: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not update this offer.";
-    if (message.includes("offer") || message.includes("counter") || message.includes("domain")) return jsonError(message, 400);
+    if (message.includes("offer") || message.includes("counter") || message.includes("domain") || message.includes("price") || message.includes("commission") || message.includes("minimum")) return jsonError(message, 400);
     return handleError(err);
   }
 }
