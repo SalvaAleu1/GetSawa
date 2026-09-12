@@ -6,7 +6,8 @@ export type OrderNotificationType =
   | "ORDER_PROVISIONING"
   | "ORDER_ACTIVE"
   | "ORDER_FULFILMENT_FAILED"
-  | "DOMAIN_RENEWAL_INVOICE";
+  | "DOMAIN_RENEWAL_INVOICE"
+  | "HOSTING_RENEWAL_INVOICE";
 
 /**
  * Creates a durable in-app notification once per order/status and optionally
@@ -47,8 +48,6 @@ export async function notifyOrderLifecycle(params: {
     });
     created = true;
   } catch {
-    // A notification outage must not break payment or provisioning. Email is
-    // still attempted only when the durable notification was created here.
     return { created: false, emailSent: false };
   }
 
