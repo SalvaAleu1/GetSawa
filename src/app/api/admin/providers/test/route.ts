@@ -84,8 +84,8 @@ export async function POST(req: NextRequest) {
 
     await prisma.providerCredential.upsert({
       where: { provider },
-      create: { provider, isConfigured: ok, isEnabled: ok, lastTestedAt: new Date(), lastTestOk: ok, lastTestMessage: message, metadata },
-      update: { isConfigured: ok, isEnabled: ok, lastTestedAt: new Date(), lastTestOk: ok, lastTestMessage: message, metadata },
+      create: { provider, isConfigured: ok, lastTestedAt: new Date(), lastTestOk: ok, lastTestMessage: message, metadata },
+      update: { isConfigured: ok, lastTestedAt: new Date(), lastTestOk: ok, lastTestMessage: message, metadata },
     });
 
     await logAudit({ actorId: admin.id, action: "provider.tested", resource: "provider", resourceId: provider, metadata: { ok, message } });
