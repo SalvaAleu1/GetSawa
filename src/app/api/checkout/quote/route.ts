@@ -1,11 +1,15 @@
 import { NextRequest } from "next/server";
+import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { checkoutSchema, priceCart, CheckoutError } from "@/lib/checkout";
 import { validateDomainLifecycleCheckout } from "@/lib/checkout-domain-guard";
 import { validatePricedPremiumCart } from "@/lib/premium-checkout";
 import { assertCatalogPriceFloors, validateCatalogCheckout } from "@/lib/catalog-checkout-guard";
+import { getAvailableCustomerCredit } from "@/lib/credits";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { checkRateLimit } from "@/lib/rate-limit";
+
+const quoteSchema = checkoutSchema.extend({ applyCredit: z.boolean().optional().default(false) });
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,12 +17,16 @@ export async function POST(req: NextRequest) {
     const rl = checkRateLimit("checkout-quote", user.id, { max: 30, windowMs: 60_000 });
     if (!rl.allowed) return jsonError("Too many quote requests. Please wait a moment and try again.", 429);
 
-    const input = checkoutSchema.parse(await req.json());
+    const input = quoteSchema.parse(await req.json());
     await validateDomainLifecycleCheckout(input, user.id);
     const catalogFloors = await validateCatalogCheckout(input);
     const priced = await priceCart(input, user.id);
     await validatePricedPremiumCart(priced, user.id);
     assertCatalogPriceFloors(priced, catalogFloors);
+
+    const creditBalanceCents = await getAvailableCustomerCredit(user.id);
+    const creditAppliedCents = input.applyCredit ? Math.min(creditBalanceCents, priced.totalCents) : 0;
+    const amountDueCents = priced.totalCents - creditAppliedCents;
 
     return jsonOk({
       items: priced.items.map((item) => ({
@@ -42,6 +50,9 @@ export async function POST(req: NextRequest) {
       subtotalCents: priced.subtotalCents,
       discountCents: priced.discountCents,
       totalCents: priced.totalCents,
+      creditBalanceCents,
+      creditAppliedCents,
+      amountDueCents,
       currency: priced.currency,
       appliedPromotionId: priced.appliedPromotionId,
       appliedCouponCode: priced.appliedCouponCode,
