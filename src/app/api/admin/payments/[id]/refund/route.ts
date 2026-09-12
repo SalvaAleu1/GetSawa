@@ -9,6 +9,7 @@ import { logAudit } from "@/lib/audit";
 import { restoreOrderCredit } from "@/lib/credits";
 import { recordRefundSettlement } from "@/lib/finance";
 import { extractPayPalRefundEconomics } from "@/lib/paypal-economics";
+import { handleFullyRefundedHostingOrder } from "@/lib/hosting-billing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,8 +35,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
         prisma.order.update({ where: { id: payment.orderId }, data: { status: "REFUNDED" } }),
         prisma.invoice.updateMany({ where: { orderId: payment.orderId }, data: { status: "REFUNDED" } }),
       ]);
-      await logAudit({ actorId: admin.id, action: "payments.credit_refund.completed", resource: "payment", resourceId: payment.id, metadata: { restoredCreditCents, reason: parsed.data.reason || null } });
-      return jsonOk({ creditRefund: true, restoredCreditCents });
+      const hosting = await handleFullyRefundedHostingOrder(payment.orderId).catch(() => undefined);
+      await logAudit({ actorId: admin.id, action: "payments.credit_refund.completed", resource: "payment", resourceId: payment.id, metadata: { restoredCreditCents, hosting, reason: parsed.data.reason || null } });
+      return jsonOk({ creditRefund: true, restoredCreditCents, hosting });
     }
 
     if (payment.provider !== "paypal" || !payment.providerCaptureId) return jsonError("This payment cannot be refunded through the configured provider.", 409);
@@ -66,8 +68,9 @@ export async function POST(req: NextRequest, context: RouteContext) {
     });
 
     const restoredCreditCents = fullyRefunded ? await restoreOrderCredit(payment.orderId) : 0;
+    const hosting = fullyRefunded ? await handleFullyRefundedHostingOrder(payment.orderId).catch(() => undefined) : undefined;
     await recordRefundSettlement({ refundId: refund.id, providerFeeCents: economics.providerFeeCents });
-    await logAudit({ actorId: admin.id, action: "payments.refund.completed", resource: "payment", resourceId: payment.id, metadata: { refundId: refund.id, providerRefundId, amountCents, restoredCreditCents, reason: parsed.data.reason || null } });
-    return jsonOk({ refund, restoredCreditCents });
+    await logAudit({ actorId: admin.id, action: "payments.refund.completed", resource: "payment", resourceId: payment.id, metadata: { refundId: refund.id, providerRefundId, amountCents, restoredCreditCents, hosting, reason: parsed.data.reason || null } });
+    return jsonOk({ refund, restoredCreditCents, hosting });
   } catch (error) { return handleError(error); }
 }
