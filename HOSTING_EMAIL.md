@@ -28,87 +28,159 @@ secret store.
 
 Environment variables alone do **not** make hosting sellable. After initial
 configuration or any credential rotation, an authorized admin must run the
-live cPanel/WHM test under **Admin > Providers**. The test verifies:
-
-1. the current credential set can authenticate to WHM;
-2. WHM returns packages that the reseller can create;
-3. bandwidth reporting required by the customer hosting dashboard is
-   accessible; and
-4. the credential fingerprint stored with the successful test matches the
-   currently deployed credentials.
-
-Hosting product activation additionally requires the product's
-`providerProductId` to match one of the package codes returned by that live
-test. A typo or package outside the reseller's privileges therefore cannot be
-activated for sale.
+live cPanel/WHM test under **Admin > Providers**. The test verifies the current
+credentials, creatable WHM packages and bandwidth reporting; activation also
+requires the exact product package to be present in that verified package set.
 
 ### Hosting product contract
 
-A production hosting product uses:
+A production hosting product uses `HOSTING`, `HOSTING_ACCOUNT`, and for
+recurring plans `HOSTING_RENEWAL`, with a managed domain, verified wholesale
+cost and protected retail/renewal prices. Recurring hosting supports monthly
+and yearly billing. Setup fees remain off-sale until a dedicated setup-fee
+checkout lifecycle exists.
 
-- category: `HOSTING`
-- provisioning contract: `HOSTING_ACCOUNT`
-- renewal contract for recurring plans: `HOSTING_RENEWAL`
-- provider product ID: exact WHM package code
+### Provisioning, access and recovery
+
+A paid initial hosting order provisions a deterministic WHM account. Customers
+access cPanel using a fresh temporary session; GetSawa does not persist a
+cPanel password. Recurring hosting reuses the existing provider account,
+refreshes protected pricing before payment, supports grace/suspension,
+cancel-at-period-end, reactivation after payment, and full-refund suspension.
+Cloudflare runs renewal/suspension enforcement through
+`/api/cron/billing-renewals` using `CRON_SECRET`.
+
+## Business Email — Phase 16 implementation
+
+Business email is implemented against **OpenSRS Hosted Email OMA JSON API**.
+It is intentionally separate from the cPanel hosting account so a customer can
+buy a professional mailbox without first buying GetSawa web hosting.
+
+Core implementation:
+
+- `src/lib/providers/email/EmailProvider.ts`
+- `src/lib/email-readiness.ts`
+- `src/lib/email-billing.ts`
+- `src/lib/email-domains.ts`
+- `src/lib/service-billing.ts`
+- `src/lib/product-provisioning.ts`
+- `/dashboard/email`
+- `/admin/email`
+
+Required production secrets:
+
+- `OPENSRS_EMAIL_CLUSTER` — `A` or `B`
+- `OPENSRS_EMAIL_ADMIN_USER`
+- `OPENSRS_EMAIL_ADMIN_PASSWORD`
+- `OPENSRS_EMAIL_COMPANY`
+- optional `OPENSRS_EMAIL_API_BASE_URL`
+
+These are Hosted Email Mail Administration credentials, not the OpenSRS
+Domains API key. Real credentials belong only in the deployment secret store.
+
+### Provider verification gate
+
+Environment variables alone never make an email plan purchasable. After initial
+configuration or credential rotation, an authorized admin must run
+**Admin > Providers > OpenSRS Hosted Email > Test live connection**. The
+successful test stores only health metadata and a credential fingerprint. A
+credential change invalidates readiness until the new credentials pass another
+live company-administration test.
+
+A recurring mailbox product uses:
+
+- category: `EMAIL`
+- provider: `opensrs_hosted_email`
+- provisioning contract: `EMAIL_MAILBOX`
+- renewal contract: `EMAIL_RENEWAL`
 - managed domain required: `true`
-- verified wholesale cost and currency
-- protected retail and renewal prices above the configured cost/margin floor
-- billing cycle: `ONE_TIME`, `MONTHLY` or `YEARLY` as supported by the product
+- `providerConfig.storageMb`: positive mailbox quota
+- verified wholesale cost/currency
+- protected first-period and renewal prices
+- billing cycle: `MONTHLY` or `YEARLY`
 
-Recurring hosting currently supports `MONTHLY` and `YEARLY`. Setup fees remain
-off-sale until a dedicated setup-fee checkout lifecycle exists.
+Admin product creation supports those fields directly. Product activation still
+runs the same provider/pricing/fulfilment/billing readiness gate used by the
+rest of the catalog.
 
-### Provisioning and customer access
+### Mailbox provisioning and passwords
 
-A paid initial hosting order calls WHM `createacct`. The cPanel username is
-deterministically derived from the paid order item so retries can reconcile a
-provider account that was created even if the original HTTP response was lost.
-GetSawa does not persist a cPanel password.
+Checkout requires an active/expiring domain already owned by the signed-in
+customer and a validated mailbox local part. Pricing remains entirely server
+authoritative.
 
-Customers access cPanel from `/dashboard/hosting`. Each click requests a fresh
-WHM user session and redirects to the short-lived HTTPS session URL. The
-hosting dashboard also reconciles live account state, disk usage and current
-month bandwidth usage when the WHM provider is verified.
+After payment, GetSawa:
 
-Provider-supported file management, backups, FTP accounts, databases and
-other advanced hosting controls remain in cPanel instead of being re-created
-as weaker duplicate controls inside GetSawa.
+1. creates/reconciles the OpenSRS email domain;
+2. creates the mailbox with a generated bootstrap password;
+3. records the OpenSRS mailbox address as a unique provider service instance;
+4. attaches recurring billing when applicable; and
+5. requires the customer to replace the bootstrap password from the dashboard.
+
+Mailbox passwords are sent directly to OpenSRS and are **never stored in the
+GetSawa database**. Webmail access uses a fresh provider SSO token rather than a
+stored mailbox password.
+
+### Mailbox management
+
+`/dashboard/email` provides real provider-backed controls for:
+
+- live storage quota and usage;
+- last provider login state where available;
+- password changes;
+- aliases on the managed email domain;
+- external forwarding requests;
+- secure webmail SSO;
+- IMAP/SMTP connection information;
+- automatic-renewal controls; and
+- email DNS verification/cutover.
+
+OpenSRS external forwarding requires recipient opt-in. GetSawa therefore does
+not describe a new external forwarding recipient as active merely because the
+provider accepted the request.
+
+Staff can inspect mailbox/customer/product/DNS/billing/provider state in
+`/admin/email` and issue authenticated provider suspend/reactivate actions.
+
+### DNS cutover safety
+
+Mailbox/provider provisioning happens **before** MX changes. Buying email does
+not silently replace existing mail routing.
+
+GetSawa derives the exact cluster-specific MX/CNAME records plus the OpenSRS
+SPF include. The customer must explicitly approve a DNS cutover before GetSawa
+changes mail routing.
+
+When the domain is genuinely authoritative on NameSilo/DNSOwl, GetSawa can:
+
+- replace root MX records with the OpenSRS routing MX;
+- replace conflicting `mail` A/AAAA/CNAME records with the required CNAME; and
+- add the OpenSRS SPF record only when no SPF record already exists.
+
+An existing SPF policy is never overwritten. If it does not already include
+OpenSRS, the dashboard reports that a safe SPF merge is required.
+
+For domains using external nameservers, GetSawa refuses to edit inactive
+NameSilo DNS and instead displays the exact records for the customer to add at
+the authoritative DNS provider.
+
+In both cases, DNS readiness is determined by **public DNS verification**, not
+just by a successful provider API write. The email-domain state becomes active
+only after the required MX and mail CNAME are publicly visible.
 
 ### Billing and recovery
 
-Recurring hosting is linked through:
+Business-email renewals share the central billing tables but resolve the
+provider-specific service contract before repricing or fulfilment. A renewal:
 
-`customer -> product_service_instances -> WHM account -> billing_subscriptions`
-
-The renewal engine:
-
-- issues a protected renewal invoice before the paid period ends;
-- refreshes the protected hosting price immediately before each PayPal retry;
-- never calls `createacct` for a renewal;
-- reactivates the same WHM account after a successful paid renewal when it was
-  suspended;
-- preserves the customer's automatic-renewal preference;
+- refreshes the protected OpenSRS email price before PayPal handoff;
+- reuses the existing mailbox and never creates a duplicate mailbox;
+- preserves the customer's auto-renew preference;
 - supports cancel-at-period-end;
-- suspends overdue accounts after the grace period;
-- retries provider suspension through the billing cron if WHM was temporarily
-  unavailable; and
-- suspends/cancels hosting after a fully refunded initial or renewal order.
+- suspends overdue mailboxes after the grace period;
+- reactivates the same mailbox after a successful paid renewal; and
+- suspends/cancels the mailbox after a fully refunded initial or renewal order.
 
-Cloudflare runs the shared billing renewal/suspension job through
-`/api/cron/billing-renewals`. `CRON_SECRET` must be configured in the deployed
-Worker environment.
-
-## Business Email — Phase 16
-
-Business email remains fail-closed until Phase 16 selects and integrates a
-real mailbox provider. `src/lib/providers/email/EmailProvider.ts` remains the
-provider contract, and email products must not be activated merely because a
-catalog row exists.
-
-The currently reserved environment values are:
-
-- `EMAIL_PROVIDER`
-- `EMAIL_PROVIDER_API_KEY`
-
-They should remain blank until the Phase 16 provider implementation defines
-and verifies the actual production contract.
+Hosting and email now share provider-neutral renewal/refund dispatch, so adding
+a second service provider cannot accidentally send a mailbox renewal through
+WHM logic.
