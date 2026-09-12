@@ -1,8 +1,8 @@
 import type { Product } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getHostingProvider } from "@/lib/providers/hosting/HostingProvider";
 import { getEmailProvider } from "@/lib/providers/email/EmailProvider";
 import { getAIProvider } from "@/lib/providers/ai/AIProviderFactory";
+import { getHostingOperationalState } from "@/lib/hosting-readiness";
 import { computeSafeRetailPrice } from "@/lib/pricing-safety";
 import { getPricingSafetyPolicy } from "@/lib/pricing-policy";
 
@@ -72,8 +72,6 @@ export async function getProductReadiness(product: Product, suppliedMeta?: Produ
     } else {
       const policy = await getPricingSafetyPolicy();
       minimumRetailCents = computeSafeRetailPrice(meta.wholesaleCostCents, policy).retailCents;
-      // Checkout currently charges the catalog retail line directly. Setup fees
-      // therefore stay off-sale until their charge/persistence lifecycle is wired.
       pricingReady = product.setupFeeCents === 0 && product.retailPriceCents >= minimumRetailCents;
       if (product.setupFeeCents > 0) reasons.push("Setup-fee collection is not active for catalog checkout yet.");
       else if (!pricingReady) reasons.push(`Retail price is below the protected minimum of ${(minimumRetailCents / 100).toFixed(2)} ${product.currency}.`);
@@ -81,11 +79,12 @@ export async function getProductReadiness(product: Product, suppliedMeta?: Produ
 
     const contract = meta.provisioningContract as ProductProvisioningContract | null;
     if (contract === "HOSTING_ACCOUNT") {
-      const provider = getHostingProvider();
-      providerReady = provider.isConfigured();
+      const hosting = await getHostingOperationalState();
+      providerReady = hosting.configured && hosting.verified;
       fulfillmentReady = product.category === "HOSTING" && product.providerName === "hosting" && Boolean(product.providerProductId) && meta.requiresDomain;
-      if (!providerReady) reasons.push("A concrete hosting provider is not configured.");
-      if (!product.providerProductId) reasons.push("Hosting provider plan code is missing.");
+      if (!hosting.configured) reasons.push("cPanel/WHM hosting credentials are not configured.");
+      else if (!hosting.verified) reasons.push(hosting.reason || "cPanel/WHM must pass a live provider test before this plan can be sold.");
+      if (!product.providerProductId) reasons.push("WHM hosting plan code is missing.");
       if (!meta.requiresDomain) reasons.push("Hosting products must require a managed domain.");
     } else if (contract === "EMAIL_MAILBOX") {
       const provider = getEmailProvider();
@@ -103,16 +102,13 @@ export async function getProductReadiness(product: Product, suppliedMeta?: Produ
     }
   }
 
-  // Phase 14 owns recurring charges, renewals and failed-payment recovery.
-  // Phase 13 therefore only permits one-time catalog products with no renewal
-  // price. This prevents a service being sold with a renewal promise that the
-  // billing engine cannot yet execute.
+  // Product-specific recurring billing is enabled phase-by-phase. Domain
+  // renewals exist in Phase 14, but generic service subscriptions must not be
+  // inferred from that. Phase 15 will explicitly open supported hosting cycles.
   billingReady = product.billingCycle === "ONE_TIME" && product.renewalPriceCents == null && product.setupFeeCents === 0;
-  if (product.billingCycle !== "ONE_TIME") reasons.push("Recurring billing lifecycle is not active for this catalog product yet.");
-  if (product.billingCycle === "ONE_TIME" && product.renewalPriceCents != null) reasons.push("A one-time product cannot advertise a renewal price before the renewal lifecycle is active.");
+  if (product.billingCycle !== "ONE_TIME") reasons.push("Recurring billing is not yet enabled for this product contract.");
+  if (product.billingCycle === "ONE_TIME" && product.renewalPriceCents != null) reasons.push("A one-time product cannot advertise a renewal price without a service-renewal contract.");
 
-  // An AI provider can be configured for the website generator, but that alone
-  // is not a sellable catalog entitlement. Explicitly record that distinction.
   if (product.category === "AI" && getAIProvider().isConfigured() && !meta?.provisioningContract) {
     if (!reasons.includes("A supported provisioning contract is missing.")) reasons.push("AI generation is configured, but no paid catalog entitlement contract exists yet.");
   }
