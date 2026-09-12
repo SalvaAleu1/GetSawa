@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { processDueRenewals } from "@/lib/billing";
 import { enforceHostingPastDue } from "@/lib/hosting-billing";
+import { enforceEmailPastDue } from "@/lib/email-billing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,6 +11,9 @@ export async function GET(req: NextRequest) {
   const authorization = req.headers.get("authorization");
   if (!secret || authorization !== `Bearer ${secret}`) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const renewals = await processDueRenewals(100);
-  const hostingSuspensions = await enforceHostingPastDue(100);
-  return Response.json({ ok: true, renewals, hostingSuspensions, timestamp: new Date().toISOString() });
+  const [hostingSuspensions, emailSuspensions] = await Promise.all([
+    enforceHostingPastDue(100),
+    enforceEmailPastDue(100),
+  ]);
+  return Response.json({ ok: true, renewals, hostingSuspensions, emailSuspensions, timestamp: new Date().toISOString() });
 }
