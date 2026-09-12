@@ -24,7 +24,21 @@ export async function POST(req: NextRequest, context: RouteContext) {
     if (!parsed.success) return jsonError("Invalid refund request.", 422);
     const payment = await prisma.payment.findUnique({ where: { id }, include: { refunds: true, order: true } });
     if (!payment) return jsonError("Payment not found.", 404);
-    if (payment.provider !== "paypal" || !payment.providerCaptureId) return jsonError("This payment cannot be refunded through PayPal.", 409);
+
+    if (payment.provider === "credit") {
+      if (payment.status !== "PAID") return jsonError("This account-credit payment is not refundable.", 409);
+      const restoredCreditCents = await restoreOrderCredit(payment.orderId);
+      if (restoredCreditCents <= 0) return jsonError("No applied account credit remains to restore for this order.", 409);
+      await prisma.$transaction([
+        prisma.payment.update({ where: { id: payment.id }, data: { status: "REFUNDED" } }),
+        prisma.order.update({ where: { id: payment.orderId }, data: { status: "REFUNDED" } }),
+        prisma.invoice.updateMany({ where: { orderId: payment.orderId }, data: { status: "REFUNDED" } }),
+      ]);
+      await logAudit({ actorId: admin.id, action: "payments.credit_refund.completed", resource: "payment", resourceId: payment.id, metadata: { restoredCreditCents, reason: parsed.data.reason || null } });
+      return jsonOk({ creditRefund: true, restoredCreditCents });
+    }
+
+    if (payment.provider !== "paypal" || !payment.providerCaptureId) return jsonError("This payment cannot be refunded through the configured provider.", 409);
     if (payment.status !== "PAID" && payment.status !== "PARTIALLY_REFUNDED") return jsonError("Only captured payments can be refunded.", 409);
     const alreadyRefunded = payment.refunds.filter((refund) => refund.status === "COMPLETED").reduce((sum, refund) => sum + refund.amountCents, 0);
     const remaining = payment.amountCents - alreadyRefunded;
