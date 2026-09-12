@@ -20,10 +20,16 @@ interface Product {
   category: string;
   status: string;
   retailPriceCents: number;
+  renewalPriceCents: number | null;
   currency: string;
   billingCycle: string;
   providerName: string | null;
-  commerce: { wholesaleCostCents: number | null; costSource: string; provisioningContract: string | null } | null;
+  commerce: {
+    wholesaleCostCents: number | null;
+    costSource: string;
+    provisioningContract: string | null;
+    renewalContract: string | null;
+  } | null;
   activationReadiness: Readiness;
 }
 
@@ -34,8 +40,8 @@ interface BundleRow {
 
 const CATEGORIES = ["DOMAIN_REGISTRATION", "DOMAIN_TRANSFER", "DOMAIN_RENEWAL", "PREMIUM_DOMAIN", "HOSTING", "EMAIL", "WEBSITE", "SECURITY", "AI", "MARKETING", "ADD_ON"];
 const emptyForm = {
-  sku: "", name: "", category: "ADD_ON", retailPrice: "", wholesaleCost: "", providerName: "",
-  providerProductId: "", provisioningContract: "", billingCycle: "ONE_TIME", requiresDomain: false, storageMb: "",
+  sku: "", name: "", category: "ADD_ON", retailPrice: "", renewalPrice: "", wholesaleCost: "", providerName: "",
+  providerProductId: "", provisioningContract: "", renewalContract: "", billingCycle: "ONE_TIME", requiresDomain: false, storageMb: "",
 };
 const emptyBundle = { name: "", productSkus: "", bundlePrice: "" };
 
@@ -54,7 +60,7 @@ export default function AdminProductsPage() {
     setBundles(bundleData.bundles || []);
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { void load(); }, []);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -62,6 +68,17 @@ export default function AdminProductsPage() {
     setError(null);
     try {
       const wholesaleCostCents = Math.round(Number(form.wholesaleCost) * 100);
+      const renewalPriceCents = form.renewalPrice ? Math.round(Number(form.renewalPrice) * 100) : null;
+      if (form.billingCycle !== "ONE_TIME" && (!renewalPriceCents || renewalPriceCents <= 0)) {
+        throw new Error("Monthly and yearly products require a positive renewal price.");
+      }
+      if (form.billingCycle !== "ONE_TIME" && !form.renewalContract) {
+        throw new Error("Monthly and yearly products require an implemented renewal contract.");
+      }
+      if (form.billingCycle === "ONE_TIME" && (form.renewalPrice || form.renewalContract)) {
+        throw new Error("One-time products cannot include a recurring renewal price or renewal contract.");
+      }
+
       const providerConfig = form.storageMb ? { storageMb: Number(form.storageMb) } : {};
       const res = await fetch("/api/admin/products", {
         method: "POST",
@@ -71,6 +88,7 @@ export default function AdminProductsPage() {
           name: form.name,
           category: form.category,
           retailPriceCents: Math.round(Number(form.retailPrice) * 100),
+          renewalPriceCents,
           billingCycle: form.billingCycle,
           providerName: form.providerName || undefined,
           providerProductId: form.providerProductId || undefined,
@@ -81,6 +99,7 @@ export default function AdminProductsPage() {
             requiresDomain: form.requiresDomain,
             providerConfig,
             provisioningContract: form.provisioningContract || null,
+            renewalContract: form.renewalContract || null,
           },
         }),
       });
@@ -160,6 +179,9 @@ export default function AdminProductsPage() {
                   {product.category} · {formatCents(product.retailPriceCents, product.currency)} · {product.billingCycle}
                   {product.providerName ? ` · ${product.providerName}` : ""}
                 </p>
+                {product.billingCycle !== "ONE_TIME" && product.renewalPriceCents != null ? (
+                  <p className="mt-1 text-xs text-ink/45">Renews at {formatCents(product.renewalPriceCents, product.currency)} · {product.commerce?.renewalContract || "renewal contract missing"}</p>
+                ) : null}
               </div>
               <div className="text-xs">
                 <div className="flex flex-wrap gap-1.5">
@@ -175,9 +197,9 @@ export default function AdminProductsPage() {
               <div className="flex items-center gap-2 lg:justify-end">
                 <StatusPill status={product.status} />
                 {product.status !== "ACTIVE" ? (
-                  <button onClick={() => setStatus(product.id, "ACTIVE")} className="btn-primary">Activate</button>
+                  <button onClick={() => void setStatus(product.id, "ACTIVE")} className="btn-primary">Activate</button>
                 ) : (
-                  <button onClick={() => setStatus(product.id, "PAUSED")} className="btn-secondary">Pause</button>
+                  <button onClick={() => void setStatus(product.id, "PAUSED")} className="btn-secondary">Pause</button>
                 )}
               </div>
             </div>
@@ -195,18 +217,21 @@ export default function AdminProductsPage() {
           <Field label="SKU"><input className="input" required value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></Field>
           <Field label="Name"><input className="input" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
           <Field label="Category"><select className="input" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>{CATEGORIES.map((category) => <option key={category}>{category}</option>)}</select></Field>
-          <Field label="Retail price (USD)"><input className="input" type="number" min="0" step="0.01" required value={form.retailPrice} onChange={(e) => setForm({ ...form, retailPrice: e.target.value })} /></Field>
+          <Field label="First-period retail price (USD)"><input className="input" type="number" min="0" step="0.01" required value={form.retailPrice} onChange={(e) => setForm({ ...form, retailPrice: e.target.value })} /></Field>
+          <Field label="Renewal price (USD)"><input className="input" type="number" min="0.01" step="0.01" disabled={form.billingCycle === "ONE_TIME"} required={form.billingCycle !== "ONE_TIME"} value={form.renewalPrice} onChange={(e) => setForm({ ...form, renewalPrice: e.target.value })} placeholder={form.billingCycle === "ONE_TIME" ? "Not applicable" : "Required for recurring products"} /></Field>
           <Field label="Verified wholesale cost (USD)"><input className="input" type="number" min="0" step="0.01" value={form.wholesaleCost} onChange={(e) => setForm({ ...form, wholesaleCost: e.target.value })} /></Field>
-          <Field label="Billing cycle"><select className="input" value={form.billingCycle} onChange={(e) => setForm({ ...form, billingCycle: e.target.value })}><option>ONE_TIME</option><option>MONTHLY</option><option>YEARLY</option></select></Field>
-          <Field label="Provider"><select className="input" value={form.providerName} onChange={(e) => setForm({ ...form, providerName: e.target.value })}><option value="">Not selected</option><option value="hosting">hosting</option><option value="email">email</option><option value="ai">ai</option><option value="namesilo">namesilo</option></select></Field>
+          <Field label="Billing cycle"><select className="input" value={form.billingCycle} onChange={(e) => { const billingCycle = e.target.value; setForm({ ...form, billingCycle, renewalPrice: billingCycle === "ONE_TIME" ? "" : form.renewalPrice, renewalContract: billingCycle === "ONE_TIME" ? "" : form.renewalContract }); }}><option>ONE_TIME</option><option>MONTHLY</option><option>YEARLY</option></select></Field>
+          <Field label="Provider"><select className="input" value={form.providerName} onChange={(e) => setForm({ ...form, providerName: e.target.value })}><option value="">Not selected</option><option value="cpanel_whm">cPanel / WHM hosting</option><option value="opensrs_hosted_email">OpenSRS Hosted Email</option><option value="ai">AI provider</option><option value="namesilo">NameSilo</option></select></Field>
           <Field label="Provider plan / product code"><input className="input" value={form.providerProductId} onChange={(e) => setForm({ ...form, providerProductId: e.target.value })} /></Field>
           <Field label="Provisioning contract"><select className="input" value={form.provisioningContract} onChange={(e) => setForm({ ...form, provisioningContract: e.target.value })}><option value="">Not implemented</option><option value="HOSTING_ACCOUNT">HOSTING_ACCOUNT</option><option value="EMAIL_MAILBOX">EMAIL_MAILBOX</option></select></Field>
+          <Field label="Renewal contract"><select className="input" disabled={form.billingCycle === "ONE_TIME"} value={form.renewalContract} onChange={(e) => setForm({ ...form, renewalContract: e.target.value })}><option value="">Not implemented</option><option value="HOSTING_RENEWAL">HOSTING_RENEWAL</option><option value="EMAIL_RENEWAL">EMAIL_RENEWAL</option></select></Field>
           <Field label="Mailbox storage (MB)"><input className="input" type="number" min="1" value={form.storageMb} onChange={(e) => setForm({ ...form, storageMb: e.target.value })} /></Field>
           <label className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 text-sm">
             <input type="checkbox" checked={form.requiresDomain} onChange={(e) => setForm({ ...form, requiresDomain: e.target.checked })} />
             Requires a domain in the customer account
           </label>
         </div>
+        <p className="text-xs leading-5 text-ink/50">Recurring OpenSRS mailbox plans use provider <strong>opensrs_hosted_email</strong>, provisioning contract <strong>EMAIL_MAILBOX</strong>, renewal contract <strong>EMAIL_RENEWAL</strong>, a verified wholesale cost and a positive mailbox storage limit. The provider live test still decides whether activation is permitted.</p>
         <button type="submit" disabled={submitting} className="btn-primary">{submitting ? "Saving…" : "Create draft product"}</button>
       </form>
 
@@ -223,7 +248,7 @@ export default function AdminProductsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <StatusPill status={row.bundle.isActive ? "ACTIVE" : "DRAFT"} />
-                  <button className={row.bundle.isActive ? "btn-secondary" : "btn-primary"} onClick={() => toggleBundle(row)}>{row.bundle.isActive ? "Pause" : "Activate"}</button>
+                  <button className={row.bundle.isActive ? "btn-secondary" : "btn-primary"} onClick={() => void toggleBundle(row)}>{row.bundle.isActive ? "Pause" : "Activate"}</button>
                 </div>
               </div>
             ))}
