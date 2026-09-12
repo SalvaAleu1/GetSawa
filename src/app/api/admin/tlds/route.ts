@@ -4,14 +4,17 @@ import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { jsonOk, handleError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
-import { computeTldPrice } from "@/lib/pricing";
+import { computeProtectedTldPrice } from "@/lib/pricing";
+import { getPricingSafetyPolicy } from "@/lib/pricing-policy";
 
 const createSchema = z.object({
   extension: z.string().min(1).max(30).transform((s) => s.toLowerCase().replace(/^\./, "")),
   isActive: z.boolean().default(false),
   isFeatured: z.boolean().default(false),
   supportsPrivacy: z.boolean().default(false),
-  supportsPremium: z.boolean().default(true),
+  // Fail-safe default: only mark this true after confirming the registry can
+  // return premium names and the configured provider can quote them safely.
+  supportsPremium: z.boolean().default(false),
   minYears: z.number().int().min(1).max(10).default(1),
   maxYears: z.number().int().min(1).max(10).default(10),
   pricingMethod: z.enum(["FIXED", "WHOLESALE_PLUS_FIXED", "WHOLESALE_PLUS_PERCENT", "CUSTOM"]).default("WHOLESALE_PLUS_PERCENT"),
@@ -30,8 +33,16 @@ const createSchema = z.object({
 export async function GET() {
   try {
     await requireAdmin();
-    const tlds = await prisma.tld.findMany({ orderBy: { extension: "asc" } });
-    return jsonOk({ tlds: tlds.map((t) => ({ ...t, computedPrice: computeTldPrice(t) })) });
+    const [tlds, policy] = await Promise.all([
+      prisma.tld.findMany({ orderBy: { extension: "asc" } }),
+      getPricingSafetyPolicy(),
+    ]);
+    return jsonOk({
+      tlds: tlds.map((t) => ({
+        ...t,
+        computedPrice: computeProtectedTldPrice(t, policy),
+      })),
+    });
   } catch (err) {
     return handleError(err);
   }
