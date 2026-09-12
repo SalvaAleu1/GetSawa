@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { priceCart, DOMAIN_QUOTE_TTL_MS } from "@/lib/checkout";
-import { refreshHostingRenewalOrderPrice } from "@/lib/hosting-billing";
+import { refreshServiceRenewalOrderPrice } from "@/lib/service-billing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,7 +33,7 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
     let currency: string;
 
     if (renewal.service_instance_id) {
-      const quote = await refreshHostingRenewalOrderPrice({
+      const quote = await refreshServiceRenewalOrderPrice({
         orderId: order.id,
         userId: user.id,
         subscriptionId: renewal.subscription_id,
