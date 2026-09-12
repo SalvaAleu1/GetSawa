@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS "finance_events" (
 CREATE INDEX IF NOT EXISTS "finance_events_payment_idx" ON "finance_events" ("payment_id", "created_at");
 CREATE INDEX IF NOT EXISTS "finance_events_order_idx" ON "finance_events" ("order_id", "created_at");
 CREATE INDEX IF NOT EXISTS "finance_events_type_idx" ON "finance_events" ("event_type", "created_at");
+CREATE UNIQUE INDEX IF NOT EXISTS "Refund_providerRefundId_key" ON "Refund" ("providerRefundId");
 
 ALTER TABLE "finance_events"
   ADD CONSTRAINT "finance_events_payment_id_fkey"
