@@ -31,8 +31,8 @@ export async function GET() {
         ? prisma.domain.findMany({ where: { id: { in: domainIds }, userId: user.id }, select: { id: true, name: true } })
         : Promise.resolve([]),
       serviceIds.length > 0
-        ? prisma.$queryRaw<Array<{ id: string; product_name: string; domain_name: string | null }>>`
-            SELECT psi."id",p."name" AS product_name,d."name" AS domain_name
+        ? prisma.$queryRaw<Array<{ id: string; product_name: string; domain_name: string | null; provider_name: string; provider_resource_id: string }>>`
+            SELECT psi."id",p."name" AS product_name,d."name" AS domain_name,psi."provider_name",psi."provider_resource_id"
             FROM "product_service_instances" psi
             JOIN "Product" p ON p."id"=psi."product_id"
             LEFT JOIN "Domain" d ON d."id"=psi."domain_id"
@@ -41,15 +41,24 @@ export async function GET() {
         : Promise.resolve([]),
     ]);
     const domainNames = new Map(domains.map((domain) => [domain.id, domain.name]));
-    const serviceNames = new Map(services.map((service) => [service.id, service.domain_name ? `${service.product_name} — ${service.domain_name}` : service.product_name]));
-    const labeledSubscriptions = subscriptions.map((subscription) => ({
-      ...subscription,
-      serviceLabel: subscription.serviceInstanceId
-        ? serviceNames.get(subscription.serviceInstanceId) || "Web Hosting"
-        : subscription.domainId
-          ? domainNames.get(subscription.domainId) || "Domain renewal"
-          : "Recurring service",
-    }));
+    const serviceInfo = new Map(services.map((service) => [service.id, {
+      label: service.provider_name === "opensrs_hosted_email"
+        ? service.provider_resource_id
+        : service.domain_name
+          ? `${service.product_name} — ${service.domain_name}`
+          : service.product_name,
+      kind: service.provider_name === "opensrs_hosted_email" ? "BUSINESS_EMAIL" : service.provider_name === "cpanel_whm" ? "WEB_HOSTING" : "SERVICE",
+      provider: service.provider_name,
+    }]));
+    const labeledSubscriptions = subscriptions.map((subscription) => {
+      const info = subscription.serviceInstanceId ? serviceInfo.get(subscription.serviceInstanceId) : undefined;
+      return {
+        ...subscription,
+        serviceLabel: info?.label ?? (subscription.domainId ? domainNames.get(subscription.domainId) || "Domain renewal" : "Recurring service"),
+        serviceKind: info?.kind ?? (subscription.domainId ? "DOMAIN" : "SERVICE"),
+        serviceProvider: info?.provider ?? null,
+      };
+    });
 
     return jsonOk({
       subscriptions: labeledSubscriptions,
