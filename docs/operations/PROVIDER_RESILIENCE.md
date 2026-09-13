@@ -15,9 +15,9 @@ Each capability has one implemented provider today, so automatic cross-provider 
 
 ## Selection contract
 
-`src/lib/providers/provider-routing.ts` centralizes primary/secondary selection and refuses an unknown provider name. Setting a secondary provider before its adapter exists is a configuration error, not a signal to mock/fallback. `PROVIDER_AUTOMATIC_FAILOVER=true` additionally requires two implemented distinct providers and a reviewed `PROVIDER_FAILOVER_APPROVAL_ID`.
+`src/lib/providers/provider-routing.ts` centralizes primary/secondary selection and refuses an unknown provider name. Setting a secondary provider before its adapter exists is a configuration error, not a signal to mock/fallback. `PROVIDER_AUTOMATIC_FAILOVER_CAPABILITIES` is a comma-separated capability allow-list such as `payments` or `domains,payments`; each selected capability additionally requires two distinct implemented providers and a reviewed `PROVIDER_FAILOVER_APPROVAL_ID`.
 
-This protects high-risk operations from unsafe generic failover. A timeout during payment capture, domain registration, renewal, transfer, provisioning or payout must be reconciled with provider truth before another provider is attempted.
+This protects unrelated capabilities from being affected when failover is introduced for one product area. It also protects high-risk operations from unsafe generic failover. A timeout during payment capture, domain registration, renewal, transfer, provisioning or payout must be reconciled with provider truth before another provider is attempted.
 
 ## Adding a secondary registrar
 
@@ -33,9 +33,9 @@ A second payment adapter should implement the shared `PaymentProvider` contract 
 
 ## Failover modes
 
-1. **Off (default):** current production behavior; existing provider fail-closed/recovery rules apply.
+1. **Off (default):** current production behavior; `PROVIDER_AUTOMATIC_FAILOVER_CAPABILITIES` is blank and existing provider fail-closed/recovery rules apply.
 2. **Manual provider switch:** allowed only after the secondary adapter and acceptance evidence exist. Freeze affected mutations, reconcile the primary, switch configuration, then verify controlled operations.
-3. **Automatic failover:** future capability only. Requires two implemented adapters, explicit approval, operation-level idempotency semantics and proof that ambiguous external side effects cannot duplicate money/domain actions.
+3. **Automatic failover:** future capability only and enabled per named capability. Requires two implemented adapters, explicit approval, operation-level idempotency semantics and proof that ambiguous external side effects cannot duplicate money/domain actions.
 
 ## Scaling and automation
 
