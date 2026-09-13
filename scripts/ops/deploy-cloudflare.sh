@@ -34,9 +34,17 @@ if [[ "${WORKERS_CI:-}" != "1" && "$environment" == "production" && "${CONFIRM_P
   exit 1
 fi
 
-printf 'Preparing database for %s...\n' "$environment"
+# Run the repository-wide static and unit-test gate before touching production
+# schema state. `tsc` reports the complete TypeScript error set in one run,
+# avoiding one-error-per-Next-build deployment loops.
+printf 'Generating Prisma client for repository verification...\n'
 npx prisma generate
+printf 'Running full TypeScript repository check...\n'
+npm run typecheck -- --pretty false
+printf 'Running unit tests...\n'
+npm test
 
+printf 'Preparing database for %s...\n' "$environment"
 migration_database_url="${DIRECT_URL:-${DATABASE_URL:-}}"
 if [[ -z "$migration_database_url" ]]; then
   echo "Missing database connection for Prisma administration. Set DIRECT_URL (recommended for Neon) or DATABASE_URL." >&2
