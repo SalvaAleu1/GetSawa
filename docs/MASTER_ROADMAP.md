@@ -57,30 +57,30 @@ Production catalog governance for hosting, email, SSL/security, DNS/Anycast, WHO
 Production PayPal payment lifecycle with amount/currency verification, webhook and reconciliation convergence, idempotent finance events, invoices, provider-fee capture, refunds and disputes, registrar-priced domain-renewal invoices, retry-safe failed payments, account-credit reservation/application/refund controls, finance reporting and truthful payment-method capability reporting. A separate direct-card gateway remains fail-closed until a real production provider is configured. Build verification evidence is documented in `docs/PHASE14_VERIFICATION.md`; the authoritative runtime build remains the Cloudflare gate.
 
 ### Phase 15 — Web hosting product — DONE
-Production cPanel/WHM API 1 integration with credential-fingerprint/live-test gating, reseller-creatable package verification, managed-domain checkout configuration, idempotent account provisioning, provider-backed service instances, secure temporary cPanel access, live disk/bandwidth visibility, monthly/yearly protected renewals, failed-payment grace handling, cancel-at-period-end, suspension/reactivation, full-refund suspension recovery, admin operations and Cloudflare scheduled enforcement. Hosting remains fail-closed until real WHM credentials pass the live provider test and the exact product package is verified as creatable. Build/provider verification evidence is documented in `docs/PHASE15_VERIFICATION.md`; the authoritative runtime build and end-to-end live-provider test remain deployment gates.
+Production cPanel/WHM API 1 integration with credential-fingerprint/live-test gating, reseller-creatable package verification, managed-domain checkout configuration, idempotent account provisioning, provider-backed service instances, secure temporary cPanel access, live disk/bandwidth visibility, monthly/yearly protected renewals, failed-payment grace handling, cancel-at-period-end, suspension/reactivation, full-refund suspension recovery, admin operations and Cloudflare scheduled enforcement. Hosting remains fail-closed until real WHM credentials pass the live provider test and the exact product package is verified as creatable. Verification evidence is documented in `docs/PHASE15_VERIFICATION.md`.
 
 ### Phase 16 — Business email product — DONE
-Production OpenSRS Hosted Email integration with credential-fingerprint/live-test gating, managed-domain mailbox checkout, unique mailbox provisioning, secure password changes without password persistence, webmail SSO, quota/usage state, aliases and opt-in forwarding, explicit mail-DNS cutover, public DNS verification, external-DNS guidance, monthly/yearly protected renewals, cancel-at-period-end, grace suspension/reactivation, full-refund suspension and admin/customer operations. Email remains fail-closed until the current OpenSRS credentials pass the live provider test and each recurring product has verified wholesale/renewal economics. Verification evidence is documented in `docs/PHASE16_VERIFICATION.md`; the Cloudflare runtime build and production-provider end-to-end test remain deployment gates.
+Production OpenSRS Hosted Email integration with credential-fingerprint/live-test gating, managed-domain mailbox checkout, unique mailbox provisioning, secure password changes without password persistence, webmail SSO, quota/usage state, aliases and opt-in forwarding, explicit mail-DNS cutover, public DNS verification, external-DNS guidance, monthly/yearly protected renewals, cancel-at-period-end, grace suspension/reactivation, full-refund suspension and admin/customer operations. Verification evidence is documented in `docs/PHASE16_VERIFICATION.md`.
 
-### Phase 17 — SSL, CDN, DNS and security add-ons — CURRENT
-Implement provider-backed Cloudflare security/CDN services with safe zone onboarding, DNS preservation before nameserver cutover, HTTPS/TLS/CDN controls, DNSSEC where supported, provider health/readiness, protected pricing and recurring lifecycle. No security product may become purchasable merely because Cloudflare credentials or a catalog row exist.
+### Phase 17 — SSL, CDN, DNS and security add-ons — DONE
+Cloudflare-backed full-zone security service with credential-fingerprint verification, conservative DNS import, explicit nameserver cutover, customer DNS editing, Universal SSL/HTTPS reconciliation, web-record proxy controls, registrar-linked DNSSEC, protected recurring billing, refund/past-due proxy suspension and staff/customer operations. Unsafe record shapes such as SRV remain fail-closed rather than being guessed. Verification evidence is documented in `docs/PHASE17_VERIFICATION.md`.
 
-### Phase 18 — AI website builder editor — UPCOMING
-Upgrade from generated JSON/content into a real editor with templates, sections, pages, navigation, assets, brand settings, responsive preview, SEO controls, regeneration tools, undo/versioning and publishing controls.
+### Phase 18 — AI website builder editor — DONE
+Safe structured website editor with templates, brand settings, page/navigation management, typed sections, validated URL assets, SEO controls, responsive preview, AI page/section regeneration, optimistic edit conflicts, immutable versions, restore/undo and immutable publish snapshots. Public sites support real multi-page routing without executing AI-generated HTML/JavaScript. Verification evidence is documented in `docs/PHASE18_VERIFICATION.md`.
 
-### Phase 19 — Website hosting, publishing, custom domains and TLS — UPCOMING
-Production publishing pipeline, custom-domain verification, apex/www routing, automatic TLS, version rollback, deployment status, project environments, redirects and domain connection health.
+### Phase 19 — Website hosting, publishing, custom domains and TLS — DONE
+Immutable production deployment history and rollback, Cloudflare Worker Custom Domains for customer-owned active Phase 17 zones, apex/www attachment, explicit conflicting-DNS approval, Cloudflare-managed TLS identifiers, host-based Worker rendering, custom-domain health state and project redirects. The previous CNAME-only/TLS-placeholder path has been replaced. Verification evidence is documented in `docs/PHASE19_VERIFICATION.md`; actual Worker/domain TLS remains a Cloudflare staging/production gate.
 
-### Phase 20 — Admin control center — UPCOMING
-Rebuild admin into a dense operational workspace: customers, orders, products, pricing, domains, payments, providers, provisioning, support, fraud/risk signals, system health, audit logs and role-based access.
+### Phase 20 — Admin control center — DONE
+Unified operational workspace over the existing production sources of truth: customer/domain/order/support KPIs, finance signals, payment/support/provisioning queues, provider/service health, risk signals, custom-domain failures, audit activity and staff access. Staff role mutation is Super-Admin-only with self-demotion and last-Super-Admin protection. Specialist pages remain authoritative for destructive actions. Verification evidence is documented in `docs/PHASE20_VERIFICATION.md`.
 
-### Phase 21 — CMS, promotions, blog, ads and affiliate growth — UPCOMING
-CMS-managed public sections, announcements, offers, promo rules, coupons, campaigns, blog/editorial tools, affiliate attribution, commissions, payouts and conversion reporting.
+### Phase 21 — CMS, promotions, blog, ads and affiliate growth — DONE
+Tracked internal campaigns with click/paid-conversion attribution, scheduled campaign metadata, homepage announcements and scheduled banner controls, CMS slots, existing blog/promotions/coupons integration, idempotent affiliate commissions, paid-order approval validation, pre-payout refund/dispute revalidation, real PayPal payouts and conversion reporting. Campaign destinations are internal-only to prevent open redirects. Verification evidence is documented in `docs/PHASE21_VERIFICATION.md`.
 
-### Phase 22 — Support, notifications, transactional messaging and webhooks — UPCOMING
-Ticketing, internal notes, customer notifications, transactional email reliability, templates, delivery status, webhooks/events, escalation paths and operational alerts.
+### Phase 22 — Support, notifications, transactional messaging and webhook health — DONE
+Durable in-app/email delivery ledger, immediate send plus retry/backoff state, Cloudflare retry cron, customer notification center, order/support delivery migration, support first-response SLA state, internal notes, urgent/reply escalation, delivery failure alerts, manual retry/acknowledgement controls and visibility into failed inbound provider webhook processing. Public outbound webhook subscriptions remain intentionally reserved for Phase 23. Verification evidence is documented in `docs/PHASE22_VERIFICATION.md`.
 
-### Phase 23 — Developer API and integration platform — UPCOMING
+### Phase 23 — Developer API and integration platform — CURRENT
 API keys/scopes, rate limits, domain/product/customer-safe APIs, webhook subscriptions, API documentation, usage logs, revocation, idempotency and developer onboarding.
 
 ### Phase 24 — Security, abuse prevention and compliance controls — UPCOMING
