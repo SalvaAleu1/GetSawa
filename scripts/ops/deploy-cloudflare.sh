@@ -13,7 +13,7 @@ case "$environment" in
     export APP_URL="${APP_URL:-https://getsawa.app}"
     export APP_NAME="${APP_NAME:-GetSawa}"
     export WEBSITE_PLATFORM_HOST="${WEBSITE_PLATFORM_HOST:-getsawa.app}"
-    export CLOUDFLARE_WORKER_SERVICE_NAME="${CLOUDFLARE_WORKER_SERVICE_NAME:-getsawa-production}"
+    export CLOUDFLARE_WORKER_SERVICE_NAME="${CLOUDFLARE_WORKER_SERVICE_NAME:-getsawa}"
     ;;
   *)
     echo "Usage: $0 {staging|production}" >&2
@@ -30,7 +30,7 @@ cd "$repo_root"
 # In Cloudflare Workers Builds, selecting the production deploy command is the
 # deployment approval and pushes to the configured production branch may deploy.
 if [[ "${WORKERS_CI:-}" != "1" && "$environment" == "production" && "${CONFIRM_PRODUCTION_CUTOVER:-}" != "SWITCH_GETSAWA_TO_CLOUDFLARE" ]]; then
-  echo "Production configuration now owns getsawa.app and activates production crons. Set CONFIRM_PRODUCTION_CUTOVER=SWITCH_GETSAWA_TO_CLOUDFLARE only during the approved Phase 29 cutover." >&2
+  echo "Production deployment is approved only with CONFIRM_PRODUCTION_CUTOVER=SWITCH_GETSAWA_TO_CLOUDFLARE." >&2
   exit 1
 fi
 
@@ -111,7 +111,13 @@ echo "Seeding safe baseline configuration..."
 DATABASE_URL="$migration_database_url" npm run db:seed
 
 printf 'Building GetSawa for Cloudflare environment %s...\n' "$environment"
-npx opennextjs-cloudflare build --env="$environment"
+if [[ "$environment" == "staging" ]]; then
+  npx opennextjs-cloudflare build --env=staging
+else
+  # Production is the connected root Worker (`getsawa`), not a Wrangler
+  # environment suffix. This keeps the repository name aligned with Workers Builds.
+  npx opennextjs-cloudflare build
+fi
 
 if [[ "${WORKERS_CI:-}" != "1" && "$environment" == "production" && "${CONFIRM_PRODUCTION_WORKER_UPLOAD:-}" != "UPLOAD_PRODUCTION_WORKER" ]]; then
   echo "Production build completed, but upload is blocked. Set CONFIRM_PRODUCTION_WORKER_UPLOAD=UPLOAD_PRODUCTION_WORKER after review." >&2
@@ -119,10 +125,11 @@ if [[ "${WORKERS_CI:-}" != "1" && "$environment" == "production" && "${CONFIRM_P
 fi
 
 printf 'Deploying GetSawa Cloudflare environment %s...\n' "$environment"
-npx opennextjs-cloudflare deploy --env="$environment" -- --keep-vars
-
 if [[ "$environment" == "staging" ]]; then
+  npx opennextjs-cloudflare deploy --env=staging -- --keep-vars
   APP_URL="https://staging.getsawa.app" ./scripts/ops/verify-deployment-health.sh
 else
-  APP_URL="https://getsawa.app" ./scripts/ops/verify-production-cutover.sh
+  npx opennextjs-cloudflare deploy -- --keep-vars
+  echo "Production Worker uploaded as getsawa."
+  echo "getsawa.app is intentionally not attached by Wrangler until the domain is an active Cloudflare zone; attach it under Worker Settings > Domains & Routes after DNS onboarding."
 fi
