@@ -30,9 +30,9 @@ const config: Config = {
         danger: "#C0362C",
       },
       fontFamily: {
-        display: ["'Space Grotesk'", "system-ui", "sans-serif"],
-        sans: ["'Inter'", "system-ui", "sans-serif"],
-        mono: ["'IBM Plex Mono'", "monospace"],
+        display: ["var(--font-space-grotesk)", "system-ui", "sans-serif"],
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        mono: ["var(--font-ibm-plex-mono)", "ui-monospace", "monospace"],
       },
       borderRadius: {
         xl: "14px",

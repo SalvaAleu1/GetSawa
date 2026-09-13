@@ -5,10 +5,11 @@
 @layer base {
   html {
     @apply bg-paper text-ink;
+    text-rendering: optimizeLegibility;
   }
 
   body {
-    @apply min-h-screen bg-paper antialiased;
+    @apply min-h-screen bg-paper font-sans antialiased;
   }
 
   h1,
@@ -25,9 +26,36 @@
   :focus-visible {
     @apply outline-none ring-2 ring-brand-400 ring-offset-2 ring-offset-white;
   }
+
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
 
 @layer components {
+  .skip-link {
+    @apply fixed left-4 top-4 z-[100] -translate-y-24 rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white shadow-lg transition-transform focus:translate-y-0;
+  }
+
+  .network-status {
+    @apply fixed inset-x-4 bottom-4 z-[90] mx-auto max-w-xl rounded-xl border border-amber-400/40 bg-white px-4 py-3 text-center text-sm font-medium text-ink shadow-card;
+  }
+
   .shell-container {
     @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
   }
@@ -53,7 +81,7 @@
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:pointer-events-none disabled:opacity-50;
   }
 
   .btn-primary {
@@ -77,11 +105,11 @@
   }
 
   .icon-button {
-    @apply inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-white text-ink/70 transition hover:bg-paper hover:text-ink;
+    @apply inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-white text-ink/70 transition hover:bg-paper hover:text-ink;
   }
 
   .nav-trigger {
-    @apply inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-ink/60 transition hover:bg-ink/5 hover:text-ink;
+    @apply inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-ink/60 transition hover:bg-ink/5 hover:text-ink;
   }
 
   .card {
@@ -101,11 +129,12 @@
   }
 
   .table-shell {
-    @apply overflow-hidden rounded-2xl border border-border bg-surface;
+    @apply overflow-x-auto rounded-2xl border border-border bg-surface;
+    -webkit-overflow-scrolling: touch;
   }
 
   .input {
-    @apply w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink/40 focus:border-brand-400 focus:ring-2 focus:ring-brand-100;
+    @apply w-full min-h-11 rounded-xl border border-border bg-white px-3.5 py-2.5 text-base text-ink outline-none transition placeholder:text-ink/40 focus:border-brand-400 focus:ring-2 focus:ring-brand-100 sm:text-sm;
   }
 
   .select {

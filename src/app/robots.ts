@@ -1,11 +1,23 @@
-import { MetadataRoute } from "next";
+import type { MetadataRoute } from "next";
+
+const baseUrl = process.env.APP_URL || "https://getsawa.app";
 
 export default function robots(): MetadataRoute.Robots {
-  const base = process.env.APP_URL || "https://getsawa.app";
   return {
-    rules: [
-      { userAgent: "*", allow: "/", disallow: ["/dashboard", "/admin", "/api"] },
-    ],
-    sitemap: `${base}/sitemap.xml`,
+    rules: {
+      userAgent: "*",
+      allow: "/",
+      disallow: [
+        "/admin/",
+        "/api/",
+        "/checkout/",
+        "/dashboard/",
+        "/login",
+        "/forgot-password",
+        "/reset-password",
+      ],
+    },
+    sitemap: `${baseUrl.replace(/\/$/, "")}/sitemap.xml`,
+    host: baseUrl,
   };
 }
