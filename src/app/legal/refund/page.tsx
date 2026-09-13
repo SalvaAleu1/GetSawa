@@ -12,7 +12,7 @@ export default function RefundPolicyPage() {
       <main className="mx-auto max-w-4xl px-6 py-16">
         <article className="prose prose-slate max-w-none">
           <h1>Refund & Cancellation Policy</h1>
-          <p className="lead">Last updated: September 4, 2026</p>
+          <p className="lead">Last updated: September 13, 2026</p>
           <p>This policy explains how GetSawa handles cancellations, failed provisioning, refunds and domain-related
             purchases. Product-specific terms shown at checkout also apply.</p>
 
@@ -64,11 +64,6 @@ export default function RefundPolicyPage() {
           <h2>10. Policy changes</h2>
           <p>We may update this policy when provider rules, products or legal requirements change. The revision date at
             the top of this page will be updated when changes are published.</p>
-
-          <div className="not-prose mt-10 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4 text-sm text-ink/70">
-            This operational policy should be reviewed by qualified legal counsel and reconciled with the final NameSilo,
-            PayPal and other provider terms before public launch.
-          </div>
         </article>
       </main>
     </>
