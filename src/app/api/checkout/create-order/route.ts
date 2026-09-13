@@ -14,7 +14,8 @@ import { generateOrderNumber } from "@/lib/pricing";
 import { encryptSecret } from "@/lib/crypto";
 import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
 import { jsonError, jsonOk, handleError } from "@/lib/api";
-import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/rate-limit";
+import { assertCheckoutAbuseAllowed, checkDistributedRateLimit, SecurityBlockError } from "@/lib/security-controls";
 import { logAudit } from "@/lib/audit";
 import { transitionOrderStatus } from "@/lib/order-lifecycle";
 import { provisionOrder } from "@/lib/provisioning";
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
     const user = await requireUser();
     reservationOwnerId = user.id;
     const ip = getClientIp(req.headers);
-    const rl = checkRateLimit("create-order", user.id, { max: 20, windowMs: 60_000 });
+    const rl = await checkDistributedRateLimit("create-order", user.id, { max: 20, windowMs: 60_000 });
     if (!rl.allowed) return jsonError("Too many checkout attempts. Please slow down.", 429);
 
     const rawBody = await req.json();
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest) {
     assertCatalogPriceFloors(priced, catalogFloors);
 
     if (priced.totalCents <= 0) return jsonError("Order total must be greater than zero.", 400);
+    await assertCheckoutAbuseAllowed(user.id, priced.totalCents);
 
     reservedPremium = await reservePricedPremiumCart(priced, user.id);
 
@@ -242,6 +244,7 @@ export async function POST(req: NextRequest) {
       }
     }
     if (err instanceof CheckoutError) return jsonError(err.message, 400);
+    if (err instanceof SecurityBlockError) return jsonError(err.message, err.status);
     return handleError(err);
   }
 }
