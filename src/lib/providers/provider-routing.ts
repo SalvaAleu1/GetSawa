@@ -34,6 +34,15 @@ function clean(value: string | undefined) {
   return value?.trim().toLowerCase() || null;
 }
 
+function automaticFailoverCapabilities(): Set<string> {
+  return new Set(
+    (process.env.PROVIDER_AUTOMATIC_FAILOVER_CAPABILITIES || "")
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean),
+  );
+}
+
 export interface ProviderRoutingPlan {
   capability: ProviderCapability;
   primary: string;
@@ -48,7 +57,8 @@ export function getProviderRoutingPlan(capability: ProviderCapability): Provider
   const primary = clean(process.env[keys.primary]) || defaults[capability];
   const secondary = clean(process.env[keys.secondary]);
   const implemented = implementedProviders[capability];
-  const automaticFailoverRequested = process.env.PROVIDER_AUTOMATIC_FAILOVER === "true";
+  const requested = automaticFailoverCapabilities();
+  const automaticFailoverRequested = requested.has(capability) || requested.has("*");
   const automaticFailoverEligible = Boolean(
     secondary &&
     secondary !== primary &&
