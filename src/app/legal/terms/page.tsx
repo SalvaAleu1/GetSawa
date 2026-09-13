@@ -12,7 +12,7 @@ export default function TermsPage() {
       <main className="mx-auto max-w-4xl px-6 py-16">
         <article className="prose prose-slate max-w-none">
           <h1>Terms of Service</h1>
-          <p className="lead">Last updated: September 4, 2026</p>
+          <p className="lead">Last updated: September 13, 2026</p>
           <p>
             These Terms govern your use of GetSawa, including domain search and registration, transfers, renewals,
             DNS management, websites, digital products, support, auctions, premium domains, developer APIs and other
@@ -83,13 +83,7 @@ export default function TermsPage() {
             where permitted by law.</p>
 
           <h2>13. Contact</h2>
-          <p>Questions about these Terms should be sent through the support channels provided in your GetSawa account
-            or on the public GetSawa website.</p>
-
-          <div className="not-prose mt-10 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4 text-sm text-ink/70">
-            This operational draft is intended to describe the actual platform rules. It should be reviewed and adapted
-            by qualified legal counsel for the jurisdictions in which GetSawa will operate before public launch.
-          </div>
+          <p>Questions about these Terms should be sent through the official support channels published by GetSawa.</p>
         </article>
       </main>
     </>
