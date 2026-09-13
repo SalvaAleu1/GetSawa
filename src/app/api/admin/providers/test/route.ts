@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
   try {
     const admin = await requireAdmin(["SUPER_ADMIN", "ADMIN"]);
     const { provider } = schema.parse(await req.json());
-    let ok = false; let message = ""; let metadata: Record<string, unknown> | undefined;
+    let ok = false; let message = ""; let metadata: Prisma.InputJsonObject | undefined;
 
     if (provider === "namesilo") {
       const domainProvider = getDomainProvider();
@@ -32,13 +33,13 @@ export async function POST(req: NextRequest) {
       else { try { await PayPalProvider.createOrder({ amountCents:100,currency:"USD",referenceId:`test-${Date.now()}`,description:"GetSawa connection test (not captured)",idempotencyKey:`test-${admin.id}-${Date.now()}`,returnUrl:`${process.env.APP_URL}/admin/providers`,cancelUrl:`${process.env.APP_URL}/admin/providers` }); ok=true; message="Connected successfully. A test order was created but not captured, so no charge occurred."; } catch(error:any){message=error.message||"Connection failed.";} }
     }
     if (provider === "hosting") {
-      const hosting=getHostingProvider();const health=await hosting.healthCheck();ok=health.ok;message=health.message;metadata={implementation:hosting.name,credentialFingerprint:currentHostingCredentialFingerprint(),creatablePlanCodes:health.plans.map((plan)=>plan.code),planCount:health.plans.length};
+      const hosting=getHostingProvider();const health=await hosting.healthCheck();ok=health.ok;message=health.message;metadata={implementation:hosting.name,credentialFingerprint:currentHostingCredentialFingerprint()??null,creatablePlanCodes:health.plans.map((plan)=>plan.code),planCount:health.plans.length};
     }
     if (provider === "email_hosting") {
-      const email=getEmailProvider();const health=await email.healthCheck();ok=health.ok;message=health.message;metadata={implementation:email.name,credentialFingerprint:currentEmailCredentialFingerprint(),cluster:health.cluster,webmailUrl:health.webmailUrl,imapSmtpHost:health.imapSmtpHost};
+      const email=getEmailProvider();const health=await email.healthCheck();ok=health.ok;message=health.message;metadata={implementation:email.name,credentialFingerprint:currentEmailCredentialFingerprint()??null,cluster:health.cluster??null,webmailUrl:health.webmailUrl??null,imapSmtpHost:health.imapSmtpHost??null};
     }
     if (provider === "cloudflare_security") {
-      const cloudflare=getCloudflareSecurityProvider();const health=await cloudflare.healthCheck();ok=health.ok;message=health.message;metadata={implementation:cloudflare.name,credentialFingerprint:currentCloudflareCredentialFingerprint(),accountId:process.env.CLOUDFLARE_ACCOUNT_ID?.trim()||null,serviceProfile:"BASELINE"};
+      const cloudflare=getCloudflareSecurityProvider();const health=await cloudflare.healthCheck();ok=health.ok;message=health.message;metadata={implementation:cloudflare.name,credentialFingerprint:currentCloudflareCredentialFingerprint()??null,accountId:process.env.CLOUDFLARE_ACCOUNT_ID?.trim()||null,serviceProfile:"BASELINE"};
     }
     if (provider === "ai") {
       const ai=getAIProvider();if(!ai.isConfigured())message="AI_API_KEY is not set.";else{try{await ai.generateWebsiteContent({businessName:"Test Business",businessDescription:"A short connectivity test — this result is not saved anywhere.",pages:["home"]});ok=true;message="Connected successfully.";}catch(error:any){message=error.message||"Connection failed.";}}
