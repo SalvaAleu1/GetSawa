@@ -33,10 +33,17 @@ fi
 
 printf 'Checking database migration state for %s...\n' "$environment"
 npx prisma generate
-npx prisma migrate status
+
+migration_database_url="${DIRECT_URL:-${DATABASE_URL:-}}"
+if [[ -z "$migration_database_url" ]]; then
+  echo "Missing database connection for Prisma migrations. Set DIRECT_URL (recommended for Neon) or DATABASE_URL." >&2
+  exit 1
+fi
+
+DATABASE_URL="$migration_database_url" npx prisma migrate status
 
 if [[ "${APPLY_DATABASE_MIGRATIONS:-}" == "APPLY_REVIEWED_MIGRATIONS" ]]; then
-  npx prisma migrate deploy
+  DATABASE_URL="$migration_database_url" npx prisma migrate deploy
 else
   echo "Database migrations were not applied. Set APPLY_DATABASE_MIGRATIONS=APPLY_REVIEWED_MIGRATIONS after reviewing the migration plan."
 fi
