@@ -12,14 +12,12 @@ Status: cutover configuration and verification tooling are repository-complete; 
 - Production verification checks the Cloudflare runtime fingerprint, public health and PayPal webhook configuration without creating a payment.
 - Detailed cutover, scheduler handoff and rollback sequence is documented.
 
-## Static gate
+## Static gate completed — 13 September 2026
 
-Before merge:
-
-1. Run `node scripts/ops/check-cutover-config.mjs` and require success.
-2. Run `bash -n` on `deploy-cloudflare.sh` and `verify-production-cutover.sh`.
-3. Parse `wrangler.jsonc` and ensure production has exactly one apex Custom Domain, `workers_dev=false` and 12 unique crons.
-4. Review that `vercel.json` remains unchanged; disabling the live legacy scheduler must be an explicit operational action during the change window, not an early source-code side effect.
+- `node scripts/ops/check-cutover-config.mjs` passes: all 8 committed Vercel cron jobs are covered by the 12 Cloudflare production jobs and all 12 Worker mappings match the production schedule.
+- `wrangler.jsonc` parses successfully; production has one `getsawa.app` Custom Domain, `workers_dev=false` and 12 unique crons.
+- The production deploy and cutover verification shell scripts were syntax-reviewed; the added cutover guard is a fail-closed production-only condition.
+- `vercel.json` remains unchanged. Disabling the live legacy scheduler is intentionally a controlled operational action during the cutover window, not an early source-code side effect.
 
 ## Live gate
 
