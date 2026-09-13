@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { useEffect,useState } from "react";
 
-type Data={generatedAt:string;viewer:{id:string;role:string};kpis:Record<string,number>;finance30d:{grossCents:number;refundedCents:number;feesCents:number;netCents:number}|null;recurring:{pastDue:number;renewalInvoices:number}|null;websites:{customDomains:number;failedDomains:number}|null;services:Array<{provider_name:string;status:string;count:number}>;queues:{provisioningFailures:any[];paymentQueue:any[];supportQueue:any[]};riskSignals:{failedLogins24h:number;suspendedCustomers:number;disputedPayments:number;highValueOrders:any[]};providers:any[];staff:any[];recentAudit:any[]};
+type Kpis={customers:number;activeDomains:number;orders30d:number;openTickets:number;disputedPayments:number;failedLogins24h:number;suspendedCustomers:number};
+type Data={generatedAt:string;viewer:{id:string;role:string};kpis:Kpis;finance30d:{grossCents:number;refundedCents:number;feesCents:number;netCents:number}|null;recurring:{pastDue:number;renewalInvoices:number}|null;websites:{customDomains:number;failedDomains:number}|null;services:Array<{provider_name:string;status:string;count:number}>;queues:{provisioningFailures:any[];paymentQueue:any[];supportQueue:any[]};riskSignals:{failedLogins24h:number;suspendedCustomers:number;disputedPayments:number;highValueOrders:any[]};providers:any[];staff:any[];recentAudit:any[]};
 const ROLES=["SUPER_ADMIN","ADMIN","SUPPORT","FINANCE","CONTENT_MANAGER","PRODUCT_MANAGER"];
 const money=(c:number)=>new Intl.NumberFormat(undefined,{style:"currency",currency:"USD"}).format(c/100);
 export default function ControlCenter(){const[data,setData]=useState<Data|null>(null);const[loading,setLoading]=useState(true);const[error,setError]=useState("");
