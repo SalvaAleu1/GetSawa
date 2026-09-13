@@ -1,85 +1,131 @@
-# Deployment
+# GetSawa deployment — Cloudflare Workers
 
-GetSawa is a standard Next.js 14 app and can be deployed anywhere that runs
-Node.js 18.18+ and can reach a PostgreSQL database. These instructions are
-generic; adapt them to your specific host (Vercel, Render, Railway, a plain
-VPS, etc).
+GetSawa targets Cloudflare Workers through `@opennextjs/cloudflare`. The production Wrangler environment is `production`, which deploys the Worker as `getsawa-production` and attaches the custom domain `getsawa.app`. Staging uses `getsawa-staging` and `staging.getsawa.app`.
 
-## 1. Provision infrastructure
+GitHub Actions are not required for deployment. Cloudflare Workers Builds can connect directly to the GitHub repository and build/deploy `main` inside Cloudflare.
 
-- A PostgreSQL database (managed, e.g. RDS/Supabase/Neon/Railway, is
-  strongly recommended over self-hosting for a production launch).
-- A place to run the Next.js server (any Node host, or a platform with
-  first-class Next.js support).
+## 1. Production prerequisites
 
-## 2. Set environment variables
+Before production cutover, ensure:
 
-Copy every variable from `.env.example` into your host's environment
-variable / secrets manager. At minimum for a real launch:
+- `getsawa.app` is in the Cloudflare account that will own the Worker custom domain.
+- The production PostgreSQL database is reachable from Cloudflare Workers.
+- Reviewed Prisma migrations are ready.
+- Production provider credentials are available for the products being launched.
+- The current repository `main` is the approved release commit.
+
+## 2. Import the repository into Workers Builds
+
+In Cloudflare Dashboard:
+
+1. Open **Workers & Pages**.
+2. Select **Create application** → **Import a repository**.
+3. Connect GitHub and authorize repository `SalvaAleu1/GetSawa`.
+4. Use branch `main`.
+5. Keep the repository root as `/`.
+6. Configure the production commands below.
+
+### Build command
+
+```bash
+npm run build:cloudflare:production
+```
+
+### Deploy command
+
+```bash
+npx opennextjs-cloudflare deploy --env=production -- --keep-vars
+```
+
+The `production` Wrangler environment resolves to Worker `getsawa-production`. Cloudflare Workers Builds supports Wrangler environment Workers; the deploy command must include the matching `--env=production` flag.
+
+## 3. Build variables and secrets
+
+Workers Builds **build variables/secrets** exist only during the build. Configure at least:
+
+```text
+NODE_ENV=production
+APP_URL=https://getsawa.app
+APP_NAME=GetSawa
+WEBSITE_PLATFORM_HOST=getsawa.app
+CLOUDFLARE_WORKER_SERVICE_NAME=getsawa-production
+CLOUDFLARE_ACCOUNT_ID=<your account id>
+CONFIRM_PRODUCTION_DEPLOY=DEPLOY_GETSAWA_PRODUCTION
+CONFIRM_PRODUCTION_CUTOVER=SWITCH_GETSAWA_TO_CLOUDFLARE
+CONFIRM_PRODUCTION_WORKER_UPLOAD=UPLOAD_PRODUCTION_WORKER
+```
+
+If the Next.js build needs database-backed/static-generation data, also provide `DATABASE_URL` and any other required build-time values as masked build secrets. Do not put long-lived production secrets in source control.
+
+Cloudflare Workers Builds injects its own deployment identity (`WORKERS_CI=1`), so the application's runtime `CLOUDFLARE_API_TOKEN` does not need to be exposed merely to authenticate the build/deploy step.
+
+## 4. Runtime variables and secrets
+
+After the Worker exists, open **getsawa-production → Settings → Variables & Secrets** and configure the production runtime values from `.env.example`.
+
+Core runtime secrets:
 
 - `DATABASE_URL`
 - `SESSION_SECRET`
-- `APP_URL` (your real production URL, used for email links and PayPal
-  return URLs)
+- `CRON_SECRET`
 - `NAMESILO_API_KEY`
-- `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_MODE=live`,
-  `PAYPAL_WEBHOOK_ID`
-- `SMTP_*` (so verification/receipt emails actually send)
+- `PAYPAL_CLIENT_ID`
+- `PAYPAL_CLIENT_SECRET`
+- `PAYPAL_WEBHOOK_ID`
+- `SMTP_PASSWORD` and the remaining `SMTP_*` values
+- `CLOUDFLARE_API_TOKEN` for GetSawa customer DNS/CDN/publishing operations
+- provider credentials for any enabled hosting/email/AI product
 
-Never commit `.env` to source control.
+Core runtime plain variables include:
 
-## 3. Run database migrations
+- `APP_URL=https://getsawa.app`
+- `APP_NAME=GetSawa`
+- `WEBSITE_PLATFORM_HOST=getsawa.app`
+- `CLOUDFLARE_WORKER_SERVICE_NAME=getsawa-production`
+- `CLOUDFLARE_ACCOUNT_ID`
+- provider routing defaults from `.env.example`
 
-```bash
-npm run prisma:migrate    # runs `prisma migrate deploy`
-npm run db:seed           # optional — adds a starter (inactive) TLD list
-```
+Blank optional provider credentials intentionally keep those dependent products fail-closed.
 
-## 4. Create your first admin
+## 5. Database migration
 
-Set `INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD` as one-time environment
-variables (or run locally against the production `DATABASE_URL`), then:
-
-```bash
-npm run setup:admin
-```
-
-Remove those two variables afterward.
-
-## 5. Build and start
+Do not let a production deployment silently guess whether migrations should run. Review migration state against the production database, then run:
 
 ```bash
-npm run build
-npm run start
+npx prisma migrate status
+npx prisma migrate deploy
 ```
 
-## 6. Configure PayPal webhooks
+The repository deployment wrapper supports the explicit `APPLY_DATABASE_MIGRATIONS=APPLY_REVIEWED_MIGRATIONS` acknowledgement when deploying from an authorized shell.
 
-Point PayPal's webhook at `https://your-domain/api/webhooks/paypal` — see
-`docs/PAYPAL.md`.
+## 6. Custom domain and crons
 
-## 7. Go through the in-app checklist
+`wrangler.jsonc` already defines the production custom domain `getsawa.app` and the production cron triggers. A production environment deployment therefore changes real traffic and scheduled jobs; do not point DNS/cut over from Vercel until the Worker build and health checks pass.
 
-Log into `/admin`:
+## 7. Production verification
 
-1. **Providers** — both NameSilo and PayPal should show "Configured" and
-   pass "Test connection".
-2. **TLD Manager** — activate the TLDs you're launching with.
-3. Place one real, small test order yourself end-to-end before announcing
-   launch.
+After deploy:
 
-## HTTPS
+```bash
+APP_URL=https://getsawa.app ./scripts/ops/verify-production-cutover.sh
+```
 
-Run behind HTTPS in production (most hosts handle this automatically). The
-`next.config.js` sets `X-Frame-Options`, `X-Content-Type-Options`,
-`Referrer-Policy`, and a restrictive `Permissions-Policy` on every response;
-add HSTS at your reverse proxy / CDN layer if it isn't already applied
-there.
+Then verify in the application/admin portal:
 
-## What this does NOT include
+1. Authentication and sessions.
+2. NameSilo provider health and domain search.
+3. PayPal live order creation/capture/webhook handling.
+4. Transactional email.
+5. Cron-triggered reconciliation/jobs.
+6. Customer DNS/CDN/publishing capabilities if enabled.
+7. One controlled real order before public launch.
 
-There's no Docker/Kubernetes manifest, CI/CD pipeline, or infrastructure-as-
-code in this repo — the spec didn't require a specific hosting target, and
-adding one would lock in an opinionated choice you didn't ask for. The app
-itself has no assumptions about a specific platform beyond "Node.js +
-Postgres reachable over the network."
+Run the final evidence gate only after the real operational evidence exists:
+
+```bash
+npm run ops:launch-readiness
+```
+
+## 8. Rollback
+
+Retain the previous Vercel production deployment and DNS state until Cloudflare production verification is complete. Follow `docs/operations/VERCEL_TO_CLOUDFLARE_CUTOVER.md` for rollback/cutover steps and `docs/operations/DISASTER_RECOVERY.md` for recovery procedures.
