@@ -4,13 +4,8 @@
   "main": "./cloudflare-worker.ts",
   "compatibility_date": "2026-09-12",
   "compatibility_flags": ["nodejs_compat"],
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
-  "observability": {
-    "enabled": true
-  },
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "observability": { "enabled": true },
   "triggers": {
     "crons": [
       "17 * * * *",
@@ -21,7 +16,8 @@
       "23 6 * * *",
       "*/5 * * * *",
       "7 */6 * * *",
-      "*/6 * * * *"
+      "*/6 * * * *",
+      "9,39 * * * *"
     ]
   }
 }

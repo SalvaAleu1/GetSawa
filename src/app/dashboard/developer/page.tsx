@@ -1,100 +1,33 @@
 "use client";
+import Link from "next/link";
+import { useEffect,useState } from "react";
 
-import { useEffect, useState } from "react";
-
-interface Key {
-  id: string;
-  name: string;
-  keyPrefix: string;
-  isActive: boolean;
-  lastUsedAt: string | null;
-  createdAt: string;
+type KeyRow={id:string;name:string;keyPrefix:string;scopes:string[];rateLimit:number;isActive:boolean;lastUsedAt:string|null;createdAt:string};
+type Hook={id:string;name:string;url:string;events:string[];is_active:boolean;created_at:string};
+type Delivery={id:string;subscription_id:string;event_type:string;status:string;attempts:number;last_status_code:number|null;last_error:string|null;created_at:string;delivered_at:string|null};
+type Usage={api_client_id:string;name:string;requests:number;errors:number;avg_ms:number|null;last_request:string|null};
+const DEFAULT_SCOPES=["domains:read","products:read","orders:read","webhooks:manage"];
+export default function DeveloperPage(){
+ const[keys,setKeys]=useState<KeyRow[]>([]),[scopes,setScopes]=useState<string[]>(DEFAULT_SCOPES),[keyName,setKeyName]=useState(""),[newKey,setNewKey]=useState<string|null>(null);
+ const[hooks,setHooks]=useState<Hook[]>([]),[deliveries,setDeliveries]=useState<Delivery[]>([]),[events,setEvents]=useState<string[]>([]),[hookName,setHookName]=useState(""),[hookUrl,setHookUrl]=useState(""),[hookEvents,setHookEvents]=useState<string[]>([]),[newSecret,setNewSecret]=useState<string|null>(null);
+ const[usage,setUsage]=useState<Usage[]>([]),[recent,setRecent]=useState<any[]>([]),[busy,setBusy]=useState(""),[error,setError]=useState("");
+ async function load(){try{const[k,w,u]=await Promise.all([fetch("/api/dashboard/api-keys",{cache:"no-store"}),fetch("/api/dashboard/developer/webhooks",{cache:"no-store"}),fetch("/api/dashboard/developer/usage",{cache:"no-store"})]);const kb=await k.json(),wb=await w.json(),ub=await u.json();if(!k.ok)throw new Error(kb.error||"Could not load API keys.");if(!w.ok)throw new Error(wb.error||"Could not load webhooks.");if(!u.ok)throw new Error(ub.error||"Could not load usage.");setKeys(kb.keys||[]);setScopes(kb.availableScopes||DEFAULT_SCOPES);setHooks(wb.subscriptions||[]);setDeliveries(wb.deliveries||[]);setEvents(wb.availableEvents||[]);setUsage(ub.requests||[]);setRecent(ub.recent||[]);if(!hookEvents.length)setHookEvents(wb.availableEvents?.slice(0,1)||[]);setError("");}catch(e){setError(e instanceof Error?e.message:"Developer tools could not be loaded.");}}
+ useEffect(()=>{void load();},[]);
+ async function createKey(e:React.FormEvent){e.preventDefault();setBusy("key");setError("");try{const selected=Array.from(document.querySelectorAll<HTMLInputElement>('input[name="scope"]:checked')).map(el=>el.value);const r=await fetch("/api/dashboard/api-keys",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:keyName,scopes:selected})});const b=await r.json();if(!r.ok)throw new Error(b.error||"Could not create API key.");setNewKey(b.key);setKeyName("");await load();}catch(e){setError(e instanceof Error?e.message:"Could not create API key.");}finally{setBusy("");}}
+ async function revokeKey(id:string){if(!confirm("Revoke this API key? Existing integrations using it will stop immediately."))return;setBusy(id);const r=await fetch(`/api/dashboard/api-keys/${id}`,{method:"DELETE"});const b=await r.json();if(!r.ok)setError(b.error||"Could not revoke API key.");await load();setBusy("");}
+ async function createHook(e:React.FormEvent){e.preventDefault();setBusy("hook");setError("");try{const r=await fetch("/api/dashboard/developer/webhooks",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:hookName,url:hookUrl,events:hookEvents})});const b=await r.json();if(!r.ok)throw new Error(b.error||"Could not create webhook.");setNewSecret(b.webhook.secret);setHookName("");setHookUrl("");await load();}catch(e){setError(e instanceof Error?e.message:"Could not create webhook.");}finally{setBusy("");}}
+ async function hookAction(id:string,method:"POST"|"DELETE"){setBusy(id+method);setError("");try{const r=await fetch(`/api/dashboard/developer/webhooks/${id}`,{method});const b=await r.json();if(!r.ok)throw new Error(b.error||"Webhook action failed.");await load();}catch(e){setError(e instanceof Error?e.message:"Webhook action failed.");}finally{setBusy("");}}
+ return <main className="max-w-6xl space-y-8">
+  <header className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-sm font-medium">Integrations</p><h1 className="text-3xl font-bold">Developer API</h1><p className="mt-2 max-w-3xl text-sm text-ink/60">Create scoped credentials, receive signed events, and inspect real API usage. Secrets are shown once and stored only as hashes or encrypted values.</p></div><Link className="btn-secondary" href="/developers/api">API documentation</Link></header>
+  {error&&<div className="rounded-xl border border-danger/20 bg-danger/5 p-4 text-sm text-danger">{error}</div>}
+  {newKey&&<SecretBox title="New API key" value={newKey} note="Copy this key now. GetSawa stores only its SHA-256 hash." onClose={()=>setNewKey(null)}/>} {newSecret&&<SecretBox title="New webhook signing secret" value={newSecret} note="Use this secret to verify X-GetSawa-Signature. It will not be shown again." onClose={()=>setNewSecret(null)}/>} 
+  <section className="grid gap-5 lg:grid-cols-2"><div className="card p-5"><h2 className="text-lg font-bold">API keys</h2><div className="mt-4 space-y-3">{keys.map(k=><div key={k.id} className="rounded-xl border border-border p-4"><div className="flex justify-between gap-3"><div><p className="font-semibold">{k.name} <span className="font-mono text-xs text-ink/45">{k.keyPrefix}…</span></p><p className="mt-1 text-xs text-ink/50">{k.scopes.join(" · ")} · {k.rateLimit}/min</p><p className="mt-1 text-xs text-ink/45">{k.lastUsedAt?`Last used ${new Date(k.lastUsedAt).toLocaleString()}`:"Never used"}</p></div>{k.isActive?<button className="btn-danger h-fit" disabled={busy===k.id} onClick={()=>void revokeKey(k.id)}>Revoke</button>:<span className="badge-neutral h-fit">Revoked</span>}</div></div>)}{!keys.length&&<p className="text-sm text-ink/50">No API keys yet.</p>}</div></div>
+  <form onSubmit={createKey} className="card p-5"><h2 className="text-lg font-bold">Create scoped key</h2><label className="label mt-4">Key name<input className="input mt-1" required maxLength={100} value={keyName} onChange={e=>setKeyName(e.target.value)} placeholder="Production integration"/></label><div className="mt-4"><p className="label">Scopes</p><div className="mt-2 space-y-2">{scopes.map((s,i)=><label key={s} className="flex items-center gap-2 text-sm"><input name="scope" type="checkbox" value={s} defaultChecked={i===0}/><code>{s}</code></label>)}</div></div><button className="btn-primary mt-5" disabled={busy==="key"}>{busy==="key"?"Creating…":"Create API key"}</button></form></section>
+  <section className="grid gap-5 lg:grid-cols-2"><div className="card p-5"><h2 className="text-lg font-bold">Webhook subscriptions</h2><div className="mt-4 space-y-3">{hooks.map(h=><div key={h.id} className="rounded-xl border border-border p-4"><p className="font-semibold">{h.name} {!h.is_active&&<span className="badge-neutral ml-2">Inactive</span>}</p><p className="mt-1 break-all text-xs text-ink/50">{h.url}</p><p className="mt-2 text-xs text-ink/45">{h.events.join(" · ")}</p>{h.is_active&&<div className="mt-3 flex gap-2"><button className="btn-secondary" disabled={busy===h.id+"POST"} onClick={()=>void hookAction(h.id,"POST")}>Send test</button><button className="btn-danger" disabled={busy===h.id+"DELETE"} onClick={()=>void hookAction(h.id,"DELETE")}>Deactivate</button></div>}</div>)}{!hooks.length&&<p className="text-sm text-ink/50">No webhook subscriptions yet.</p>}</div></div>
+  <form onSubmit={createHook} className="card p-5"><h2 className="text-lg font-bold">Add webhook endpoint</h2><label className="label mt-4">Name<input className="input mt-1" required value={hookName} onChange={e=>setHookName(e.target.value)} placeholder="Order events"/></label><label className="label mt-3">Public HTTPS URL<input className="input mt-1" required type="url" value={hookUrl} onChange={e=>setHookUrl(e.target.value)} placeholder="https://example.com/webhooks/getsawa"/></label><div className="mt-4"><p className="label">Events</p><div className="mt-2 space-y-2">{events.map(event=><label key={event} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={hookEvents.includes(event)} onChange={e=>setHookEvents(e.target.checked?[...hookEvents,event]:hookEvents.filter(x=>x!==event))}/><code>{event}</code></label>)}</div></div><button className="btn-primary mt-5" disabled={busy==="hook"||hookEvents.length===0}>{busy==="hook"?"Creating…":"Create webhook"}</button></form></section>
+  <section><h2 className="text-xl font-bold">30-day API usage</h2><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{usage.map(u=><div className="card p-4" key={u.api_client_id}><p className="font-semibold">{u.name}</p><p className="mt-2 text-2xl font-bold">{u.requests}</p><p className="text-xs text-ink/50">requests · {u.errors} errors · {u.avg_ms==null?"—":`${Math.round(u.avg_ms)} ms avg`}</p></div>)}{!usage.length&&<div className="card p-4 text-sm text-ink/50">No API traffic yet.</div>}</div></section>
+  <section className="grid gap-5 xl:grid-cols-2"><div><h2 className="text-xl font-bold">Recent API requests</h2><div className="card mt-3 overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead><tr className="border-b"><th className="p-3">Time</th><th>Key</th><th>Route</th><th>Status</th><th>Latency</th></tr></thead><tbody>{recent.slice(0,30).map((r:any)=><tr key={r.request_id} className="border-b last:border-0"><td className="p-3 text-xs">{new Date(r.created_at).toLocaleString()}</td><td>{r.key_name}</td><td className="font-mono text-xs">{r.method} {r.route}</td><td>{r.status_code}</td><td>{r.duration_ms} ms</td></tr>)}</tbody></table></div></div>
+  <div><h2 className="text-xl font-bold">Recent webhook deliveries</h2><div className="card mt-3 overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead><tr className="border-b"><th className="p-3">Event</th><th>Status</th><th>Attempts</th><th>HTTP</th><th>Time</th></tr></thead><tbody>{deliveries.slice(0,30).map(d=><tr key={d.id} className="border-b last:border-0"><td className="p-3 font-mono text-xs">{d.event_type}</td><td>{d.status}</td><td>{d.attempts}</td><td>{d.last_status_code??"—"}</td><td className="text-xs">{new Date(d.created_at).toLocaleString()}</td></tr>)}</tbody></table></div></div></section>
+ </main>;
 }
-
-export default function DeveloperPage() {
-  const [keys, setKeys] = useState<Key[]>([]);
-  const [name, setName] = useState("");
-  const [newKey, setNewKey] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  async function load() {
-    const res = await fetch("/api/dashboard/api-keys");
-    const data = await res.json();
-    setKeys(data.keys || []);
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/dashboard/api-keys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not create key.");
-      setNewKey(data.key);
-      setName("");
-      load();
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleRevoke(id: string) {
-    await fetch(`/api/dashboard/api-keys/${id}`, { method: "DELETE" });
-    load();
-  }
-
-  return (
-    <div>
-      <h1 className="text-2xl font-semibold">Developer API</h1>
-      <p className="mt-1 text-sm text-ink/60">
-        Use your API key to check domain availability and pricing programmatically. See <code>GET /api/v1/domains/search</code> and{" "}
-        <code>GET /api/v1/domains/pricing</code>, authenticated with <code>Authorization: Bearer &lt;key&gt;</code>.
-      </p>
-
-      {newKey && (
-        <div className="card mt-6 border-amber-400/40 bg-amber-400/5 p-4">
-          <p className="font-medium">Copy your new API key now — it won't be shown again.</p>
-          <code className="mt-2 block break-all rounded bg-ink/5 p-2 text-sm">{newKey}</code>
-        </div>
-      )}
-
-      <div className="card mt-6 divide-y divide-border">
-        {keys.map((k) => (
-          <div key={k.id} className="flex items-center justify-between px-5 py-3.5">
-            <div>
-              <p className="font-medium">{k.name} <span className="ml-2 font-mono text-xs text-ink/40">{k.keyPrefix}…</span></p>
-              <p className="text-xs text-ink/50">{k.lastUsedAt ? `Last used ${new Date(k.lastUsedAt).toLocaleString()}` : "Never used"}</p>
-            </div>
-            {k.isActive ? (
-              <button onClick={() => handleRevoke(k.id)} className="btn-danger">Revoke</button>
-            ) : (
-              <span className="badge-neutral">Revoked</span>
-            )}
-          </div>
-        ))}
-        {keys.length === 0 && <p className="p-5 text-sm text-ink/60">No API keys yet.</p>}
-      </div>
-
-      <form onSubmit={handleCreate} className="card mt-6 flex items-end gap-3 p-6">
-        <div className="flex-1">
-          <label className="label">Key name</label>
-          <input className="input" required placeholder="My integration" value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        <button type="submit" disabled={submitting} className="btn-primary">{submitting ? "Creating…" : "Create key"}</button>
-      </form>
-      {error && <p className="mt-2 text-sm text-danger">{error}</p>}
-    </div>
-  );
-}
+function SecretBox({title,value,note,onClose}:{title:string;value:string;note:string;onClose:()=>void}){return <div className="rounded-2xl border border-amber-300/50 bg-amber-50 p-5"><div className="flex justify-between gap-3"><div><p className="font-bold text-amber-950">{title}</p><p className="mt-1 text-xs text-amber-900/70">{note}</p></div><button className="text-sm font-semibold" onClick={onClose}>Dismiss</button></div><code className="mt-3 block break-all rounded-lg bg-white p-3 text-sm">{value}</code></div>}
