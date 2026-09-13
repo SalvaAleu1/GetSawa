@@ -66,6 +66,7 @@ async function paypalFetch(path: string, init: RequestInit & { idempotencyKey?: 
 }
 
 export const PayPalProvider = {
+  name: "paypal" as const,
   isConfigured,
 
   async createOrder(params: { amountCents: number; currency: string; referenceId: string; description: string; idempotencyKey: string; returnUrl: string; cancelUrl: string }) {
