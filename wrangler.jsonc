@@ -16,7 +16,6 @@
   "env": {
     "staging": {
       "workers_dev": true,
-      "keep_vars": true,
       "routes": [
         {
           "pattern": "staging.getsawa.app",
@@ -49,7 +48,6 @@
     },
     "production": {
       "workers_dev": false,
-      "keep_vars": true,
       "routes": [
         {
           "pattern": "getsawa.app",
