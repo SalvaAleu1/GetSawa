@@ -2,6 +2,8 @@
 
 This is the canonical rebuild roadmap for GetSawa. A phase is complete when its implementation is committed, reviewed against repository contracts and safety rules, and is ready for the Cloudflare build/deployment gate. GitHub Actions are not required while the account's monthly Actions allowance is exhausted.
 
+Repository implementation is complete through Phase 31 as of September 13, 2026. This does **not** by itself approve a public production launch: the Phase 30 launch-readiness evidence gate remains authoritative for Cloudflare runtime validation, disaster-recovery proof, provider acceptance, legal/support readiness and the controlled production handoff.
+
 ## Status legend
 
 - DONE — implemented and committed
@@ -89,23 +91,23 @@ Browser-origin protection for cookie-authenticated mutations, hardened account/a
 ### Phase 25 — Analytics, observability and finance reporting — DONE
 Authoritative finance/business/growth/support KPIs, product revenue and current-cost margin estimates with unknown-cost disclosure, 30-day signup activation cohorts, provider health, Developer API latency, Cloudflare cron run history, sanitized application-error fingerprints, daily analytics snapshots, finance CSV export and reconciliation-gap dashboards for finance events, refunds, provider/developer webhooks and transactional messaging. Verification evidence is documented in `docs/PHASE25_VERIFICATION.md`; production telemetry validation remains a Cloudflare staging gate.
 
-### Phase 26 — Performance, accessibility, SEO and PWA/mobile quality — CURRENT
-Core Web Vitals, caching, image/font strategy, keyboard/screen-reader accessibility, metadata/schema/SEO, sitemap/robots, responsive QA, installable PWA where appropriate and poor-network behavior.
+### Phase 26 — Performance, accessibility, SEO and PWA/mobile quality — DONE
+Repository implementation covers font/image/caching strategy, accessibility defaults, metadata/schema/SEO, dynamic sitemap/robots, PWA installability, offline/poor-network behavior and responsive foundations. Real Core Web Vitals, keyboard/screen-reader and installability measurements on Cloudflare remain mandatory Phase 30 launch evidence. Verification is documented in `docs/PHASE26_VERIFICATION.md`.
 
-### Phase 27 — Backup, disaster recovery and operational runbooks — UPCOMING
-Database backup/restore verification, provider reconciliation recovery, secret rotation procedures, rollback plans, incident playbooks, recovery objectives and tested restoration evidence.
+### Phase 27 — Backup, disaster recovery and operational runbooks — DONE
+Backup, checksum, isolated restore, restore verification, provider reconciliation, secret rotation, rollback, incident response and RPO/RTO runbooks are committed. A real production-class backup/isolated restore drill and measured recovery evidence remain mandatory launch blockers until performed. Verification is documented in `docs/PHASE27_VERIFICATION.md`.
 
-### Phase 28 — Cloudflare staging and production infrastructure — UPCOMING
-Create the actual Cloudflare environments, configure secrets/bindings, database connectivity, Worker routes, cron triggers, logs, staging hostname, migration execution and deployment controls.
+### Phase 28 — Cloudflare staging and production infrastructure — DONE
+Explicit staging/production Wrangler environments, deployment preflight, migration controls, cron mapping, observability and safe deployment tooling are committed. Actual Cloudflare staging/production runtime deployment evidence, isolated staging data and runtime tests remain external launch gates. Verification is documented in `docs/PHASE28_VERIFICATION.md`.
 
-### Phase 29 — Vercel-to-Cloudflare cutover — UPCOMING
-Validate staging, freeze risky changes, migrate production secrets, switch DNS/custom domain routing, validate payments/webhooks/cron jobs, monitor errors and retain a rollback path before retiring Vercel.
+### Phase 29 — Vercel-to-Cloudflare cutover — DONE
+Production Custom Domain/scheduler handoff configuration, runtime fingerprints, cutover verification, webhook checks, reconciliation order and rollback procedure are committed. The real Vercel scheduler shutdown, DNS/Worker handoff and production validation remain a controlled live operation and must never be inferred or guessed from repository state. Verification is documented in `docs/PHASE29_VERIFICATION.md`.
 
-### Phase 30 — Launch readiness, legal, support and operations — UPCOMING
-End-to-end acceptance tests, provider live tests, legal/policy review, customer help content, pricing verification, support procedures, admin training, monitoring thresholds and controlled launch checklist.
+### Phase 30 — Launch readiness, legal, support and operations — DONE
+Public support/help content, customer-facing legal cleanup, provider acceptance matrix, monitoring guidance, operator launch runbook and a fail-closed launch-evidence checker are implemented. `npm run ops:launch-readiness` remains deliberately blocked until reviewed runtime, restore, Cloudflare/cutover, migration, security, legal, support, monitoring, handover and enabled-provider evidence exists. Verification is documented in `docs/PHASE30_VERIFICATION.md`.
 
-### Phase 31 — Post-launch resilience and provider expansion — LATER
-Add secondary registrars/providers where commercially useful, premium-quote-capable registrar support, local/regional payment options, provider failover, multi-currency expansion, localization, deeper automation and scale optimizations.
+### Phase 31 — Post-launch resilience and provider expansion — DONE
+Provider selection is centralized and fail-closed; domain/payment adapter seams, capability-scoped failover controls, provider onboarding discipline, premium-price safety, market/currency/localization admission rules and resilience validation are implemented. No secondary registrar, regional payment gateway, extra currency or localization is claimed live: each future addition requires a real commercial account, production adapter and acceptance evidence before routing or customer-facing enablement. Verification is documented in `docs/PHASE31_VERIFICATION.md`.
 
 ## Working rules
 
@@ -118,5 +120,5 @@ Add secondary registrars/providers where commercially useful, premium-quote-capa
 7. Never create a purchasable product merely because a UI card or database product row exists. Real provider readiness and a supported fulfillment contract are mandatory.
 8. Prefer shared primitives and provider abstractions over duplicated one-off code.
 9. Every phase should leave data integrity, operational behavior, reconciliation and error states clearer than before.
-10. Cloudflare is the target production runtime; Vercel remains transitional until Phase 29 is verified.
+10. Cloudflare is the target production runtime; Vercel remains transitional until the live Phase 29 cutover evidence is verified.
 11. While GitHub Actions quota is exhausted, do not block development on Actions. Use static review/local checks where available, and treat the Cloudflare build/deployment as the runtime build gate.
