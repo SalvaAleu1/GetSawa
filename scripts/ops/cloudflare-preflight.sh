@@ -11,7 +11,7 @@ case "$environment" in
   production)
     expected_url="https://getsawa.app"
     expected_host="getsawa.app"
-    expected_worker="getsawa-production"
+    expected_worker="getsawa"
     ;;
   *)
     echo "Usage: $0 {staging|production}" >&2
