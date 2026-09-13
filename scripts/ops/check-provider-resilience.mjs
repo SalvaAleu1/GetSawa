@@ -27,15 +27,26 @@ for (const [capability, [rawPrimary, rawSecondary]] of Object.entries(selections
   if (secondary && secondary === primary) failures.push(`${capability}: primary and secondary providers are identical.`);
 }
 
-if (process.env.PROVIDER_AUTOMATIC_FAILOVER === "true") {
-  const candidates = Object.entries(selections).filter(([, [primary, secondary]]) => secondary && String(primary).toLowerCase() !== String(secondary).toLowerCase());
-  if (!candidates.length) failures.push("Automatic failover requested but no distinct secondary provider is configured.");
-  for (const [capability, [primary, secondary]] of candidates) {
-    const p = String(primary).trim().toLowerCase();
-    const s = String(secondary).trim().toLowerCase();
-    if (!implemented[capability].includes(p) || !implemented[capability].includes(s)) failures.push(`${capability}: automatic failover requires two implemented adapters.`);
+const automaticCapabilities = new Set(
+  (process.env.PROVIDER_AUTOMATIC_FAILOVER_CAPABILITIES || "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean),
+);
+const expandedAutomaticCapabilities = automaticCapabilities.has("*") ? Object.keys(selections) : [...automaticCapabilities];
+for (const capability of expandedAutomaticCapabilities) {
+  if (!selections[capability]) {
+    failures.push(`Unknown automatic-failover capability: ${capability}`);
+    continue;
   }
-  if (!process.env.PROVIDER_FAILOVER_APPROVAL_ID?.trim()) failures.push("PROVIDER_FAILOVER_APPROVAL_ID is required for automatic failover.");
+  const [rawPrimary, rawSecondary] = selections[capability];
+  const primary = String(rawPrimary).trim().toLowerCase();
+  const secondary = rawSecondary ? String(rawSecondary).trim().toLowerCase() : "";
+  if (!secondary || secondary === primary) failures.push(`${capability}: automatic failover requires a distinct secondary provider.`);
+  if (!implemented[capability].includes(primary) || !implemented[capability].includes(secondary)) failures.push(`${capability}: automatic failover requires two implemented adapters.`);
+}
+if (expandedAutomaticCapabilities.length > 0 && !process.env.PROVIDER_FAILOVER_APPROVAL_ID?.trim()) {
+  failures.push("PROVIDER_FAILOVER_APPROVAL_ID is required when automatic failover is requested.");
 }
 
 const currencies = (process.env.GETSAWA_SUPPORTED_CURRENCIES || "USD").split(",").map((v) => v.trim().toUpperCase()).filter(Boolean);
