@@ -1,0 +1,45 @@
+import type { WebsiteContent, WebsitePage, WebsiteSection } from "@/lib/ai/website-schema";
+
+function fontFamily(kind: string) {
+  if (kind === "serif") return "Georgia, 'Times New Roman', serif";
+  if (kind === "rounded") return "ui-rounded, system-ui, sans-serif";
+  return "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+}
+
+function safeHref(value?: string) {
+  if (!value) return "#";
+  if (value.startsWith("#") || value.startsWith("/") || value.startsWith("mailto:") || value.startsWith("tel:")) return value;
+  try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) ? value : "#"; } catch { return "#"; }
+}
+
+function Section({ section, accent }: { section: WebsiteSection; accent: string }) {
+  const items = section.items ?? [];
+  if (section.type === "cta") return <section style={{ marginTop: 32, padding: 28, borderRadius: 20, background: `${accent}14`, textAlign: "center" }}><h3 style={{ fontSize: 26, margin: 0 }}>{section.heading}</h3><p style={{ lineHeight: 1.7, opacity: .72 }}>{section.body}</p>{section.buttonLabel ? <a href={safeHref(section.buttonHref)} style={{ display: "inline-block", marginTop: 8, borderRadius: 10, padding: "10px 18px", background: accent, color: "white", textDecoration: "none", fontWeight: 700 }}>{section.buttonLabel}</a> : null}</section>;
+  if (section.type === "feature-grid" || section.type === "stats") return <section style={{ marginTop: 32 }}><h3 style={{ fontSize: 24 }}>{section.heading}</h3>{section.body ? <p style={{ lineHeight: 1.7, opacity: .72 }}>{section.body}</p> : null}<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 14, marginTop: 18 }}>{items.map((item, i) => <div key={i} style={{ border: "1px solid rgba(127,127,127,.22)", borderRadius: 14, padding: 18 }}><strong>{item.title}</strong><p style={{ marginBottom: 0, opacity: .72, lineHeight: 1.6 }}>{item.body}</p></div>)}</div></section>;
+  if (section.type === "image-text") return <section style={{ display: "grid", gridTemplateColumns: section.imageUrl ? "minmax(0,1fr) minmax(0,1fr)" : "1fr", gap: 24, alignItems: "center", marginTop: 32 }}>{section.imageUrl ? <img src={section.imageUrl} alt={section.imageAlt || ""} style={{ width: "100%", maxHeight: 360, objectFit: "cover", borderRadius: 18 }} /> : null}<div><h3 style={{ fontSize: 24 }}>{section.heading}</h3><p style={{ lineHeight: 1.75, opacity: .72, whiteSpace: "pre-wrap" }}>{section.body}</p></div></section>;
+  return <section style={{ marginTop: 30 }}><h3 style={{ fontSize: 24, marginBottom: 8 }}>{section.heading}</h3><p style={{ lineHeight: 1.75, opacity: .72, whiteSpace: "pre-wrap" }}>{section.body}</p>{section.buttonLabel ? <a href={safeHref(section.buttonHref)} style={{ color: accent, fontWeight: 700 }}>{section.buttonLabel}</a> : null}</section>;
+}
+
+export function WebsiteRenderer({ content, pageSlug, preview = false }: { content: WebsiteContent; pageSlug?: string; preview?: boolean }) {
+  const page: WebsitePage = content.pages.find((candidate) => candidate.slug === pageSlug) ?? content.pages.find((candidate) => candidate.slug === "home") ?? content.pages[0];
+  const brand = content.brand;
+  const primary = brand?.primary || content.colors?.primary || "#2A57E8";
+  const accent = brand?.accent || content.colors?.accent || "#14B8A6";
+  const background = brand?.background || "#FFFFFF";
+  const text = brand?.text || "#0B1220";
+  const bold = content.template === "BOLD";
+  const minimal = content.template === "MINIMAL";
+  return <div style={{ minHeight: "100%", background, color: text, fontFamily: fontFamily(brand?.bodyFont || "system") }}>
+    <header style={{ borderBottom: "1px solid rgba(127,127,127,.18)", padding: "16px 5%", display: "flex", gap: 24, alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>{brand?.logoUrl ? <img src={brand.logoUrl} alt="" style={{ width: 36, height: 36, objectFit: "contain" }} /> : null}<strong style={{ fontFamily: fontFamily(brand?.headingFont || "system"), fontSize: 18 }}>{content.businessName}</strong></div>
+      <nav style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>{(content.navigation.length ? content.navigation : content.pages.map((p) => ({ label: p.title, pageSlug: p.slug }))).map((item) => <a key={`${item.pageSlug}-${item.label}`} href={preview ? `#${item.pageSlug}` : item.pageSlug === "home" ? "./" : `./${item.pageSlug}`} style={{ color: text, textDecoration: "none", fontSize: 14 }}>{item.label}</a>)}</nav>
+    </header>
+    <main>
+      <section style={{ padding: bold ? "88px 7%" : minimal ? "58px 7%" : "72px 7%", background: minimal ? background : `linear-gradient(135deg, ${primary}, ${accent})`, color: minimal ? text : "white" }}>
+        <div style={{ maxWidth: 980, margin: "0 auto" }}><p style={{ fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", opacity: .75 }}>{page.title}</p><h1 style={{ fontFamily: fontFamily(brand?.headingFont || "system"), fontSize: bold ? 54 : 42, lineHeight: 1.08, margin: "10px 0" }}>{page.headline || content.businessName}</h1>{page.subheadline ? <p style={{ maxWidth: 720, fontSize: 19, lineHeight: 1.65, opacity: .88 }}>{page.subheadline}</p> : null}</div>
+      </section>
+      <div style={{ maxWidth: 980, margin: "0 auto", padding: "24px 7% 64px" }}>{page.sections.map((section, index) => <Section key={section.id || index} section={section} accent={accent} />)}{page.faqs.length ? <section style={{ marginTop: 36 }}><h3 style={{ fontSize: 25 }}>Frequently asked questions</h3>{page.faqs.map((faq, i) => <details key={i} style={{ padding: "14px 0", borderBottom: "1px solid rgba(127,127,127,.2)" }}><summary style={{ fontWeight: 700, cursor: "pointer" }}>{faq.question}</summary><p style={{ opacity: .72, lineHeight: 1.7 }}>{faq.answer}</p></details>)}</section> : null}</div>
+    </main>
+    <footer style={{ padding: "28px 7%", borderTop: "1px solid rgba(127,127,127,.18)", textAlign: "center", fontSize: 13, opacity: .58 }}>{content.businessName}{content.tagline ? ` · ${content.tagline}` : ""}</footer>
+  </div>;
+}
