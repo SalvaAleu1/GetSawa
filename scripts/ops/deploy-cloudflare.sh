@@ -5,15 +5,18 @@ environment="${1:-}"
 case "$environment" in
   staging)
     export APP_URL="${APP_URL:-https://staging.getsawa.app}"
-    export APP_NAME="${APP_NAME:-GetSawa}"
+    export APP_NAME="GetSawa"
     export WEBSITE_PLATFORM_HOST="${WEBSITE_PLATFORM_HOST:-staging.getsawa.app}"
-    export CLOUDFLARE_WORKER_SERVICE_NAME="${CLOUDFLARE_WORKER_SERVICE_NAME:-getsawa-staging}"
+    export CLOUDFLARE_WORKER_SERVICE_NAME="getsawa-staging"
     ;;
   production)
-    export APP_URL="${APP_URL:-https://getsawa.app}"
-    export APP_NAME="${APP_NAME:-GetSawa}"
-    export WEBSITE_PLATFORM_HOST="${WEBSITE_PLATFORM_HOST:-getsawa.app}"
-    export CLOUDFLARE_WORKER_SERVICE_NAME="${CLOUDFLARE_WORKER_SERVICE_NAME:-getsawa}"
+    # Pre-domain deployment: publish the root Worker to workers.dev first.
+    # Cloudflare assigns the exact public hostname after upload, so do not bake
+    # a future custom domain into the application during this phase.
+    export APP_NAME="GetSawa"
+    export CLOUDFLARE_WORKER_SERVICE_NAME="getsawa"
+    if [[ "${APP_URL:-}" == "https://getsawa.app" ]]; then unset APP_URL; fi
+    if [[ "${WEBSITE_PLATFORM_HOST:-}" == "getsawa.app" ]]; then unset WEBSITE_PLATFORM_HOST; fi
     ;;
   *)
     echo "Usage: $0 {staging|production}" >&2
@@ -51,11 +54,6 @@ if [[ -z "$migration_database_url" ]]; then
   exit 1
 fi
 
-# Count existing application tables using the direct database connection.
-# A brand-new Neon database has zero public base tables. Only in that exact
-# state do we bootstrap the current Prisma schema. Historical raw-SQL tables
-# are replayed by repair-baselined-database.mjs before those migrations are
-# marked applied, so the physical schema always matches migration history.
 user_table_count="$(DATABASE_URL="$migration_database_url" node <<'NODE'
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
@@ -87,9 +85,6 @@ if [[ "$user_table_count" == "0" ]]; then
     DATABASE_URL="$migration_database_url" npx prisma migrate resolve --applied "$migration_name"
   done
 else
-  # Reconcile databases that were bootstrapped by the earlier db-push-only flow.
-  # The repair script is a no-op when all retained operational tables exist and
-  # fails closed if it finds a partial schema.
   DIRECT_URL="$migration_database_url" DATABASE_URL="$migration_database_url" node scripts/ops/repair-baselined-database.mjs
 
   echo "Existing database detected. Applying committed Prisma migrations..."
@@ -114,8 +109,6 @@ printf 'Building GetSawa for Cloudflare environment %s...\n' "$environment"
 if [[ "$environment" == "staging" ]]; then
   npx opennextjs-cloudflare build --env=staging
 else
-  # Production is the connected root Worker (`getsawa`), not a Wrangler
-  # environment suffix. This keeps the repository name aligned with Workers Builds.
   npx opennextjs-cloudflare build
 fi
 
@@ -130,6 +123,6 @@ if [[ "$environment" == "staging" ]]; then
   APP_URL="https://staging.getsawa.app" ./scripts/ops/verify-deployment-health.sh
 else
   npx opennextjs-cloudflare deploy -- --keep-vars
-  echo "Production Worker uploaded as getsawa."
-  echo "getsawa.app is intentionally not attached by Wrangler until the domain is an active Cloudflare zone; attach it under Worker Settings > Domains & Routes after DNS onboarding."
+  echo "GetSawa Worker uploaded as 'getsawa' with workers.dev enabled."
+  echo "Use the workers.dev URL printed by Wrangler for preview/testing. No custom domain is required at this stage."
 fi
