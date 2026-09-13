@@ -68,7 +68,10 @@ async function resolvePublic(name: string, type: "MX" | "CNAME" | "TXT"): Promis
 function publicMxMatches(answer: string, required: EmailDnsRecord) {
   const match = answer.trim().match(/^(\d+)\s+(.+)$/);
   if (!match) return false;
-  return Number(match[1]) === Number(required.priority ?? 0) && normalizeValue(match[2]) === normalizeValue(required.value);
+  const priority = match[1];
+  const target = match[2];
+  if (priority == null || target == null) return false;
+  return Number(priority) === Number(required.priority ?? 0) && normalizeValue(target) === normalizeValue(required.value);
 }
 
 function publicCnameMatches(answer: string, required: EmailDnsRecord) {
