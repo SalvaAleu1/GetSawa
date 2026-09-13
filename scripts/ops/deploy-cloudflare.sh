@@ -3,8 +3,22 @@ set -Eeuo pipefail
 
 environment="${1:-}"
 case "$environment" in
-  staging|production) ;;
-  *) echo "Usage: $0 {staging|production}" >&2; exit 2 ;;
+  staging)
+    export APP_URL="${APP_URL:-https://staging.getsawa.app}"
+    export APP_NAME="${APP_NAME:-GetSawa}"
+    export WEBSITE_PLATFORM_HOST="${WEBSITE_PLATFORM_HOST:-staging.getsawa.app}"
+    export CLOUDFLARE_WORKER_SERVICE_NAME="${CLOUDFLARE_WORKER_SERVICE_NAME:-getsawa-staging}"
+    ;;
+  production)
+    export APP_URL="${APP_URL:-https://getsawa.app}"
+    export APP_NAME="${APP_NAME:-GetSawa}"
+    export WEBSITE_PLATFORM_HOST="${WEBSITE_PLATFORM_HOST:-getsawa.app}"
+    export CLOUDFLARE_WORKER_SERVICE_NAME="${CLOUDFLARE_WORKER_SERVICE_NAME:-getsawa-production}"
+    ;;
+  *)
+    echo "Usage: $0 {staging|production}" >&2
+    exit 2
+    ;;
 esac
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
