@@ -78,18 +78,18 @@ Unified operational workspace over the existing production sources of truth: cus
 Tracked internal campaigns with click/paid-conversion attribution, scheduled campaign metadata, homepage announcements and scheduled banner controls, CMS slots, existing blog/promotions/coupons integration, idempotent affiliate commissions, paid-order approval validation, pre-payout refund/dispute revalidation, real PayPal payouts and conversion reporting. Campaign destinations are internal-only to prevent open redirects. Verification evidence is documented in `docs/PHASE21_VERIFICATION.md`.
 
 ### Phase 22 — Support, notifications, transactional messaging and webhook health — DONE
-Durable in-app/email delivery ledger, immediate send plus retry/backoff state, Cloudflare retry cron, customer notification center, order/support delivery migration, support first-response SLA state, internal notes, urgent/reply escalation, delivery failure alerts, manual retry/acknowledgement controls and visibility into failed inbound provider webhook processing. Public outbound webhook subscriptions remain intentionally reserved for Phase 23. Verification evidence is documented in `docs/PHASE22_VERIFICATION.md`.
+Durable in-app/email delivery ledger, immediate send plus retry/backoff state, Cloudflare retry cron, customer notification center, order/support delivery migration, support first-response SLA state, internal notes, urgent/reply escalation, delivery failure alerts, manual retry/acknowledgement controls and visibility into failed inbound provider webhook processing. Verification evidence is documented in `docs/PHASE22_VERIFICATION.md`.
 
-### Phase 23 — Developer API and integration platform — CURRENT
-API keys/scopes, rate limits, domain/product/customer-safe APIs, webhook subscriptions, API documentation, usage logs, revocation, idempotency and developer onboarding.
+### Phase 23 — Developer API and integration platform — DONE
+Scoped one-time API keys, ownership-safe domain/order APIs, commerce-ready product API, durable request IDs/usage logs, per-key rate limits, encrypted webhook signing secrets, public-HTTPS webhook validation, signed asynchronous webhook delivery/retry, idempotent test sends, revocation, usage visibility and implementation-backed developer documentation. Order lifecycle events feed developer subscriptions without allowing receiver failures to affect commerce. Verification evidence is documented in `docs/PHASE23_VERIFICATION.md`.
 
-### Phase 24 — Security, abuse prevention and compliance controls — UPCOMING
-Authorization review, CSRF/session protections, rate limiting, fraud/abuse controls, audit coverage, encrypted secrets, staff permissions, data minimization, privacy controls, incident hooks and security test evidence.
+### Phase 24 — Security, abuse prevention and compliance controls — DONE
+Browser-origin protection for cookie-authenticated mutations, hardened account/admin response headers, Postgres-backed distributed rate limiting, hashed security subjects, login/checkout abuse evidence, payment/dispute review signals, audited abuse controls, Security & Compliance Center, admin-MFA posture, privacy/data export and tracked deletion-review cases. Verification evidence is documented in `docs/PHASE24_VERIFICATION.md`; penetration testing and legal/regulatory certification remain later launch gates.
 
-### Phase 25 — Analytics, observability and finance reporting — UPCOMING
-Business KPIs, product revenue/margin, cohort/conversion funnels, provider health, cron/job status, error reporting, structured logs, performance telemetry, reconciliation dashboards and exportable finance reports.
+### Phase 25 — Analytics, observability and finance reporting — DONE
+Authoritative finance/business/growth/support KPIs, product revenue and current-cost margin estimates with unknown-cost disclosure, 30-day signup activation cohorts, provider health, Developer API latency, Cloudflare cron run history, sanitized application-error fingerprints, daily analytics snapshots, finance CSV export and reconciliation-gap dashboards for finance events, refunds, provider/developer webhooks and transactional messaging. Verification evidence is documented in `docs/PHASE25_VERIFICATION.md`; production telemetry validation remains a Cloudflare staging gate.
 
-### Phase 26 — Performance, accessibility, SEO and PWA/mobile quality — UPCOMING
+### Phase 26 — Performance, accessibility, SEO and PWA/mobile quality — CURRENT
 Core Web Vitals, caching, image/font strategy, keyboard/screen-reader accessibility, metadata/schema/SEO, sitemap/robots, responsive QA, installable PWA where appropriate and poor-network behavior.
 
 ### Phase 27 — Backup, disaster recovery and operational runbooks — UPCOMING
