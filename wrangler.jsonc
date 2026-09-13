@@ -48,8 +48,14 @@
       }
     },
     "production": {
-      "workers_dev": true,
+      "workers_dev": false,
       "keep_vars": true,
+      "routes": [
+        {
+          "pattern": "getsawa.app",
+          "custom_domain": true
+        }
+      ],
       "vars": {
         "APP_ENV": "production",
         "APP_URL": "https://getsawa.app",
@@ -58,7 +64,20 @@
         "CLOUDFLARE_WORKER_SERVICE_NAME": "getsawa-production"
       },
       "triggers": {
-        "crons": []
+        "crons": [
+          "17 * * * *",
+          "37 * * * *",
+          "*/10 * * * *",
+          "13 * * * *",
+          "*/15 * * * *",
+          "23 6 * * *",
+          "*/5 * * * *",
+          "7 */6 * * *",
+          "*/6 * * * *",
+          "9,39 * * * *",
+          "41 3 * * *",
+          "31 2 * * *"
+        ]
       }
     }
   }

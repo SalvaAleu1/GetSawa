@@ -12,6 +12,11 @@ cd "$repo_root"
 
 ./scripts/ops/cloudflare-preflight.sh "$environment"
 
+if [[ "$environment" == "production" && "${CONFIRM_PRODUCTION_CUTOVER:-}" != "SWITCH_GETSAWA_TO_CLOUDFLARE" ]]; then
+  echo "Production configuration now owns getsawa.app and activates production crons. Set CONFIRM_PRODUCTION_CUTOVER=SWITCH_GETSAWA_TO_CLOUDFLARE only during the approved Phase 29 cutover." >&2
+  exit 1
+fi
+
 printf 'Checking database migration state for %s...\n' "$environment"
 npx prisma generate
 npx prisma migrate status
@@ -35,8 +40,6 @@ npx opennextjs-cloudflare deploy --env="$environment" -- --keep-vars
 
 if [[ "$environment" == "staging" ]]; then
   APP_URL="https://staging.getsawa.app" ./scripts/ops/verify-deployment-health.sh
-elif [[ -n "${VERIFY_URL:-}" ]]; then
-  APP_URL="$VERIFY_URL" ./scripts/ops/verify-deployment-health.sh
 else
-  echo "Production Worker uploaded without changing getsawa.app. Set VERIFY_URL to its workers.dev/preview URL for HTTP smoke verification."
+  APP_URL="https://getsawa.app" ./scripts/ops/verify-production-cutover.sh
 fi
