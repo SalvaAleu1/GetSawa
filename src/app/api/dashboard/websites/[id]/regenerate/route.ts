@@ -23,17 +23,21 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     const current = normalizeWebsiteContent(editor.content);
     const pageIndex = current.pages.findIndex((page) => page.slug === input.pageSlug);
     if (pageIndex < 0) return jsonError("The selected page does not exist.", 404);
+    const currentPage = current.pages[pageIndex];
+    if (!currentPage) return jsonError("The selected page does not exist.", 404);
     const generated = normalizeWebsiteContent(await provider.generateWebsiteContent({ businessName: current.businessName, businessDescription: editor.project.businessDescription || "", category: editor.project.category || undefined, tone: editor.project.tone || undefined, pages: [input.pageSlug] }));
     const generatedPage = generated.pages[0];
     if (!generatedPage) return jsonError("The AI provider did not return the requested page.", 502);
     const pages = [...current.pages];
     if (input.scope === "PAGE") {
-      pages[pageIndex] = { ...generatedPage, slug: current.pages[pageIndex].slug, title: current.pages[pageIndex].title };
+      pages[pageIndex] = { ...generatedPage, slug: currentPage.slug, title: currentPage.title };
     } else {
-      if (input.sectionIndex == null || !current.pages[pageIndex].sections[input.sectionIndex]) return jsonError("The selected section does not exist.", 404);
+      if (input.sectionIndex == null || !currentPage.sections[input.sectionIndex]) return jsonError("The selected section does not exist.", 404);
       const replacement = generatedPage.sections[input.sectionIndex] ?? generatedPage.sections[0];
       if (!replacement) return jsonError("The AI provider did not return replacement section content.", 502);
-      const sections = [...current.pages[pageIndex].sections]; sections[input.sectionIndex] = replacement; pages[pageIndex] = { ...current.pages[pageIndex], sections };
+      const sections = [...currentPage.sections];
+      sections[input.sectionIndex] = replacement;
+      pages[pageIndex] = { ...currentPage, sections };
     }
     const result = await saveWebsiteDocument({ projectId: id, userId: user.id, content: { ...current, pages }, note: `AI regenerated ${input.scope.toLowerCase()} ${input.pageSlug}`, baseVersionId: input.baseVersionId });
     await logAudit({ actorId: user.id, action: "website.ai_regenerated", resource: "website_project", resourceId: id, metadata: { scope: input.scope, pageSlug: input.pageSlug, sectionIndex: input.sectionIndex ?? null, versionId: result.version.id } });
