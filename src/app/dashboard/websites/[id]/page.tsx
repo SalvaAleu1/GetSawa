@@ -1,231 +1,30 @@
 "use client";
-
-import { useEffect, useState, useCallback } from "react";
+import { useCallback,useEffect,useMemo,useState } from "react";
 import { useParams } from "next/navigation";
-import { WebsiteContent } from "@/lib/ai/website-schema";
+import type { WebsiteContent,WebsitePage,WebsiteSection } from "@/lib/ai/website-schema";
+import { WebsiteRenderer } from "@/components/websites/WebsiteRenderer";
 
-interface Project {
-  id: string;
-  name: string;
-  slug: string;
-  status: string;
-  content: WebsiteContent | null;
-  domainId: string | null;
-  domainConnectionStatus: string | null;
-}
-
-const PAGE_OPTIONS = ["home", "about", "services", "pricing", "contact", "faq"];
-
-export default function WebsiteEditorPage() {
-  const { id } = useParams<{ id: string }>();
-  const [project, setProject] = useState<Project | null>(null);
-  const [content, setContent] = useState<WebsiteContent | null>(null);
-  const [selectedPages, setSelectedPages] = useState<string[]>(["home", "about", "services", "contact"]);
-  const [generating, setGenerating] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
-  const [selectedDomain, setSelectedDomain] = useState("");
-  const [connectMessage, setConnectMessage] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/dashboard/websites/${id}`);
-    const data = await res.json();
-    if (res.ok) {
-      setProject(data.project);
-      setContent(data.project.content);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    load();
-    fetch("/api/dashboard/domains").then((r) => r.json()).then((d) => setDomains((d.domains || []).map((x: any) => ({ id: x.id, name: x.name }))));
-  }, [load]);
-
-  async function handleGenerate() {
-    setGenerating(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/dashboard/websites/${id}/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pages: selectedPages }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Generation failed.");
-      setProject(data.project);
-      setContent(data.project.content);
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  async function handleSave() {
-    if (!content) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/dashboard/websites/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, note: "Manual edit" }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not save.");
-      setProject(data.project);
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handlePublish(publish: boolean) {
-    const res = await fetch(`/api/dashboard/websites/${id}/publish`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ publish }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error);
-      return;
-    }
-    setProject(data.project);
-  }
-
-  async function handleConnectDomain() {
-    if (!selectedDomain) return;
-    const res = await fetch(`/api/dashboard/websites/${id}/connect-domain`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ domainId: selectedDomain }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error);
-      return;
-    }
-    setConnectMessage(data.instructions);
-    setProject(data.project);
-  }
-
-  function updatePage(index: number, patch: Partial<WebsiteContent["pages"][number]>) {
-    if (!content) return;
-    const pages = content.pages.map((p, i) => (i === index ? { ...p, ...patch } : p));
-    setContent({ ...content, pages });
-  }
-
-  if (!project) return <p className="text-ink/60">Loading…</p>;
-
-  return (
-    <div>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">{project.name}</h1>
-          <p className="text-sm text-ink/50">/sites/{project.slug}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={project.status === "PUBLISHED" ? "badge-success" : "badge-neutral"}>{project.status}</span>
-          {project.status === "PUBLISHED" ? (
-            <button onClick={() => handlePublish(false)} className="btn-secondary">Unpublish</button>
-          ) : (
-            <button onClick={() => handlePublish(true)} className="btn-primary">Publish</button>
-          )}
-        </div>
-      </div>
-
-      {error && <p className="mt-4 text-sm text-danger">{error}</p>}
-
-      {!content && (
-        <div className="card mt-6 p-6">
-          <p className="font-medium">Generate your website content</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {PAGE_OPTIONS.map((p) => (
-              <label key={p} className="flex items-center gap-1.5 text-sm">
-                <input
-                  type="checkbox"
-                  checked={selectedPages.includes(p)}
-                  onChange={(e) =>
-                    setSelectedPages(e.target.checked ? [...selectedPages, p] : selectedPages.filter((x) => x !== p))
-                  }
-                />
-                {p}
-              </label>
-            ))}
-          </div>
-          <button onClick={handleGenerate} disabled={generating} className="btn-primary mt-4">
-            {generating ? "Generating…" : "Generate with AI"}
-          </button>
-        </div>
-      )}
-
-      {content && (
-        <div className="mt-6 space-y-6">
-          <div className="card p-6">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="label">Business name</label>
-                <input className="input" value={content.businessName} onChange={(e) => setContent({ ...content, businessName: e.target.value })} />
-              </div>
-              <div>
-                <label className="label">Tagline</label>
-                <input className="input" value={content.tagline || ""} onChange={(e) => setContent({ ...content, tagline: e.target.value })} />
-              </div>
-            </div>
-          </div>
-
-          {content.pages.map((page, i) => (
-            <div key={page.slug} className="card p-6">
-              <h3 className="font-semibold capitalize">{page.slug}</h3>
-              <div className="mt-3 grid gap-3">
-                <input className="input" placeholder="Headline" value={page.headline || ""} onChange={(e) => updatePage(i, { headline: e.target.value })} />
-                <input className="input" placeholder="Subheadline" value={page.subheadline || ""} onChange={(e) => updatePage(i, { subheadline: e.target.value })} />
-                {page.sections.map((s, si) => (
-                  <div key={si} className="rounded-lg border border-border p-3">
-                    <input
-                      className="input mb-2"
-                      value={s.heading}
-                      onChange={(e) => {
-                        const sections = page.sections.map((x, idx) => (idx === si ? { ...x, heading: e.target.value } : x));
-                        updatePage(i, { sections });
-                      }}
-                    />
-                    <textarea
-                      className="input"
-                      rows={2}
-                      value={s.body}
-                      onChange={(e) => {
-                        const sections = page.sections.map((x, idx) => (idx === si ? { ...x, body: e.target.value } : x));
-                        updatePage(i, { sections });
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          <button onClick={handleSave} disabled={saving} className="btn-primary">{saving ? "Saving…" : "Save changes"}</button>
-        </div>
-      )}
-
-      <div className="card mt-6 p-6">
-        <h3 className="font-semibold">Connect a domain</h3>
-        <p className="mt-1 text-sm text-ink/60">
-          Point one of your registered domains at this site. Your site stays reachable at /sites/{project.slug} either way.
-        </p>
-        <div className="mt-3 flex gap-2">
-          <select className="input max-w-xs" value={selectedDomain} onChange={(e) => setSelectedDomain(e.target.value)}>
-            <option value="">Select a domain…</option>
-            {domains.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
-          <button onClick={handleConnectDomain} disabled={!selectedDomain} className="btn-secondary">Connect</button>
-        </div>
-        {connectMessage && <p className="mt-3 text-sm text-ink/60">{connectMessage}</p>}
-      </div>
-    </div>
-  );
-}
+type Version={id:string;note:string|null;createdAt:string};type Project={id:string;name:string;slug:string;status:string;content:WebsiteContent|null};
+const PAGE_OPTIONS=["home","about","services","pricing","contact","faq","gallery"];
+const emptySection=():WebsiteSection=>({id:crypto.randomUUID(),type:"text",heading:"New section",body:"Add useful content here.",items:[]});
+export default function WebsiteEditorPage(){const{id}=useParams<{id:string}>();const[project,setProject]=useState<Project|null>(null);const[content,setContent]=useState<WebsiteContent|null>(null);const[versions,setVersions]=useState<Version[]>([]);const[baseVersionId,setBaseVersionId]=useState<string|null>(null);const[aiConfigured,setAiConfigured]=useState(false);const[selectedPage,setSelectedPage]=useState("home");const[selectedPages,setSelectedPages]=useState(["home","about","services","contact"]);const[viewport,setViewport]=useState<"desktop"|"tablet"|"mobile">("desktop");const[busy,setBusy]=useState("");const[error,setError]=useState("");
+const load=useCallback(async()=>{const r=await fetch(`/api/dashboard/websites/${id}`,{cache:"no-store"});const b=await r.json();if(!r.ok)throw new Error(b.error||"Unable to load website editor.");const d=b.data??b;setProject(d.project);setContent(d.content);setVersions((d.versions||[]).map((v:any)=>({id:v.id,note:v.note,createdAt:v.createdAt})));setBaseVersionId(d.state?.last_saved_version_id??d.versions?.[0]?.id??null);setAiConfigured(Boolean(d.aiConfigured));if(d.content?.pages?.length&&!d.content.pages.some((p:any)=>p.slug===selectedPage))setSelectedPage(d.content.pages[0].slug);},[id,selectedPage]);useEffect(()=>{load().catch(e=>setError(e.message));},[load]);
+const pageIndex=content?.pages.findIndex(p=>p.slug===selectedPage)??-1;const page=pageIndex>=0?content?.pages[pageIndex]:undefined;const previewWidth=viewport==="desktop"?"100%":viewport==="tablet"?"760px":"390px";
+function patchPage(patch:Partial<WebsitePage>){if(!content||pageIndex<0)return;const pages=content.pages.map((p,i)=>i===pageIndex?{...p,...patch}:p);setContent({...content,pages});}
+function patchSection(index:number,patch:Partial<WebsiteSection>){if(!page)return;patchPage({sections:page.sections.map((s,i)=>i===index?{...s,...patch}:s)});}
+async function save(note="Manual editor save"){if(!content)return;setBusy("save");setError("");try{const r=await fetch(`/api/dashboard/websites/${id}`,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({content,note,baseVersionId})});const b=await r.json();if(!r.ok)throw new Error(b.error||"Could not save website.");const d=b.data??b;setProject(d.project);setBaseVersionId(d.version.id);await load();}catch(e){setError(e instanceof Error?e.message:"Could not save website.");}finally{setBusy("");}}
+async function generate(){setBusy("generate");setError("");try{const r=await fetch(`/api/dashboard/websites/${id}/generate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pages:selectedPages})});const b=await r.json();if(!r.ok)throw new Error(b.error||"Generation failed.");await load();}catch(e){setError(e instanceof Error?e.message:"Generation failed.");}finally{setBusy("");}}
+async function regenerate(scope:"PAGE"|"SECTION",sectionIndex?:number){if(!page)return;setBusy(`regen-${scope}-${sectionIndex??""}`);setError("");try{const r=await fetch(`/api/dashboard/websites/${id}/regenerate`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scope,pageSlug:page.slug,sectionIndex,baseVersionId})});const b=await r.json();if(!r.ok)throw new Error(b.error||"Regeneration failed.");await load();}catch(e){setError(e instanceof Error?e.message:"Regeneration failed.");}finally{setBusy("");}}
+async function restore(versionId:string){if(!window.confirm("Restore this version as a new current version? Existing history will remain available."))return;setBusy("restore");try{const r=await fetch(`/api/dashboard/websites/${id}/restore`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({versionId})});const b=await r.json();if(!r.ok)throw new Error(b.error||"Restore failed.");await load();}catch(e){setError(e instanceof Error?e.message:"Restore failed.");}finally{setBusy("");}}
+async function publish(publishValue:boolean){if(publishValue&&content)await save("Pre-publish editor save");setBusy("publish");try{const r=await fetch(`/api/dashboard/websites/${id}/publish`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({publish:publishValue})});const b=await r.json();if(!r.ok)throw new Error(b.error||"Publish action failed.");await load();}catch(e){setError(e instanceof Error?e.message:"Publish action failed.");}finally{setBusy("");}}
+function addPage(){if(!content)return;const base="page";let n=content.pages.length+1;let slug=`${base}-${n}`;while(content.pages.some(p=>p.slug===slug)){n++;slug=`${base}-${n}`;}const next:WebsitePage={slug,title:`Page ${n}`,noIndex:false,headline:`Page ${n}`,subheadline:"",sections:[emptySection()],faqs:[]};setContent({...content,pages:[...content.pages,next],navigation:[...content.navigation,{label:next.title,pageSlug:slug}]});setSelectedPage(slug);}
+function removePage(){if(!content||!page||content.pages.length<=1)return;if(!window.confirm(`Remove ${page.title}? Save to create a version after this change.`))return;const pages=content.pages.filter(p=>p.slug!==page.slug);setContent({...content,pages,navigation:content.navigation.filter(n=>n.pageSlug!==page.slug)});setSelectedPage(pages[0].slug);}
+function addAsset(){if(!content)return;const url=window.prompt("HTTPS image or asset URL");if(!url)return;const name=window.prompt("Asset name")||"Asset";const alt=window.prompt("Accessible alt text")||"";setContent({...content,assets:[...content.assets,{id:crypto.randomUUID(),name,url,alt}]});}
+if(!project)return <p className="text-ink/60">Loading editor…</p>;
+return <main className="space-y-5"><header className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-sm text-ink/50">Website editor</p><h1 className="text-2xl font-bold">{project.name}</h1><p className="text-xs text-ink/45">Preview path: /sites/{project.slug}</p></div><div className="flex gap-2"><span className={project.status==="PUBLISHED"?"badge-success":"badge-neutral"}>{project.status}</span><button className="btn-secondary" disabled={!content||busy!==""} onClick={()=>void save()}>{busy==="save"?"Saving…":"Save version"}</button><button className="btn-primary" disabled={!content||busy!==""} onClick={()=>void publish(project.status!=="PUBLISHED")}>{busy==="publish"?"Working…":project.status==="PUBLISHED"?"Unpublish":"Publish snapshot"}</button></div></header>{error&&<div className="rounded-xl border border-danger/20 bg-danger/5 p-4 text-sm text-danger">{error}</div>}
+{!content?<section className="card p-6"><h2 className="text-lg font-bold">Create the first version</h2><p className="mt-1 text-sm text-ink/55">Choose the pages you need. AI output is schema-validated and becomes editable structured content, never executable generated HTML.</p><div className="mt-4 flex flex-wrap gap-3">{PAGE_OPTIONS.map(p=><label key={p} className="text-sm"><input type="checkbox" className="mr-2" checked={selectedPages.includes(p)} onChange={e=>setSelectedPages(e.target.checked?[...selectedPages,p]:selectedPages.filter(x=>x!==p))}/>{p}</label>)}</div><button className="btn-primary mt-5" disabled={!aiConfigured||busy!==""} onClick={()=>void generate()}>{busy==="generate"?"Generating…":aiConfigured?"Generate with AI":"AI provider not configured"}</button></section>:<div className="grid gap-5 xl:grid-cols-[420px_minmax(0,1fr)]"><aside className="space-y-5"><section className="card p-5"><h2 className="font-bold">Design system</h2><div className="mt-4 grid gap-3"><label className="label">Template<select className="input mt-1" value={content.template} onChange={e=>setContent({...content,template:e.target.value as WebsiteContent["template"]})}>{["MODERN","CLASSIC","BOLD","MINIMAL"].map(t=><option key={t}>{t}</option>)}</select></label><label className="label">Business name<input className="input mt-1" value={content.businessName} onChange={e=>setContent({...content,businessName:e.target.value})}/></label><label className="label">Tagline<input className="input mt-1" value={content.tagline||""} onChange={e=>setContent({...content,tagline:e.target.value})}/></label><div className="grid grid-cols-2 gap-3"><label className="label">Primary<input className="input mt-1 h-10" type="color" value={content.brand.primary} onChange={e=>setContent({...content,brand:{...content.brand,primary:e.target.value}})}/></label><label className="label">Accent<input className="input mt-1 h-10" type="color" value={content.brand.accent} onChange={e=>setContent({...content,brand:{...content.brand,accent:e.target.value}})}/></label></div><label className="label">Logo URL<input className="input mt-1" placeholder="https://..." value={content.brand.logoUrl||""} onChange={e=>setContent({...content,brand:{...content.brand,logoUrl:e.target.value||undefined}})}/></label></div></section>
+<section className="card p-5"><div className="flex items-center justify-between"><h2 className="font-bold">Pages & navigation</h2><button className="btn-secondary" onClick={addPage}>Add page</button></div><div className="mt-3 space-y-2">{content.pages.map(p=><button key={p.slug} onClick={()=>setSelectedPage(p.slug)} className={`w-full rounded-lg border px-3 py-2 text-left text-sm ${selectedPage===p.slug?"border-brand-500 bg-brand-50":"border-border"}`}>{p.title}<span className="block text-xs text-ink/45">/{p.slug}</span></button>)}</div>{content.pages.length>1&&<button className="mt-3 text-sm text-danger" onClick={removePage}>Remove selected page</button>}</section>
+<section className="card p-5"><div className="flex justify-between"><h2 className="font-bold">Assets</h2><button className="btn-secondary" onClick={addAsset}>Add URL asset</button></div><p className="mt-2 text-xs text-ink/50">Phase 18 accepts validated http(s) asset URLs. Direct object-storage uploads stay hidden until storage credentials are genuinely configured.</p><div className="mt-3 space-y-2">{content.assets.map(a=><div key={a.id} className="rounded-lg border border-border p-2 text-xs"><p className="font-semibold">{a.name}</p><p className="truncate text-ink/45">{a.url}</p><button className="mt-1 text-danger" onClick={()=>setContent({...content,assets:content.assets.filter(x=>x.id!==a.id)})}>Remove</button></div>)}</div></section>
+<section className="card p-5"><h2 className="font-bold">Version history</h2><div className="mt-3 max-h-64 space-y-2 overflow-y-auto">{versions.map(v=><div key={v.id} className="rounded-lg border border-border p-2"><p className="text-xs font-semibold">{v.note||"Saved version"}</p><p className="text-[11px] text-ink/45">{new Date(v.createdAt).toLocaleString()}</p><button className="mt-1 text-xs font-semibold text-brand-600" disabled={busy!==""} onClick={()=>void restore(v.id)}>Restore</button></div>)}</div></section></aside>
+<section className="space-y-5">{page&&<div className="card p-5"><div className="flex flex-wrap justify-between gap-2"><div><h2 className="text-lg font-bold">{page.title}</h2><p className="text-xs text-ink/45">/{page.slug}</p></div><button className="btn-secondary" disabled={!aiConfigured||busy!==""} onClick={()=>void regenerate("PAGE")}>Regenerate page</button></div><div className="mt-4 grid gap-3 md:grid-cols-2"><label className="label">Page title<input className="input mt-1" value={page.title} onChange={e=>patchPage({title:e.target.value})}/></label><label className="label">Slug<input className="input mt-1" value={page.slug} disabled title="Changing slugs is intentionally disabled to preserve navigation references."/></label><label className="label md:col-span-2">Headline<input className="input mt-1" value={page.headline||""} onChange={e=>patchPage({headline:e.target.value})}/></label><label className="label md:col-span-2">Subheadline<textarea className="input mt-1" rows={2} value={page.subheadline||""} onChange={e=>patchPage({subheadline:e.target.value})}/></label><label className="label">SEO title<input className="input mt-1" maxLength={70} value={page.seoTitle||""} onChange={e=>patchPage({seoTitle:e.target.value})}/></label><label className="label">No index<div className="mt-3"><input type="checkbox" checked={page.noIndex} onChange={e=>patchPage({noIndex:e.target.checked})}/> <span className="text-sm">Hide this page from search engines</span></div></label><label className="label md:col-span-2">Meta description<textarea className="input mt-1" maxLength={160} rows={2} value={page.metaDescription||""} onChange={e=>patchPage({metaDescription:e.target.value})}/></label></div><div className="mt-5 space-y-3">{page.sections.map((s,i)=><div key={s.id||i} className="rounded-xl border border-border p-4"><div className="flex flex-wrap items-center justify-between gap-2"><select className="input max-w-44" value={s.type} onChange={e=>patchSection(i,{type:e.target.value as WebsiteSection["type"]})}>{["text","feature-grid","image-text","cta","stats","faq"].map(t=><option key={t}>{t}</option>)}</select><div className="flex gap-2"><button className="btn-secondary" disabled={!aiConfigured||busy!==""} onClick={()=>void regenerate("SECTION",i)}>AI rewrite</button><button className="text-sm text-danger" onClick={()=>patchPage({sections:page.sections.filter((_,idx)=>idx!==i)})}>Remove</button></div></div><input className="input mt-3" value={s.heading} onChange={e=>patchSection(i,{heading:e.target.value})}/><textarea className="input mt-2" rows={4} value={s.body} onChange={e=>patchSection(i,{body:e.target.value})}/>{s.type==="image-text"&&<input className="input mt-2" placeholder="https:// image URL" value={s.imageUrl||""} onChange={e=>patchSection(i,{imageUrl:e.target.value||undefined})}/>}</div>)}<button className="btn-secondary" onClick={()=>patchPage({sections:[...page.sections,emptySection()]})}>Add section</button></div></div>}
+<div className="card overflow-hidden"><div className="flex flex-wrap items-center justify-between border-b border-border p-3"><div><p className="font-bold">Responsive preview</p><p className="text-xs text-ink/45">Uses the same safe structured renderer as published sites.</p></div><div className="flex gap-1">{(["desktop","tablet","mobile"] as const).map(v=><button key={v} onClick={()=>setViewport(v)} className={viewport===v?"btn-primary":"btn-secondary"}>{v}</button>)}</div></div><div className="overflow-auto bg-ink/5 p-4"><div className="mx-auto min-h-[600px] overflow-hidden rounded-xl bg-white shadow" style={{width:previewWidth,maxWidth:"100%"}}><WebsiteRenderer content={content} pageSlug={selectedPage} preview/></div></div></div></section></div>}</main>}
