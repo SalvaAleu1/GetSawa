@@ -25,7 +25,9 @@
     "deploy:cloudflare:production": "bash scripts/ops/deploy-cloudflare.sh production",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "cf-typegen:staging": "wrangler types --env=staging --env-interface CloudflareEnv cloudflare-env.d.ts",
-    "cf-typegen:production": "wrangler types --env=production --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "cf-typegen:production": "wrangler types --env=production --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "ops:launch-readiness": "node scripts/ops/check-launch-readiness.mjs",
+    "ops:monitor-production": "bash scripts/ops/monitor-production.sh"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
