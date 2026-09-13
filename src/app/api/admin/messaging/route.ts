@@ -1,0 +1,16 @@
+import { NextRequest } from "next/server";
+import { z } from "zod";
+import { requireAdmin } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { attemptEmailDelivery,scanOperationalAlerts } from "@/lib/messaging";
+import { jsonError,jsonOk,handleError } from "@/lib/api";
+import { logAudit } from "@/lib/audit";
+export const dynamic="force-dynamic";
+export async function GET(){try{await requireAdmin(["SUPER_ADMIN","ADMIN","SUPPORT","FINANCE"]);await scanOperationalAlerts();const[alerts,deliveries,webhooks,sla]=await Promise.all([
+prisma.$queryRaw<Array<Record<string,unknown>>>`SELECT * FROM "operational_alerts" WHERE "status"<>'RESOLVED' ORDER BY CASE "severity" WHEN 'CRITICAL' THEN 1 WHEN 'WARNING' THEN 2 ELSE 3 END,"created_at" DESC LIMIT 100`,
+prisma.$queryRaw<Array<Record<string,unknown>>>`SELECT "id","event_key","channel","template_key","recipient","subject","status","attempts","error_message","source_type","source_id","sent_at","created_at" FROM "message_deliveries" ORDER BY "created_at" DESC LIMIT 100`,
+prisma.webhookEvent.findMany({orderBy:{receivedAt:"desc"},take:50,select:{id:true,provider:true,eventId:true,eventType:true,processingStatus:true,errorMessage:true,receivedAt:true,processedAt:true}}),
+prisma.$queryRaw<Array<Record<string,unknown>>>`SELECT sto.*,st."subject",st."priority",st."status",st."assignedTo" FROM "support_ticket_ops" sto JOIN "SupportTicket" st ON st."id"=sto."ticket_id" WHERE st."status" IN ('OPEN','PENDING') ORDER BY sto."sla_due_at" ASC NULLS LAST LIMIT 100`
+]);return jsonOk({alerts,deliveries,webhooks,sla});}catch(error){return handleError(error);}}
+const schema=z.discriminatedUnion("action",[z.object({action:z.literal("ALERT_STATUS"),id:z.string(),status:z.enum(["ACKNOWLEDGED","RESOLVED"])}),z.object({action:z.literal("RETRY_DELIVERY"),id:z.string()})]);
+export async function POST(req:NextRequest){try{const admin=await requireAdmin(["SUPER_ADMIN","ADMIN","SUPPORT","FINANCE"]);const input=schema.parse(await req.json());if(input.action==="RETRY_DELIVERY"){const exists=await prisma.$queryRaw<Array<{id:string;status:string}>>`SELECT "id","status" FROM "message_deliveries" WHERE "id"=${input.id} AND "channel"='EMAIL' LIMIT 1`;if(!exists[0])return jsonError("Email delivery not found.",404);if(exists[0].status==="SENT")return jsonOk({sent:true,alreadySent:true});await prisma.$executeRaw`UPDATE "message_deliveries" SET "next_attempt_at"=CURRENT_TIMESTAMP WHERE "id"=${input.id}`;const result=await attemptEmailDelivery(input.id);await logAudit({actorId:admin.id,action:"messaging.delivery_retried",resource:"message_delivery",resourceId:input.id,metadata:result});return jsonOk(result);}const now=input.status==="RESOLVED"?new Date():null;const rows=await prisma.$queryRaw<Array<{dedupe_key:string}>>`UPDATE "operational_alerts" SET "status"=${input.status},"resolved_at"=${now},"updated_at"=CURRENT_TIMESTAMP WHERE "id"=${input.id} RETURNING "dedupe_key"`;if(!rows[0])return jsonError("Operational alert not found.",404);await logAudit({actorId:admin.id,action:"operations.alert_status_changed",resource:"operational_alert",resourceId:input.id,metadata:{status:input.status,dedupeKey:rows[0].dedupe_key}});return jsonOk({status:input.status});}catch(error){return handleError(error);}}

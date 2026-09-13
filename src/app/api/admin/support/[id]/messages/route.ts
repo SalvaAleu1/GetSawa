@@ -2,17 +2,8 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { jsonOk, handleError } from "@/lib/api";
-
-const schema = z.object({ body: z.string().min(1).max(5000), isInternalNote: z.boolean().default(false) });
-type RouteContext = { params: Promise<{ id: string }> };
-export async function POST(req: NextRequest, { params }: RouteContext) {
-  try {
-    const admin = await requireAdmin(["SUPER_ADMIN", "ADMIN", "SUPPORT"]);
-    const { id } = await params;
-    const { body, isInternalNote } = schema.parse(await req.json());
-    const message = await prisma.supportMessage.create({ data: { ticketId: id, authorId: admin.id, body, isInternalNote } });
-    if (!isInternalNote) await prisma.supportTicket.update({ where: { id }, data: { status: "PENDING" } });
-    return jsonOk({ message }, 201);
-  } catch (err) { return handleError(err); }
-}
+import { jsonError,jsonOk,handleError } from "@/lib/api";
+import { deliverCustomerMessage,recordSupportReply,resolveOperationalAlert } from "@/lib/messaging";
+import { logAudit } from "@/lib/audit";
+const schema=z.object({body:z.string().min(1).max(5000),isInternalNote:z.boolean().default(false)});type Ctx={params:Promise<{id:string}>};
+export async function POST(req:NextRequest,{params}:Ctx){try{const admin=await requireAdmin(["SUPER_ADMIN","ADMIN","SUPPORT"]);const{id}=await params;const ticket=await prisma.supportTicket.findUnique({where:{id},include:{user:{select:{id:true,email:true,firstName:true}}}});if(!ticket)return jsonError("Ticket not found.",404);const{body,isInternalNote}=schema.parse(await req.json());const message=await prisma.supportMessage.create({data:{ticketId:id,authorId:admin.id,body,isInternalNote}});if(!isInternalNote){await prisma.supportTicket.update({where:{id},data:{status:"PENDING"}});await recordSupportReply(id,"STAFF");await resolveOperationalAlert(`support-reply:${id}`);await resolveOperationalAlert(`support-urgent:${id}`);const safeBody=body.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c] as string));await deliverCustomerMessage({eventKey:`support:${id}:message:${message.id}`,userId:ticket.user.id,type:"SUPPORT_REPLY",title:`Support replied: ${ticket.subject}`,body:`Our support team replied to your ticket: ${ticket.subject}`,email:{to:ticket.user.email,subject:`GetSawa support: ${ticket.subject}`,html:`<p>Hi ${ticket.user.firstName},</p><p>${safeBody}</p><p>Reply from your GetSawa Support dashboard if you need more help.</p>`},sourceType:"support_ticket",sourceId:id});}await logAudit({actorId:admin.id,action:isInternalNote?"support.internal_note_added":"support.customer_reply_sent",resource:"support_ticket",resourceId:id,metadata:{messageId:message.id}});return jsonOk({message},201);}catch(error){return handleError(error);}}
