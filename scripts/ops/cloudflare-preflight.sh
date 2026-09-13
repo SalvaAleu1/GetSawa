@@ -23,7 +23,14 @@ for command in node npm npx curl; do
   command -v "$command" >/dev/null 2>&1 || { echo "Required command not found: $command" >&2; exit 1; }
 done
 
-required=(APP_URL APP_NAME DATABASE_URL SESSION_SECRET CRON_SECRET CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_API_TOKEN WEBSITE_PLATFORM_HOST CLOUDFLARE_WORKER_SERVICE_NAME)
+required=(APP_URL APP_NAME DATABASE_URL SESSION_SECRET CRON_SECRET CLOUDFLARE_ACCOUNT_ID WEBSITE_PLATFORM_HOST CLOUDFLARE_WORKER_SERVICE_NAME)
+# Local/third-party CI deployments authenticate Wrangler with CLOUDFLARE_API_TOKEN.
+# Cloudflare Workers Builds injects its own deployment identity, so do not require
+# the application's runtime Cloudflare token to be exposed to the build process.
+if [[ "${WORKERS_CI:-}" != "1" ]]; then
+  required+=(CLOUDFLARE_API_TOKEN)
+fi
+
 missing=()
 for key in "${required[@]}"; do
   if [[ -z "${!key:-}" ]]; then missing+=("$key"); fi
