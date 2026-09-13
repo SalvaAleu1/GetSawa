@@ -14,34 +14,45 @@ Before production cutover, ensure:
 - Production provider credentials are available for the products being launched.
 - The current repository `main` is the approved release commit.
 
-## 2. Import the repository into Workers Builds
+## 2. Create the Wrangler environment Worker
 
-In Cloudflare Dashboard:
+GetSawa uses Wrangler environments. Create the environment Worker before connecting Git Builds:
 
-1. Open **Workers & Pages**.
-2. Select **Create application** → **Import a repository**.
-3. Connect GitHub and authorize repository `SalvaAleu1/GetSawa`.
-4. Use branch `main`.
-5. Keep the repository root as `/`.
-6. Configure the production commands below.
+- Staging Worker: `getsawa-staging`
+- Production Worker: `getsawa-production`
 
-### Build command
+A temporary starter/Hello World Worker is sufficient; the first successful GetSawa deployment replaces its code. Configure runtime variables/secrets on that Worker before the repository deployment so `--keep-vars` preserves them.
+
+## 3. Connect the GitHub repository through Workers Builds
+
+In the selected Worker:
+
+1. Open **Settings → Builds → Connect**.
+2. Connect GitHub and authorize repository `SalvaAleu1/GetSawa`.
+3. Use branch `main`.
+4. Keep the repository root as `/`.
+5. Leave **Build command** empty. The guarded GetSawa deployment script performs the OpenNext build itself.
+6. Use the matching deploy command:
+
+### Staging deploy command
 
 ```bash
-npm run build:cloudflare:production
+npm run deploy:cloudflare:staging
 ```
 
-### Deploy command
+### Production deploy command
 
 ```bash
-npx opennextjs-cloudflare deploy --env=production -- --keep-vars
+npm run deploy:cloudflare:production
 ```
 
-The `production` Wrangler environment resolves to Worker `getsawa-production`. Cloudflare Workers Builds supports Wrangler environment Workers; the deploy command must include the matching `--env=production` flag.
+These scripts run Cloudflare preflight, Prisma generation/migration status, the OpenNext build, explicit deployment acknowledgements, Worker upload and post-deploy verification. The `production` Wrangler environment resolves to Worker `getsawa-production`; staging resolves to `getsawa-staging`.
 
-## 3. Build variables and secrets
+## 4. Build variables and secrets
 
-Workers Builds **build variables/secrets** exist only during the build. Configure at least:
+Workers Builds **build variables/secrets** exist only during the deployment job. The guarded deployment script needs the following for the selected environment.
+
+### Production build variables
 
 ```text
 NODE_ENV=production
@@ -55,13 +66,33 @@ CONFIRM_PRODUCTION_CUTOVER=SWITCH_GETSAWA_TO_CLOUDFLARE
 CONFIRM_PRODUCTION_WORKER_UPLOAD=UPLOAD_PRODUCTION_WORKER
 ```
 
-If the Next.js build needs database-backed/static-generation data, also provide `DATABASE_URL` and any other required build-time values as masked build secrets. Do not put long-lived production secrets in source control.
+### Staging build variables
+
+```text
+NODE_ENV=production
+APP_URL=https://staging.getsawa.app
+APP_NAME=GetSawa
+WEBSITE_PLATFORM_HOST=staging.getsawa.app
+CLOUDFLARE_WORKER_SERVICE_NAME=getsawa-staging
+CLOUDFLARE_ACCOUNT_ID=<your account id>
+CONFIRM_STAGING_ISOLATED=STAGING_IS_ISOLATED
+```
+
+### Build secrets required by the guarded script
+
+```text
+DATABASE_URL=<environment database URL>
+SESSION_SECRET=<environment secret>
+CRON_SECRET=<environment secret>
+```
+
+Set `APPLY_DATABASE_MIGRATIONS=APPLY_REVIEWED_MIGRATIONS` only after migration review for that database. Otherwise the deployment script checks migration status without applying migrations.
 
 Cloudflare Workers Builds injects its own deployment identity (`WORKERS_CI=1`), so the application's runtime `CLOUDFLARE_API_TOKEN` does not need to be exposed merely to authenticate the build/deploy step.
 
-## 4. Runtime variables and secrets
+## 5. Runtime variables and secrets
 
-After the Worker exists, open **getsawa-production → Settings → Variables & Secrets** and configure the production runtime values from `.env.example`.
+Before the repository deployment, open the environment Worker → **Settings → Variables & Secrets** and configure the production/staging runtime values from `.env.example`.
 
 Core runtime secrets:
 
@@ -72,39 +103,51 @@ Core runtime secrets:
 - `PAYPAL_CLIENT_ID`
 - `PAYPAL_CLIENT_SECRET`
 - `PAYPAL_WEBHOOK_ID`
-- `SMTP_PASSWORD` and the remaining `SMTP_*` values
+- `SMTP_PASSWORD` and the remaining sensitive `SMTP_*` values
 - `CLOUDFLARE_API_TOKEN` for GetSawa customer DNS/CDN/publishing operations
 - provider credentials for any enabled hosting/email/AI product
 
 Core runtime plain variables include:
 
-- `APP_URL=https://getsawa.app`
+- `APP_URL`
 - `APP_NAME=GetSawa`
-- `WEBSITE_PLATFORM_HOST=getsawa.app`
-- `CLOUDFLARE_WORKER_SERVICE_NAME=getsawa-production`
+- `WEBSITE_PLATFORM_HOST`
+- `CLOUDFLARE_WORKER_SERVICE_NAME`
 - `CLOUDFLARE_ACCOUNT_ID`
 - provider routing defaults from `.env.example`
 
 Blank optional provider credentials intentionally keep those dependent products fail-closed.
 
-## 5. Database migration
+## 6. Database migration
 
-Do not let a production deployment silently guess whether migrations should run. Review migration state against the production database, then run:
+Do not let a production deployment silently guess whether migrations should run. Review migration state against the selected database, then either run explicitly:
 
 ```bash
 npx prisma migrate status
 npx prisma migrate deploy
 ```
 
-The repository deployment wrapper supports the explicit `APPLY_DATABASE_MIGRATIONS=APPLY_REVIEWED_MIGRATIONS` acknowledgement when deploying from an authorized shell.
+or set the deployment acknowledgement:
 
-## 6. Custom domain and crons
+```text
+APPLY_DATABASE_MIGRATIONS=APPLY_REVIEWED_MIGRATIONS
+```
 
-`wrangler.jsonc` already defines the production custom domain `getsawa.app` and the production cron triggers. A production environment deployment therefore changes real traffic and scheduled jobs; do not point DNS/cut over from Vercel until the Worker build and health checks pass.
+The deployment wrapper will then run `prisma migrate deploy` before the OpenNext build.
 
-## 7. Production verification
+## 7. Custom domains and crons
 
-After deploy:
+`wrangler.jsonc` already defines:
+
+- staging custom domain `staging.getsawa.app`
+- production custom domain `getsawa.app`
+- staging and production cron triggers
+
+A production deployment therefore changes real traffic and activates production scheduled jobs. Keep the previous Vercel deployment available until post-deploy checks pass.
+
+## 8. Production verification
+
+The guarded production deploy automatically runs:
 
 ```bash
 APP_URL=https://getsawa.app ./scripts/ops/verify-production-cutover.sh
@@ -126,6 +169,6 @@ Run the final evidence gate only after the real operational evidence exists:
 npm run ops:launch-readiness
 ```
 
-## 8. Rollback
+## 9. Rollback
 
 Retain the previous Vercel production deployment and DNS state until Cloudflare production verification is complete. Follow `docs/operations/VERCEL_TO_CLOUDFLARE_CUTOVER.md` for rollback/cutover steps and `docs/operations/DISASTER_RECOVERY.md` for recovery procedures.
