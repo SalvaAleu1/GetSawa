@@ -14,11 +14,8 @@
     "enabled": true
   },
   "vars": {
-    "APP_ENV": "production",
+    "APP_ENV": "preview",
     "APP_NAME": "GetSawa",
     "CLOUDFLARE_WORKER_SERVICE_NAME": "getsawa"
-  },
-  "triggers": {
-    "crons": ["* * * * *"]
   }
 }
