@@ -21,11 +21,10 @@ export async function deliverCustomerMessage(input: DeliveryInput) {
     VALUES (${crypto.randomUUID()},${`${input.eventKey}:inapp`},${input.userId},'IN_APP',${input.type},'SENT',${input.sourceType ?? null},${input.sourceId ?? null},CURRENT_TIMESTAMP)
     ON CONFLICT ("event_key") DO NOTHING RETURNING "id"
   `;
-  if (inApp[0]) {
-    await prisma.notification.create({ data: { userId: input.userId, type: input.type, title: input.title, body: input.body } });
-  }
+  if (inApp[0]) await prisma.notification.create({ data: { userId: input.userId, type: input.type, title: input.title, body: input.body } });
 
   let emailDeliveryId: string | null = null;
+  let emailSent = false;
   if (input.email) {
     const inserted = await prisma.$queryRaw<Array<{ id:string }>>`
       INSERT INTO "message_deliveries" ("id","event_key","user_id","channel","template_key","recipient","subject","body_html","body_text","status","source_type","source_id")
@@ -33,9 +32,13 @@ export async function deliverCustomerMessage(input: DeliveryInput) {
       ON CONFLICT ("event_key") DO NOTHING RETURNING "id"
     `;
     emailDeliveryId = inserted[0]?.id ?? null;
-    if (emailDeliveryId) await attemptEmailDelivery(emailDeliveryId);
+    if (emailDeliveryId) emailSent = (await attemptEmailDelivery(emailDeliveryId)).sent;
+    else {
+      const prior = await prisma.$queryRaw<Array<{ status:string }>>`SELECT "status" FROM "message_deliveries" WHERE "event_key"=${`${input.eventKey}:email`} LIMIT 1`;
+      emailSent = prior[0]?.status === "SENT";
+    }
   }
-  return { inAppCreated: Boolean(inApp[0]), emailDeliveryId };
+  return { inAppCreated: Boolean(inApp[0]), emailDeliveryId, emailSent };
 }
 
 export async function attemptEmailDelivery(id: string) {
@@ -78,10 +81,7 @@ export async function retryMessageDeliveries(limit = 100) {
 export async function ensureSupportSla(ticketId: string, priority: string) {
   const hours = priority === "URGENT" ? 2 : priority === "HIGH" ? 8 : priority === "LOW" ? 48 : 24;
   const due = new Date(Date.now() + hours * 3600000);
-  await prisma.$executeRaw`
-    INSERT INTO "support_ticket_ops" ("ticket_id","sla_due_at") VALUES (${ticketId},${due})
-    ON CONFLICT ("ticket_id") DO UPDATE SET "sla_due_at"=CASE WHEN "support_ticket_ops"."escalated_at" IS NULL THEN EXCLUDED."sla_due_at" ELSE "support_ticket_ops"."sla_due_at" END,"updated_at"=CURRENT_TIMESTAMP
-  `;
+  await prisma.$executeRaw`INSERT INTO "support_ticket_ops" ("ticket_id","sla_due_at") VALUES (${ticketId},${due}) ON CONFLICT ("ticket_id") DO UPDATE SET "sla_due_at"=CASE WHEN "support_ticket_ops"."escalated_at" IS NULL THEN EXCLUDED."sla_due_at" ELSE "support_ticket_ops"."sla_due_at" END,"updated_at"=CURRENT_TIMESTAMP`;
   return due;
 }
 
@@ -95,22 +95,12 @@ export async function recordSupportReply(ticketId: string, kind: "CUSTOMER" | "S
 }
 
 export async function upsertOperationalAlert(input: { dedupeKey:string;severity:"INFO"|"WARNING"|"CRITICAL";source:string;title:string;body:string;resourceType?:string;resourceId?:string }) {
-  await prisma.$executeRaw`
-    INSERT INTO "operational_alerts" ("id","dedupe_key","severity","source","title","body","resource_type","resource_id","status")
-    VALUES (${crypto.randomUUID()},${input.dedupeKey},${input.severity},${input.source},${input.title},${input.body},${input.resourceType ?? null},${input.resourceId ?? null},'OPEN')
-    ON CONFLICT ("dedupe_key") DO UPDATE SET "severity"=EXCLUDED."severity","title"=EXCLUDED."title","body"=EXCLUDED."body","resource_type"=EXCLUDED."resource_type","resource_id"=EXCLUDED."resource_id","status"='OPEN',"resolved_at"=NULL,"updated_at"=CURRENT_TIMESTAMP
-  `;
+  await prisma.$executeRaw`INSERT INTO "operational_alerts" ("id","dedupe_key","severity","source","title","body","resource_type","resource_id","status") VALUES (${crypto.randomUUID()},${input.dedupeKey},${input.severity},${input.source},${input.title},${input.body},${input.resourceType ?? null},${input.resourceId ?? null},'OPEN') ON CONFLICT ("dedupe_key") DO UPDATE SET "severity"=EXCLUDED."severity","title"=EXCLUDED."title","body"=EXCLUDED."body","resource_type"=EXCLUDED."resource_type","resource_id"=EXCLUDED."resource_id","status"='OPEN',"resolved_at"=NULL,"updated_at"=CURRENT_TIMESTAMP`;
 }
-
-export async function resolveOperationalAlert(dedupeKey: string) {
-  await prisma.$executeRaw`UPDATE "operational_alerts" SET "status"='RESOLVED',"resolved_at"=CURRENT_TIMESTAMP,"updated_at"=CURRENT_TIMESTAMP WHERE "dedupe_key"=${dedupeKey} AND "status"<>'RESOLVED'`;
-}
+export async function resolveOperationalAlert(dedupeKey: string) { await prisma.$executeRaw`UPDATE "operational_alerts" SET "status"='RESOLVED',"resolved_at"=CURRENT_TIMESTAMP,"updated_at"=CURRENT_TIMESTAMP WHERE "dedupe_key"=${dedupeKey} AND "status"<>'RESOLVED'`; }
 
 export async function scanOperationalAlerts() {
-  const overdue = await prisma.$queryRaw<Array<{ ticket_id:string; subject:string; priority:string }>>`
-    SELECT sto."ticket_id",st."subject",st."priority" FROM "support_ticket_ops" sto JOIN "SupportTicket" st ON st."id"=sto."ticket_id"
-    WHERE sto."sla_due_at"<=CURRENT_TIMESTAMP AND sto."last_staff_reply_at" IS NULL AND st."status" IN ('OPEN','PENDING') LIMIT 100
-  `;
+  const overdue = await prisma.$queryRaw<Array<{ ticket_id:string; subject:string; priority:string }>>`SELECT sto."ticket_id",st."subject",st."priority" FROM "support_ticket_ops" sto JOIN "SupportTicket" st ON st."id"=sto."ticket_id" WHERE sto."sla_due_at"<=CURRENT_TIMESTAMP AND sto."last_staff_reply_at" IS NULL AND st."status" IN ('OPEN','PENDING') LIMIT 100`;
   for (const ticket of overdue) {
     await prisma.$executeRaw`UPDATE "support_ticket_ops" SET "escalated_at"=COALESCE("escalated_at",CURRENT_TIMESTAMP),"escalation_reason"=COALESCE("escalation_reason",'First-response SLA exceeded'),"updated_at"=CURRENT_TIMESTAMP WHERE "ticket_id"=${ticket.ticket_id}`;
     await upsertOperationalAlert({ dedupeKey:`support-sla:${ticket.ticket_id}`, severity:ticket.priority === "URGENT" ? "CRITICAL" : "WARNING", source:"support", title:"Support first-response SLA exceeded", body:ticket.subject, resourceType:"support_ticket", resourceId:ticket.ticket_id });
