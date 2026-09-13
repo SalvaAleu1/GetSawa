@@ -36,7 +36,7 @@ export async function withDeveloperApi(
     await recordApiRequest({ client, requestId, method: req.method, route, scope, statusCode: response.status, durationMs: Date.now() - started }).catch(() => undefined);
     return response;
   } catch (error) {
-    const response = error instanceof ApiAuthError ? jsonError(error.message, error.status) : handleError(error);
+    const response = error instanceof ApiAuthError ? jsonError(error.message, error.status) : await handleError(error);
     response.headers.set("X-Request-Id", requestId);
     if (client) await recordApiRequest({ client, requestId, method: req.method, route, scope, statusCode: response.status, durationMs: Date.now() - started }).catch(() => undefined);
     return response;
@@ -70,7 +70,9 @@ export function assertPublicWebhookUrl(raw: string) {
 }
 
 function isPrivateIpv4(parts: number[]) {
-  const [a, b] = parts;
+  if (parts.length !== 4) return true;
+  const a = parts[0]!;
+  const b = parts[1]!;
   return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 198 && (b === 18 || b === 19));
 }
 
