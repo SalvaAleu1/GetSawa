@@ -20,6 +20,15 @@ if [[ -n "${DATABASE_URL:-}" && "$RESTORE_DATABASE_URL" == "$DATABASE_URL" ]]; t
   exit 1
 fi
 
+if [[ -n "${DATABASE_URL:-}" ]]; then
+  source_identity=$(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT coalesce(inet_server_addr()::text,'local') || ':' || inet_server_port() || '/' || current_database();")
+  target_identity=$(psql "$RESTORE_DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT coalesce(inet_server_addr()::text,'local') || ':' || inet_server_port() || '/' || current_database();")
+  if [[ "$source_identity" == "$target_identity" ]]; then
+    echo "Refusing restore: source and target resolve to the same database identity." >&2
+    exit 1
+  fi
+fi
+
 if [[ "${CONFIRM_ISOLATED_RESTORE:-}" != "RESTORE_ISOLATED_DATABASE" ]]; then
   echo "Set CONFIRM_ISOLATED_RESTORE=RESTORE_ISOLATED_DATABASE after verifying the target is isolated." >&2
   exit 1
