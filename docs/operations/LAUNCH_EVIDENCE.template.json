@@ -1,0 +1,30 @@
+{
+  "release": {
+    "commit": "",
+    "operator": "",
+    "reviewer": "",
+    "approvedAt": ""
+  },
+  "gates": {
+    "phase26_runtime_quality": { "passed": false, "evidence": "" },
+    "phase27_restore_drill": { "passed": false, "evidence": "" },
+    "phase28_staging_cloudflare": { "passed": false, "evidence": "" },
+    "phase29_production_cutover": { "passed": false, "evidence": "" },
+    "database_migrations": { "passed": false, "evidence": "" },
+    "security_review": { "passed": false, "evidence": "" },
+    "legal_approval": { "passed": false, "evidence": "" },
+    "support_readiness": { "passed": false, "evidence": "" },
+    "monitoring_alerts": { "passed": false, "evidence": "" },
+    "operator_handover": { "passed": false, "evidence": "" }
+  },
+  "providers": {
+    "namesilo": { "enabled": true, "passed": false, "evidence": "" },
+    "paypal": { "enabled": true, "passed": false, "evidence": "" },
+    "cloudflare": { "enabled": true, "passed": false, "evidence": "" },
+    "smtp": { "enabled": true, "passed": false, "evidence": "" },
+    "whm": { "enabled": false, "passed": false, "evidence": "" },
+    "opensrs_email": { "enabled": false, "passed": false, "evidence": "" },
+    "ai": { "enabled": false, "passed": false, "evidence": "" },
+    "storage": { "enabled": false, "passed": false, "evidence": "" }
+  }
+}
