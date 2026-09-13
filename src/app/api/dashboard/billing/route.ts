@@ -1,77 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth";
-import { jsonOk, handleError } from "@/lib/api";
-import { listCustomerSubscriptions, listRenewalAttemptsForUser } from "@/lib/billing";
-import { getAvailableCustomerCredit, getCustomerCreditBalance } from "@/lib/credits";
+import { jsonOk,handleError } from "@/lib/api";
+import { listCustomerSubscriptions,listRenewalAttemptsForUser } from "@/lib/billing";
+import { getAvailableCustomerCredit,getCustomerCreditBalance } from "@/lib/credits";
 import { prisma } from "@/lib/prisma";
 import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
-
-export const dynamic = "force-dynamic";
-
-export async function GET() {
-  try {
-    const user = await requireUser();
-    const [subscriptions, renewals, creditBalanceCents, availableCreditCents, invoices] = await Promise.all([
-      listCustomerSubscriptions(user.id),
-      listRenewalAttemptsForUser(user.id),
-      getCustomerCreditBalance(user.id),
-      getAvailableCustomerCredit(user.id),
-      prisma.invoice.findMany({
-        where: { userId: user.id },
-        orderBy: { createdAt: "desc" },
-        take: 25,
-        select: { id: true, invoiceNumber: true, orderId: true, totalCents: true, currency: true, status: true, paidAt: true, createdAt: true },
-      }),
-    ]);
-
-    const domainIds = subscriptions.map((subscription) => subscription.domainId).filter((id): id is string => Boolean(id));
-    const serviceIds = subscriptions.map((subscription) => subscription.serviceInstanceId).filter((id): id is string => Boolean(id));
-    const [domains, services] = await Promise.all([
-      domainIds.length > 0
-        ? prisma.domain.findMany({ where: { id: { in: domainIds }, userId: user.id }, select: { id: true, name: true } })
-        : Promise.resolve([]),
-      serviceIds.length > 0
-        ? prisma.$queryRaw<Array<{ id: string; product_name: string; domain_name: string | null; provider_name: string; provider_resource_id: string }>>`
-            SELECT psi."id",p."name" AS product_name,d."name" AS domain_name,psi."provider_name",psi."provider_resource_id"
-            FROM "product_service_instances" psi
-            JOIN "Product" p ON p."id"=psi."product_id"
-            LEFT JOIN "Domain" d ON d."id"=psi."domain_id"
-            WHERE psi."user_id"=${user.id} AND psi."id" IN (${Prisma.join(serviceIds)})
-          `
-        : Promise.resolve([]),
-    ]);
-    const domainNames = new Map(domains.map((domain) => [domain.id, domain.name]));
-    const serviceInfo = new Map(services.map((service) => [service.id, {
-      label: service.provider_name === "opensrs_hosted_email"
-        ? service.provider_resource_id
-        : service.domain_name
-          ? `${service.product_name} — ${service.domain_name}`
-          : service.product_name,
-      kind: service.provider_name === "opensrs_hosted_email" ? "BUSINESS_EMAIL" : service.provider_name === "cpanel_whm" ? "WEB_HOSTING" : "SERVICE",
-      provider: service.provider_name,
-    }]));
-    const labeledSubscriptions = subscriptions.map((subscription) => {
-      const info = subscription.serviceInstanceId ? serviceInfo.get(subscription.serviceInstanceId) : undefined;
-      return {
-        ...subscription,
-        serviceLabel: info?.label ?? (subscription.domainId ? domainNames.get(subscription.domainId) || "Domain renewal" : "Recurring service"),
-        serviceKind: info?.kind ?? (subscription.domainId ? "DOMAIN" : "SERVICE"),
-        serviceProvider: info?.provider ?? null,
-      };
-    });
-
-    return jsonOk({
-      subscriptions: labeledSubscriptions,
-      renewals,
-      invoices,
-      creditBalanceCents,
-      availableCreditCents,
-      paymentMethods: {
-        paypal: { enabled: PayPalProvider.isConfigured() },
-        directCardGateway: { enabled: false, reason: "No separate production card gateway is configured." },
-      },
-    });
-  } catch (error) {
-    return handleError(error);
-  }
-}
+export const dynamic="force-dynamic";
+export async function GET(){try{const user=await requireUser();const[subscriptions,renewals,creditBalanceCents,availableCreditCents,invoices]=await Promise.all([listCustomerSubscriptions(user.id),listRenewalAttemptsForUser(user.id),getCustomerCreditBalance(user.id),getAvailableCustomerCredit(user.id),prisma.invoice.findMany({where:{userId:user.id},orderBy:{createdAt:"desc"},take:25,select:{id:true,invoiceNumber:true,orderId:true,totalCents:true,currency:true,status:true,paidAt:true,createdAt:true}})]);const domainIds=subscriptions.map(s=>s.domainId).filter((id):id is string=>Boolean(id));const serviceIds=subscriptions.map(s=>s.serviceInstanceId).filter((id):id is string=>Boolean(id));const[domains,services]=await Promise.all([domainIds.length?prisma.domain.findMany({where:{id:{in:domainIds},userId:user.id},select:{id:true,name:true}}):Promise.resolve([]),serviceIds.length?prisma.$queryRaw<Array<{id:string;product_name:string;domain_name:string|null;provider_name:string;provider_resource_id:string}>>`SELECT psi."id",p."name" AS product_name,d."name" AS domain_name,psi."provider_name",psi."provider_resource_id" FROM "product_service_instances" psi JOIN "Product" p ON p."id"=psi."product_id" LEFT JOIN "Domain" d ON d."id"=psi."domain_id" WHERE psi."user_id"=${user.id} AND psi."id" IN (${Prisma.join(serviceIds)})`:Promise.resolve([])]);const domainNames=new Map(domains.map(d=>[d.id,d.name]));const info=new Map(services.map(s=>[s.id,{label:s.provider_name==="opensrs_hosted_email"?s.provider_resource_id:s.domain_name?`${s.product_name} — ${s.domain_name}`:s.product_name,kind:s.provider_name==="opensrs_hosted_email"?"BUSINESS_EMAIL":s.provider_name==="cpanel_whm"?"WEB_HOSTING":s.provider_name==="cloudflare"?"DOMAIN_SECURITY":"SERVICE",provider:s.provider_name}]));const labeled=subscriptions.map(s=>{const i=s.serviceInstanceId?info.get(s.serviceInstanceId):undefined;return{...s,serviceLabel:i?.label??(s.domainId?domainNames.get(s.domainId)||"Domain renewal":"Recurring service"),serviceKind:i?.kind??(s.domainId?"DOMAIN":"SERVICE"),serviceProvider:i?.provider??null};});return jsonOk({subscriptions:labeled,renewals,invoices,creditBalanceCents,availableCreditCents,paymentMethods:{paypal:{enabled:PayPalProvider.isConfigured()},directCardGateway:{enabled:false,reason:"No separate production card gateway is configured."}}});}catch(error){return handleError(error);}}

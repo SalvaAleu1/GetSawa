@@ -1,0 +1,6 @@
+import { requireAdmin } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { jsonOk,handleError } from "@/lib/api";
+import { getSecurityOperationalState } from "@/lib/security-readiness";
+export const dynamic="force-dynamic";
+export async function GET(){try{await requireAdmin(["SUPER_ADMIN","ADMIN","SUPPORT","FINANCE"]);const provider=await getSecurityOperationalState();const services=await prisma.$queryRaw<Array<Record<string,unknown>>>`SELECT psi."id",psi."status",psi."user_id",psi."provider_resource_id",u."email",p."name" AS product_name,d."name" AS domain_name,czs."zone_status",czs."cutover_status",czs."proxy_enabled",czs."proxy_desired",czs."https_enforced",czs."dnssec_status",czs."dns_migration_status",czs."assigned_nameservers",bs."status" AS billing_status,bs."current_period_end" FROM "product_service_instances" psi JOIN "cloudflare_zone_services" czs ON czs."service_instance_id"=psi."id" JOIN "User" u ON u."id"=psi."user_id" JOIN "Product" p ON p."id"=psi."product_id" JOIN "Domain" d ON d."id"=psi."domain_id" LEFT JOIN "billing_subscriptions" bs ON bs."service_instance_id"=psi."id" WHERE psi."provider_name"='cloudflare' ORDER BY psi."created_at" DESC`;return jsonOk({provider,services});}catch(error){return handleError(error);}}
