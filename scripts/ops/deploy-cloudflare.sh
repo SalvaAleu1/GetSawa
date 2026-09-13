@@ -38,10 +38,10 @@ if [[ "${WORKERS_CI:-}" != "1" && "$environment" == "production" && "${CONFIRM_P
 fi
 
 # Run the repository-wide static and unit-test gate before touching production
-# schema state. `tsc` reports the complete TypeScript error set in one run,
-# avoiding one-error-per-Next-build deployment loops.
+# schema state. The generated client enables Prisma driver-adapter support so
+# the same application code can use Neon safely inside Cloudflare Workers.
 printf 'Generating Prisma client for repository verification...\n'
-npx prisma generate
+npm run prisma:generate
 printf 'Running full TypeScript repository check...\n'
 npm run typecheck -- --pretty false
 printf 'Running unit tests...\n'
@@ -104,6 +104,22 @@ fi
 # customers, orders, payments, domains, provider credentials or admin accounts.
 echo "Seeding safe baseline configuration..."
 DATABASE_URL="$migration_database_url" npm run db:seed
+
+# Cloudflare Workers Builds and Worker runtime secrets are separate scopes.
+# DATABASE_URL is already available here for migration/build work; copy that
+# pooled URL into the Worker itself so server-rendered routes can reach Neon.
+# Optional core secrets are synchronized only when they are present in the build
+# environment; existing dashboard secrets remain untouched otherwise.
+if [[ "${WORKERS_CI:-}" == "1" ]]; then
+  echo "Synchronizing core runtime secrets to Worker '$CLOUDFLARE_WORKER_SERVICE_NAME'..."
+  for secret_name in DATABASE_URL SESSION_SECRET CRON_SECRET; do
+    secret_value="${!secret_name:-}"
+    if [[ -n "$secret_value" ]]; then
+      printf '%s' "$secret_value" | npx wrangler secret put "$secret_name" --name "$CLOUDFLARE_WORKER_SERVICE_NAME" >/dev/null
+      echo "Runtime secret $secret_name is configured."
+    fi
+  done
+fi
 
 printf 'Building GetSawa for Cloudflare environment %s...\n' "$environment"
 if [[ "$environment" == "staging" ]]; then
