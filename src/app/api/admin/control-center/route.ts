@@ -22,7 +22,7 @@ export async function GET() {
       prisma.auditLog.findMany({ orderBy: { createdAt: "desc" }, take: 40, select: { id: true, actorId: true, action: true, resource: true, resourceId: true, metadata: true, createdAt: true } }),
       prisma.providerCredential.findMany({ orderBy: { provider: "asc" }, select: { provider: true, isConfigured: true, isEnabled: true, lastTestedAt: true, lastTestOk: true, lastTestMessage: true, metadata: true } }),
       prisma.user.findMany({ where: { adminRole: { not: null } }, orderBy: [{ adminRole: "asc" }, { email: "asc" }], select: { id: true, email: true, firstName: true, lastName: true, adminRole: true, isSuspended: true, mfaEnabled: true, updatedAt: true } }),
-      prisma.orderItem.findMany({ where: { provisioningStatus: "FAILED" }, orderBy: { updatedAt: "desc" }, take: 20, select: { id: true, description: true, provisioningError: true, order: { select: { id: true, orderNumber: true, user: { select: { email: true } } } } } }),
+      prisma.orderItem.findMany({ where: { provisioningStatus: "FAILED" }, orderBy: { createdAt: "desc" }, take: 20, select: { id: true, description: true, provisioningNote: true, createdAt: true, order: { select: { id: true, orderNumber: true, user: { select: { email: true } } } } } }),
     ]);
 
     const [paymentQueue, supportQueue, riskOrders] = await Promise.all([
@@ -37,41 +37,16 @@ export async function GET() {
     let websites: { customDomains: number; failedDomains: number } | null = null;
     try {
       const finance = await prisma.$queryRaw<Array<{ gross: bigint; refunded: bigint; fees: bigint; net: bigint }>>`
-        SELECT
-          COALESCE(SUM(CASE WHEN "event_type"='PAYMENT_CAPTURED' THEN "gross_cents" ELSE 0 END),0) AS gross,
+        SELECT COALESCE(SUM(CASE WHEN "event_type"='PAYMENT_CAPTURED' THEN "gross_cents" ELSE 0 END),0) AS gross,
           COALESCE(SUM(CASE WHEN "event_type"='PAYMENT_REFUNDED' THEN "gross_cents" ELSE 0 END),0) AS refunded,
-          COALESCE(SUM("provider_fee_cents"),0) AS fees,
-          COALESCE(SUM("net_cents"),0) AS net
-        FROM "finance_events" WHERE "created_at">=${thirtyDaysAgo}
-      `;
+          COALESCE(SUM("provider_fee_cents"),0) AS fees,COALESCE(SUM("net_cents"),0) AS net
+        FROM "finance_events" WHERE "created_at">=${thirtyDaysAgo}`;
       finance30d = { grossCents: Number(finance[0]?.gross ?? 0), refundedCents: Number(finance[0]?.refunded ?? 0), feesCents: Number(finance[0]?.fees ?? 0), netCents: Number(finance[0]?.net ?? 0) };
     } catch {}
-    try {
-      const rows = await prisma.$queryRaw<Array<{ past_due: bigint; renewal_invoices: bigint }>>`SELECT (SELECT COUNT(*) FROM "billing_subscriptions" WHERE "status"='PAST_DUE') AS past_due,(SELECT COUNT(*) FROM "billing_renewal_attempts" WHERE "status"='ORDER_CREATED') AS renewal_invoices`;
-      recurring = { pastDue: Number(rows[0]?.past_due ?? 0), renewalInvoices: Number(rows[0]?.renewal_invoices ?? 0) };
-    } catch {}
-    try {
-      const rows = await prisma.$queryRaw<Array<{ provider_name: string; status: string; count: bigint }>>`SELECT "provider_name","status",COUNT(*) AS count FROM "product_service_instances" GROUP BY "provider_name","status" ORDER BY "provider_name","status"`;
-      services = rows.map((row) => ({ provider_name: row.provider_name, status: row.status, count: Number(row.count) }));
-    } catch {}
-    try {
-      const rows = await prisma.$queryRaw<Array<{ total: bigint; failed: bigint }>>`SELECT COUNT(*) AS total,COUNT(*) FILTER (WHERE "status"='FAILED') AS failed FROM "website_custom_domains" WHERE "status"<>'DETACHED'`;
-      websites = { customDomains: Number(rows[0]?.total ?? 0), failedDomains: Number(rows[0]?.failed ?? 0) };
-    } catch {}
+    try { const rows = await prisma.$queryRaw<Array<{ past_due: bigint; renewal_invoices: bigint }>>`SELECT (SELECT COUNT(*) FROM "billing_subscriptions" WHERE "status"='PAST_DUE') AS past_due,(SELECT COUNT(*) FROM "billing_renewal_attempts" WHERE "status"='ORDER_CREATED') AS renewal_invoices`; recurring = { pastDue: Number(rows[0]?.past_due ?? 0), renewalInvoices: Number(rows[0]?.renewal_invoices ?? 0) }; } catch {}
+    try { const rows = await prisma.$queryRaw<Array<{ provider_name: string; status: string; count: bigint }>>`SELECT "provider_name","status",COUNT(*) AS count FROM "product_service_instances" GROUP BY "provider_name","status" ORDER BY "provider_name","status"`; services = rows.map((row) => ({ provider_name: row.provider_name, status: row.status, count: Number(row.count) })); } catch {}
+    try { const rows = await prisma.$queryRaw<Array<{ total: bigint; failed: bigint }>>`SELECT COUNT(*) AS total,COUNT(*) FILTER (WHERE "status"='FAILED') AS failed FROM "website_custom_domains" WHERE "status"<>'DETACHED'`; websites = { customDomains: Number(rows[0]?.total ?? 0), failedDomains: Number(rows[0]?.failed ?? 0) }; } catch {}
 
-    return jsonOk({
-      generatedAt: now.toISOString(),
-      viewer: { id: admin.id, role: admin.adminRole },
-      kpis: { customers, activeDomains, orders30d, openTickets, disputedPayments, failedLogins24h, suspendedCustomers },
-      finance30d,
-      recurring,
-      websites,
-      services,
-      queues: { provisioningFailures, paymentQueue, supportQueue },
-      riskSignals: { failedLogins24h, suspendedCustomers, disputedPayments, highValueOrders: riskOrders },
-      providers,
-      staff,
-      recentAudit,
-    });
+    return jsonOk({ generatedAt: now.toISOString(), viewer: { id: admin.id, role: admin.adminRole }, kpis: { customers, activeDomains, orders30d, openTickets, disputedPayments, failedLogins24h, suspendedCustomers }, finance30d, recurring, websites, services, queues: { provisioningFailures, paymentQueue, supportQueue }, riskSignals: { failedLogins24h, suspendedCustomers, disputedPayments, highValueOrders: riskOrders }, providers, staff, recentAudit });
   } catch (error) { return handleError(error); }
 }
