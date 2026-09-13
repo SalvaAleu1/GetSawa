@@ -27,6 +27,27 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 const appUrl = process.env.APP_URL || "https://getsawa.app";
+const normalizedAppUrl = appUrl.replace(/\/$/, "");
+const structuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${normalizedAppUrl}/#organization`,
+      name: "GetSawa",
+      url: normalizedAppUrl,
+      logo: `${normalizedAppUrl}/icon-512.png`,
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${normalizedAppUrl}/#website`,
+      url: normalizedAppUrl,
+      name: "GetSawa",
+      publisher: { "@id": `${normalizedAppUrl}/#organization` },
+      inLanguage: "en",
+    },
+  ],
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
@@ -102,6 +123,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${inter.variable} ${spaceGrotesk.variable} ${ibmPlexMono.variable}`}
     >
       <body>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
+        />
         <a className="skip-link" href="#main-content">
           Skip to main content
         </a>
