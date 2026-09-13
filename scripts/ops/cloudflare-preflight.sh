@@ -4,13 +4,9 @@ set -Eeuo pipefail
 environment="${1:-}"
 case "$environment" in
   staging)
-    expected_url="https://staging.getsawa.app"
-    expected_host="staging.getsawa.app"
     expected_worker="getsawa-staging"
     ;;
   production)
-    expected_url="https://getsawa.app"
-    expected_host="getsawa.app"
     expected_worker="getsawa"
     ;;
   *)
@@ -28,7 +24,11 @@ done
 # - runtime Worker secrets, available only after deployment
 # SESSION_SECRET and CRON_SECRET are runtime secrets and must not be duplicated
 # into the build environment merely to satisfy preflight.
-required=(APP_URL APP_NAME DATABASE_URL CLOUDFLARE_ACCOUNT_ID WEBSITE_PLATFORM_HOST CLOUDFLARE_WORKER_SERVICE_NAME)
+#
+# During the pre-domain Workers.dev phase we intentionally do NOT require
+# APP_URL or WEBSITE_PLATFORM_HOST, because Cloudflare assigns the exact
+# workers.dev hostname only after the Worker has deployed.
+required=(APP_NAME DATABASE_URL CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_WORKER_SERVICE_NAME)
 
 if [[ "${WORKERS_CI:-}" == "1" ]]; then
   # DIRECT_URL is used for Prisma schema/migration administration on Neon.
@@ -47,8 +47,6 @@ if (( ${#missing[@]} > 0 )); then
   exit 1
 fi
 
-[[ "$APP_URL" == "$expected_url" ]] || { echo "APP_URL must be $expected_url for $environment." >&2; exit 1; }
-[[ "$WEBSITE_PLATFORM_HOST" == "$expected_host" ]] || { echo "WEBSITE_PLATFORM_HOST must be $expected_host for $environment." >&2; exit 1; }
 [[ "$CLOUDFLARE_WORKER_SERVICE_NAME" == "$expected_worker" ]] || { echo "CLOUDFLARE_WORKER_SERVICE_NAME must be $expected_worker for $environment." >&2; exit 1; }
 
 # Interactive/local deployments retain explicit safety confirmations. In
