@@ -105,6 +105,11 @@ else
   fi
 fi
 
+# Safe/idempotent seed only creates baseline TLD configuration. It never creates
+# customers, orders, payments, domains, provider credentials or admin accounts.
+echo "Seeding safe baseline configuration..."
+DATABASE_URL="$migration_database_url" npm run db:seed
+
 printf 'Building GetSawa for Cloudflare environment %s...\n' "$environment"
 npx opennextjs-cloudflare build --env="$environment"
 
