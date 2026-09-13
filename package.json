@@ -5,11 +5,11 @@
   "engines": { "node": ">=18.18.0" },
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "npm run prisma:generate && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "prisma:generate": "prisma generate",
+    "prisma:generate": "node scripts/ops/generate-prisma-client.mjs",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:migrate:dev": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
@@ -31,7 +31,9 @@
     "ops:provider-resilience": "node scripts/ops/check-provider-resilience.mjs"
   },
   "dependencies": {
-    "@prisma/client": "^5.20.0",
+    "@neondatabase/serverless": "0.10.4",
+    "@prisma/adapter-neon": "5.22.0",
+    "@prisma/client": "5.22.0",
     "bcryptjs": "^2.4.3",
     "jose": "^5.9.6",
     "next": "15.5.24",
@@ -52,9 +54,12 @@
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "tsx": "^4.19.1",
-    "prisma": "^5.20.0",
+    "prisma": "5.22.0",
     "typescript": "^5.5.4",
     "vitest": "^2.1.1",
     "wrangler": "^4.129.1"
+  },
+  "overrides": {
+    "@neondatabase/serverless": "0.10.4"
   }
 }
