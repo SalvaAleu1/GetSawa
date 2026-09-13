@@ -53,8 +53,9 @@ fi
 
 # Count existing application tables using the direct database connection.
 # A brand-new Neon database has zero public base tables. Only in that exact
-# state do we bootstrap the current schema and baseline the historical migration
-# folders, because this repository's earliest retained migration is incremental.
+# state do we bootstrap the current Prisma schema. Historical raw-SQL tables
+# are replayed by repair-baselined-database.mjs before those migrations are
+# marked applied, so the physical schema always matches migration history.
 user_table_count="$(DATABASE_URL="$migration_database_url" node <<'NODE'
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
@@ -73,16 +74,24 @@ NODE
 )"
 
 if [[ "$user_table_count" == "0" ]]; then
-  echo "Fresh PostgreSQL database detected. Creating the current GetSawa schema..."
+  echo "Fresh PostgreSQL database detected. Creating the current GetSawa Prisma schema..."
   DATABASE_URL="$migration_database_url" npx prisma db push --skip-generate
 
-  echo "Baselining retained Prisma migrations against the freshly created schema..."
+  echo "Creating retained raw-SQL operational tables before baselining migrations..."
+  DIRECT_URL="$migration_database_url" DATABASE_URL="$migration_database_url" node scripts/ops/repair-baselined-database.mjs
+
+  echo "Baselining retained Prisma migrations against the complete schema..."
   for migration_dir in prisma/migrations/*; do
     [[ -d "$migration_dir" ]] || continue
     migration_name="$(basename "$migration_dir")"
     DATABASE_URL="$migration_database_url" npx prisma migrate resolve --applied "$migration_name"
   done
 else
+  # Reconcile databases that were bootstrapped by the earlier db-push-only flow.
+  # The repair script is a no-op when all retained operational tables exist and
+  # fails closed if it finds a partial schema.
+  DIRECT_URL="$migration_database_url" DATABASE_URL="$migration_database_url" node scripts/ops/repair-baselined-database.mjs
+
   echo "Existing database detected. Applying committed Prisma migrations..."
   if [[ "${WORKERS_CI:-}" == "1" ]]; then
     DATABASE_URL="$migration_database_url" npx prisma migrate deploy
