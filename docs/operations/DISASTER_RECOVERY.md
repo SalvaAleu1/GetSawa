@@ -36,7 +36,7 @@ A local backup file is not a durable backup. Copy it to an approved encrypted de
 
 ## Restore drill
 
-A restore drill must use an isolated disposable PostgreSQL database. Never point `RESTORE_DATABASE_URL` at production. The restore script refuses to proceed if it equals `DATABASE_URL` and requires the explicit confirmation phrase.
+A restore drill must use an isolated disposable PostgreSQL database. Never point `RESTORE_DATABASE_URL` at production. When both source and target URLs are supplied, the restore script also compares the live server/database identity and refuses a match. The explicit isolation confirmation phrase remains mandatory.
 
 Example flow:
 
@@ -48,10 +48,12 @@ export BACKUP_FILE='.ops/backups/getsawa-YYYYMMDDTHHMMSSZ.dump'
 export RESTORE_DATABASE_URL='...isolated-disposable-db...'
 export CONFIRM_ISOLATED_RESTORE=RESTORE_ISOLATED_DATABASE
 ./scripts/ops/restore-postgres.sh
+
+export DR_TARGET_LABEL='restore-drill-YYYYMMDD'
 ./scripts/ops/verify-postgres-restore.sh
 ```
 
-Attach the generated `.ops/dr-evidence/restore-*.txt` to the restricted operations evidence store. Never commit it if it contains sensitive counts or database fingerprints.
+Attach the generated `.ops/dr-evidence/restore-*.txt` to the restricted operations evidence store. `DR_TARGET_LABEL` must be a non-secret operations label; do not put connection strings, credentials, customer data or other secrets in the label/evidence.
 
 ## Production restoration
 
@@ -70,4 +72,4 @@ Production restoration is intentionally not automated by the repository script. 
 
 ## Evidence required for Phase 27/30
 
-A real drill record must contain: backup timestamp, recovery point, backup checksum, isolated target identifier/fingerprint, restore start/end times, observed RPO/RTO, required-table checks, representative record checks, Prisma migration status, reconciliation results, operator/reviewer, anomalies and remediation. Secrets and customer data must not be copied into the evidence record.
+A real drill record must contain: backup timestamp, recovery point, backup checksum, non-secret isolated target label, restore start/end times, observed RPO/RTO, required-table checks, representative record checks, Prisma migration status, reconciliation results, operator/reviewer, anomalies and remediation. Secrets and customer data must not be copied into the evidence record.
