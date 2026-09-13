@@ -4,7 +4,7 @@
   "main": "./cloudflare-worker.ts",
   "compatibility_date": "2026-09-12",
   "compatibility_flags": ["nodejs_compat"],
-  "workers_dev": false,
+  "workers_dev": true,
   "keep_vars": true,
   "assets": {
     "directory": ".open-next/assets",
@@ -13,53 +13,38 @@
   "observability": {
     "enabled": true
   },
+  "vars": {
+    "APP_ENV": "production",
+    "APP_URL": "https://getsawa.app",
+    "APP_NAME": "GetSawa",
+    "WEBSITE_PLATFORM_HOST": "getsawa.app",
+    "CLOUDFLARE_WORKER_SERVICE_NAME": "getsawa"
+  },
+  "triggers": {
+    "crons": [
+      "17 * * * *",
+      "37 * * * *",
+      "*/10 * * * *",
+      "13 * * * *",
+      "*/15 * * * *",
+      "23 6 * * *",
+      "*/5 * * * *",
+      "7 */6 * * *",
+      "*/6 * * * *",
+      "9,39 * * * *",
+      "41 3 * * *",
+      "31 2 * * *"
+    ]
+  },
   "env": {
     "staging": {
       "workers_dev": true,
-      "routes": [
-        {
-          "pattern": "staging.getsawa.app",
-          "custom_domain": true
-        }
-      ],
       "vars": {
         "APP_ENV": "staging",
         "APP_URL": "https://staging.getsawa.app",
         "APP_NAME": "GetSawa",
         "WEBSITE_PLATFORM_HOST": "staging.getsawa.app",
         "CLOUDFLARE_WORKER_SERVICE_NAME": "getsawa-staging"
-      },
-      "triggers": {
-        "crons": [
-          "17 * * * *",
-          "37 * * * *",
-          "*/10 * * * *",
-          "13 * * * *",
-          "*/15 * * * *",
-          "23 6 * * *",
-          "*/5 * * * *",
-          "7 */6 * * *",
-          "*/6 * * * *",
-          "9,39 * * * *",
-          "41 3 * * *",
-          "31 2 * * *"
-        ]
-      }
-    },
-    "production": {
-      "workers_dev": false,
-      "routes": [
-        {
-          "pattern": "getsawa.app",
-          "custom_domain": true
-        }
-      ],
-      "vars": {
-        "APP_ENV": "production",
-        "APP_URL": "https://getsawa.app",
-        "APP_NAME": "GetSawa",
-        "WEBSITE_PLATFORM_HOST": "getsawa.app",
-        "CLOUDFLARE_WORKER_SERVICE_NAME": "getsawa-production"
       },
       "triggers": {
         "crons": [
