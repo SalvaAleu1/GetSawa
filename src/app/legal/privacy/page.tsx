@@ -12,7 +12,7 @@ export default function PrivacyPage() {
       <main className="mx-auto max-w-4xl px-6 py-16">
         <article className="prose prose-slate max-w-none">
           <h1>Privacy Policy</h1>
-          <p className="lead">Last updated: September 4, 2026</p>
+          <p className="lead">Last updated: September 13, 2026</p>
           <p>This policy explains how GetSawa handles information when you create an account, purchase or manage a
             service, contact support, use our API, or browse the public website.</p>
 
@@ -80,20 +80,15 @@ export default function PrivacyPage() {
 
           <h2>11. International processing</h2>
           <p>GetSawa and its service providers may process information in countries different from your country of
-            residence. Where required, appropriate contractual or legal safeguards should be used for such transfers.</p>
+            residence. Where required, appropriate contractual or legal safeguards are used for such transfers.</p>
 
           <h2>12. Changes</h2>
           <p>We may update this policy when our services or legal obligations change. The revision date at the top of this
             page will be updated when material changes are published.</p>
 
           <h2>13. Contact</h2>
-          <p>For privacy requests or questions, use the support channels published by GetSawa. Please do not include
-            passwords, payment-card numbers or other unnecessary secrets in a support request.</p>
-
-          <div className="not-prose mt-10 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4 text-sm text-ink/70">
-            This policy describes the platform&apos;s current technical data flows. Qualified legal counsel should review
-            it for the jurisdictions and privacy regimes applicable to GetSawa before public launch.
-          </div>
+          <p>For privacy requests or questions, use the official support channels published by GetSawa. Please do not
+            include passwords, payment-card numbers or other unnecessary secrets in a support request.</p>
         </article>
       </main>
     </>
