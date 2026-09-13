@@ -15,9 +15,7 @@
   },
   "vars": {
     "APP_ENV": "production",
-    "APP_URL": "https://getsawa.app",
     "APP_NAME": "GetSawa",
-    "WEBSITE_PLATFORM_HOST": "getsawa.app",
     "CLOUDFLARE_WORKER_SERVICE_NAME": "getsawa"
   },
   "triggers": {
@@ -41,9 +39,7 @@
       "workers_dev": true,
       "vars": {
         "APP_ENV": "staging",
-        "APP_URL": "https://staging.getsawa.app",
         "APP_NAME": "GetSawa",
-        "WEBSITE_PLATFORM_HOST": "staging.getsawa.app",
         "CLOUDFLARE_WORKER_SERVICE_NAME": "getsawa-staging"
       },
       "triggers": {
