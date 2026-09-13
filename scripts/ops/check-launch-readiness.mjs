@@ -10,10 +10,15 @@ const requiredFiles = [
   "docs/PHASE28_VERIFICATION.md",
   "docs/PHASE29_VERIFICATION.md",
   "docs/PHASE30_VERIFICATION.md",
+  "docs/PHASE31_VERIFICATION.md",
   "docs/operations/DISASTER_RECOVERY.md",
   "docs/operations/VERCEL_TO_CLOUDFLARE_CUTOVER.md",
   "docs/operations/PROVIDER_ACCEPTANCE.md",
   "docs/operations/PRODUCTION_MONITORING.md",
+  "docs/operations/PROVIDER_RESILIENCE.md",
+  "docs/operations/MARKET_EXPANSION.md",
+  "docs/operations/PROVIDER_ONBOARDING_CHECKLIST.md",
+  "src/lib/providers/provider-routing.ts",
   "src/app/support/page.tsx",
   "src/app/legal/terms/page.tsx",
   "src/app/legal/privacy/page.tsx",
@@ -34,6 +39,9 @@ for (const file of ["src/app/legal/terms/page.tsx", "src/app/legal/privacy/page.
 
 const cutover = spawnSync(process.execPath, ["scripts/ops/check-cutover-config.mjs"], { encoding: "utf8" });
 if (cutover.status !== 0) failures.push(`Cutover configuration check failed: ${(cutover.stderr || cutover.stdout || "unknown error").trim()}`);
+
+const resilience = spawnSync(process.execPath, ["scripts/ops/check-provider-resilience.mjs"], { encoding: "utf8", env: process.env });
+if (resilience.status !== 0) failures.push(`Provider resilience configuration check failed: ${(resilience.stderr || resilience.stdout || "unknown error").trim()}`);
 
 if (!fs.existsSync(evidencePath)) {
   failures.push(`Launch evidence file is missing: ${evidencePath}. Copy docs/operations/LAUNCH_EVIDENCE.template.json to the ignored .ops directory and attach real evidence.`);
