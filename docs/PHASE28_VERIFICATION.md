@@ -14,12 +14,13 @@ Status: repository infrastructure configuration complete; creation/deployment of
 - Deployment smoke and live-log helpers.
 - Environment/secrets, cron and evidence runbooks.
 
-## Static verification required before merge
+## Static verification completed — 13 September 2026
 
-- Parse `wrangler.jsonc` as JSONC-compatible JSON (the committed file contains no comments/trailing commas).
-- Parse `package.json` as JSON.
-- Run `bash -n` over the Phase 28 shell scripts.
-- Confirm the 12 staging cron expressions exactly match the 12 mappings in `cloudflare-worker.ts`.
+- `wrangler.jsonc` parses as valid JSON (and therefore valid JSONC) with a non-routable root, 12 staging crons and zero production crons.
+- `package.json` remains valid JSON after the environment-aware Cloudflare scripts were added.
+- `bash -n` passes for `cloudflare-preflight.sh`, `deploy-cloudflare.sh` and `cloudflare-tail.sh`.
+- The 12 staging cron expressions exactly match the 12 mappings in `cloudflare-worker.ts`.
+- The deployment wrapper cannot upload the production Worker without both production deployment and production upload acknowledgement values.
 
 ## Live Cloudflare gate
 
