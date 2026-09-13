@@ -2,7 +2,12 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 
 function cleanMessage(value: string) {
-  return value.replace(/(Bearer\s+)[A-Za-z0-9._-]+/gi, "$1[redacted]").replace(/[\r\n\t]+/g, " ").slice(0, 500);
+  return value
+    .replace(/(Bearer\s+)[A-Za-z0-9._-]+/gi, "$1[redacted]")
+    .replace(/((?:api[_-]?key|token|secret|password|client[_-]?secret)\s*[:=]\s*)[^\s,;&]+/gi, "$1[redacted]")
+    .replace(/("(?:api[_-]?key|token|secret|password|client[_-]?secret)"\s*:\s*")[^"]+("?)/gi, "$1[redacted]$2")
+    .replace(/[\r\n\t]+/g, " ")
+    .slice(0, 500);
 }
 
 export async function recordApplicationError(error: unknown, context?: { route?: string; requestId?: string; metadata?: Record<string, unknown> }) {
