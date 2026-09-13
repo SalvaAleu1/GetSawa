@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 : "${RESTORE_DATABASE_URL:?RESTORE_DATABASE_URL must point to the isolated restored database}"
+: "${DR_TARGET_LABEL:?DR_TARGET_LABEL is required (use a non-secret label for the isolated target)}"
 
 command -v psql >/dev/null 2>&1 || { echo "Required command not found: psql" >&2; exit 1; }
 
@@ -30,7 +31,7 @@ SQL
 {
   echo "GetSawa disaster-recovery restore verification"
   echo "verified_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  echo "target_database_fingerprint=$(printf '%s' "$RESTORE_DATABASE_URL" | sha256sum | cut -d' ' -f1)"
+  echo "target_label=$DR_TARGET_LABEL"
   echo
   psql "$RESTORE_DATABASE_URL" -v ON_ERROR_STOP=1 -c "$query"
 } | tee "$evidence"
