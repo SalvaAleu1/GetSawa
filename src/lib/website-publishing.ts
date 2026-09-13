@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getOwnedProjectOrThrow } from "@/lib/websites";
 import { getPublishedSnapshot } from "@/lib/website-editor";
@@ -30,11 +31,13 @@ export async function rollbackDeployment(projectId: string, userId: string, depl
   if (!versionId) throw new Error("Deployment not found.");
   const version = await prisma.websiteVersion.findFirst({ where: { id: versionId, projectId: project.id } });
   if (!version) throw new Error("Deployment snapshot no longer exists.");
+  if (version.content === null) throw new Error("Deployment snapshot content is invalid.");
+  const versionContent = version.content as Prisma.InputJsonValue;
   await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`UPDATE "website_deployments" SET "status"='RETIRED' WHERE "project_id"=${project.id} AND "environment"='PRODUCTION' AND "status"='LIVE'`;
     await tx.$executeRaw`UPDATE "website_deployments" SET "status"='LIVE',"activated_at"=CURRENT_TIMESTAMP WHERE "id"=${deploymentId}`;
     await tx.$executeRaw`UPDATE "website_editor_state" SET "published_version_id"=${versionId},"updated_at"=CURRENT_TIMESTAMP WHERE "project_id"=${project.id}`;
-    await tx.websiteProject.update({ where: { id: project.id }, data: { content: version.content, status: "PUBLISHED", publishedAt: new Date() } });
+    await tx.websiteProject.update({ where: { id: project.id }, data: { content: versionContent, status: "PUBLISHED", publishedAt: new Date() } });
   });
   await logAudit({ actorId: userId, action: "website.deployment_rolled_back", resource: "website_project", resourceId: project.id, metadata: { deploymentId, versionId } });
   return { deploymentId, versionId };
