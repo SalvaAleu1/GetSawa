@@ -11,50 +11,23 @@ const CRON_ROUTES: Record<string, string> = {
   "23 6 * * *": "/api/cron/renewal-reminders",
   "*/5 * * * *": "/api/cron/auction-close",
   "7 */6 * * *": "/api/cron/pricing-sync",
+  "*/6 * * * *": "/api/cron/message-delivery",
 };
 
-type WorkerEnv = {
-  CRON_SECRET?: string;
-};
+type WorkerEnv = { CRON_SECRET?: string };
 
 export default {
   fetch: handler.fetch,
-
-  async scheduled(
-    event: { cron: string; scheduledTime: number },
-    env: WorkerEnv,
-    ctx: { waitUntil(promise: Promise<unknown>): void },
-  ) {
+  async scheduled(event: { cron: string; scheduledTime: number }, env: WorkerEnv, ctx: { waitUntil(promise: Promise<unknown>): void }) {
     const route = CRON_ROUTES[event.cron];
-    if (!route) {
-      console.warn(`[cron] No GetSawa job is mapped to ${event.cron}`);
-      return;
-    }
-
-    if (!env.CRON_SECRET) {
-      throw new Error("CRON_SECRET is not configured for the Cloudflare Worker.");
-    }
-
-    const request = new Request(new URL(route, "https://getsawa.internal"), {
-      method: "GET",
-      headers: {
-        authorization: `Bearer ${env.CRON_SECRET}`,
-        "x-getsawa-cron": event.cron,
-      },
-    });
-
+    if (!route) { console.warn(`[cron] No GetSawa job is mapped to ${event.cron}`); return; }
+    if (!env.CRON_SECRET) throw new Error("CRON_SECRET is not configured for the Cloudflare Worker.");
+    const request = new Request(new URL(route, "https://getsawa.internal"), { method: "GET", headers: { authorization: `Bearer ${env.CRON_SECRET}`, "x-getsawa-cron": event.cron } });
     const job = (async () => {
       const response = await handler.fetch(request, env, ctx);
-      if (!response.ok) {
-        const body = await response.text().catch(() => "");
-        throw new Error(
-          `[cron] ${route} failed with HTTP ${response.status}${body ? `: ${body.slice(0, 500)}` : ""}`,
-        );
-      }
+      if (!response.ok) { const body = await response.text().catch(() => ""); throw new Error(`[cron] ${route} failed with HTTP ${response.status}${body ? `: ${body.slice(0, 500)}` : ""}`); }
       console.log(`[cron] ${route} completed at ${new Date(event.scheduledTime).toISOString()}`);
     })();
-
-    ctx.waitUntil(job);
-    await job;
+    ctx.waitUntil(job); await job;
   },
 };
