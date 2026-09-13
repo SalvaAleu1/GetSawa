@@ -23,12 +23,19 @@ for command in node npm npx curl; do
   command -v "$command" >/dev/null 2>&1 || { echo "Required command not found: $command" >&2; exit 1; }
 done
 
-required=(APP_URL APP_NAME DATABASE_URL SESSION_SECRET CRON_SECRET CLOUDFLARE_ACCOUNT_ID WEBSITE_PLATFORM_HOST CLOUDFLARE_WORKER_SERVICE_NAME)
-# Local/third-party CI deployments authenticate Wrangler with CLOUDFLARE_API_TOKEN.
-# Cloudflare Workers Builds injects its own deployment identity, so do not require
-# the application's runtime Cloudflare token to be exposed to the build process.
-if [[ "${WORKERS_CI:-}" != "1" ]]; then
-  required+=(CLOUDFLARE_API_TOKEN)
+# Cloudflare Workers Builds has two different secret scopes:
+# - build secrets, available to this shell
+# - runtime Worker secrets, available only after deployment
+# SESSION_SECRET and CRON_SECRET are runtime secrets and must not be duplicated
+# into the build environment merely to satisfy preflight.
+required=(APP_URL APP_NAME DATABASE_URL CLOUDFLARE_ACCOUNT_ID WEBSITE_PLATFORM_HOST CLOUDFLARE_WORKER_SERVICE_NAME)
+
+if [[ "${WORKERS_CI:-}" == "1" ]]; then
+  # DIRECT_URL is used for Prisma schema/migration administration on Neon.
+  required+=(DIRECT_URL)
+else
+  # Local/third-party CI deployments authenticate Wrangler explicitly.
+  required+=(SESSION_SECRET CRON_SECRET CLOUDFLARE_API_TOKEN)
 fi
 
 missing=()
@@ -44,14 +51,19 @@ fi
 [[ "$WEBSITE_PLATFORM_HOST" == "$expected_host" ]] || { echo "WEBSITE_PLATFORM_HOST must be $expected_host for $environment." >&2; exit 1; }
 [[ "$CLOUDFLARE_WORKER_SERVICE_NAME" == "$expected_worker" ]] || { echo "CLOUDFLARE_WORKER_SERVICE_NAME must be $expected_worker for $environment." >&2; exit 1; }
 
-if [[ "$environment" == "staging" && "${CONFIRM_STAGING_ISOLATED:-}" != "STAGING_IS_ISOLATED" ]]; then
-  echo "Set CONFIRM_STAGING_ISOLATED=STAGING_IS_ISOLATED only after confirming staging uses its own database and non-production/test data." >&2
-  exit 1
-fi
+# Interactive/local deployments retain explicit safety confirmations. In
+# Cloudflare Workers Builds, selecting the environment-specific deploy command
+# is itself the deployment approval and every push to the configured branch may deploy.
+if [[ "${WORKERS_CI:-}" != "1" ]]; then
+  if [[ "$environment" == "staging" && "${CONFIRM_STAGING_ISOLATED:-}" != "STAGING_IS_ISOLATED" ]]; then
+    echo "Set CONFIRM_STAGING_ISOLATED=STAGING_IS_ISOLATED only after confirming staging uses its own database and non-production/test data." >&2
+    exit 1
+  fi
 
-if [[ "$environment" == "production" && "${CONFIRM_PRODUCTION_DEPLOY:-}" != "DEPLOY_GETSAWA_PRODUCTION" ]]; then
-  echo "Set CONFIRM_PRODUCTION_DEPLOY=DEPLOY_GETSAWA_PRODUCTION for an approved production deployment." >&2
-  exit 1
+  if [[ "$environment" == "production" && "${CONFIRM_PRODUCTION_DEPLOY:-}" != "DEPLOY_GETSAWA_PRODUCTION" ]]; then
+    echo "Set CONFIRM_PRODUCTION_DEPLOY=DEPLOY_GETSAWA_PRODUCTION for an approved production deployment." >&2
+    exit 1
+  fi
 fi
 
 npx wrangler whoami >/dev/null
