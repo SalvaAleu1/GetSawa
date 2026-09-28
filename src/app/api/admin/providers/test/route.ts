@@ -7,6 +7,7 @@ import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { getDomainProvider } from "@/lib/providers/domains/DomainProviderFactory";
 import { PayPalProvider } from "@/lib/providers/payments/PayPalProvider";
 import { getAIProvider } from "@/lib/providers/ai/AIProviderFactory";
+import { verifyEmailTransport } from "@/lib/email";
 import { getHostingProvider } from "@/lib/providers/hosting/HostingProvider";
 import { getEmailProvider } from "@/lib/providers/email/EmailProvider";
 import { getCloudflareSecurityProvider } from "@/lib/providers/security/CloudflareSecurityProvider";
@@ -15,7 +16,7 @@ import { currentEmailCredentialFingerprint } from "@/lib/email-readiness";
 import { currentCloudflareCredentialFingerprint } from "@/lib/security-readiness";
 import { logAudit } from "@/lib/audit";
 
-const schema = z.object({ provider: z.enum(["namesilo", "paypal", "hosting", "email_hosting", "cloudflare_security", "ai"]) });
+const schema = z.object({ provider: z.enum(["namesilo", "paypal", "smtp", "hosting", "email_hosting", "cloudflare_security", "ai"]) });
 
 export async function POST(req: NextRequest) {
   try {
@@ -31,6 +32,11 @@ export async function POST(req: NextRequest) {
     if (provider === "paypal") {
       if (!PayPalProvider.isConfigured()) message = "PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET are not set.";
       else { try { await PayPalProvider.createOrder({ amountCents:100,currency:"USD",referenceId:`test-${Date.now()}`,description:"CloudSawa connection test (not captured)",idempotencyKey:`test-${admin.id}-${Date.now()}`,returnUrl:`${process.env.APP_URL}/admin/providers`,cancelUrl:`${process.env.APP_URL}/admin/providers` }); ok=true; message="Connected successfully. A test order was created but not captured, so no charge occurred."; } catch(error:any){message=error.message||"Connection failed.";} }
+    }
+    if (provider === "smtp") {
+      const health = await verifyEmailTransport();
+      ok = health.ok;
+      message = health.message;
     }
     if (provider === "hosting") {
       const hosting=getHostingProvider();const health=await hosting.healthCheck();ok=health.ok;message=health.message;metadata={implementation:hosting.name,credentialFingerprint:currentHostingCredentialFingerprint()??null,creatablePlanCodes:health.plans.map((plan)=>plan.code),planCount:health.plans.length};
