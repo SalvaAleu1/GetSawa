@@ -127,7 +127,7 @@ export async function testDeveloperWebhook(userId: string, subscriptionId: strin
   const subscriptions = await prisma.$queryRaw<Array<{ id:string }>>`SELECT "id" FROM "developer_webhook_subscriptions" WHERE "id"=${subscriptionId} AND "user_id"=${userId} AND "is_active"=TRUE LIMIT 1`;
   if (!subscriptions[0]) throw new ApiAuthError("Webhook subscription not found or inactive.", 404);
   const eventId = crypto.randomUUID();
-  await prisma.$executeRaw`INSERT INTO "developer_events" ("id","user_id","event_type","resource_type","resource_id","payload") VALUES (${eventId},${userId},'webhook.test','webhook_subscription',${subscriptionId},${JSON.stringify({ message: "GetSawa webhook test" })}::jsonb)`;
+  await prisma.$executeRaw`INSERT INTO "developer_events" ("id","user_id","event_type","resource_type","resource_id","payload") VALUES (${eventId},${userId},'webhook.test','webhook_subscription',${subscriptionId},${JSON.stringify({ message: "CloudSawa webhook test" })}::jsonb)`;
   const deliveryId = crypto.randomUUID();
   await prisma.$executeRaw`INSERT INTO "developer_webhook_deliveries" ("id","event_id","subscription_id") VALUES (${deliveryId},${eventId},${subscriptionId})`;
   const result = await attemptDeveloperWebhookDelivery(deliveryId);
@@ -152,7 +152,7 @@ export async function attemptDeveloperWebhookDelivery(deliveryId: string) {
   const timeout = setTimeout(() => controller.abort(), 10_000);
   const attempts = row.attempts + 1;
   try {
-    const response = await fetch(url, { method:"POST", headers:{"content-type":"application/json","user-agent":"GetSawa-Webhooks/1.0","x-getsawa-event-id":row.event_id,"x-getsawa-event-type":row.event_type,"x-getsawa-timestamp":timestamp,"x-getsawa-signature":`v1=${signature}`}, body, redirect:"manual", signal:controller.signal });
+    const response = await fetch(url, { method:"POST", headers:{"content-type":"application/json","user-agent":"CloudSawa-Webhooks/1.0","x-cloudsawa-event-id":row.event_id,"x-cloudsawa-event-type":row.event_type,"x-cloudsawa-timestamp":timestamp,"x-cloudsawa-signature":`v1=${signature}`}, body, redirect:"manual", signal:controller.signal });
     if (response.status >= 200 && response.status < 300) {
       await prisma.$executeRaw`UPDATE "developer_webhook_deliveries" SET "status"='DELIVERED',"attempts"=${attempts},"last_status_code"=${response.status},"last_error"=NULL,"delivered_at"=CURRENT_TIMESTAMP,"updated_at"=CURRENT_TIMESTAMP WHERE "id"=${deliveryId}`;
       await resolveOperationalAlert(`developer-webhook:${deliveryId}`);

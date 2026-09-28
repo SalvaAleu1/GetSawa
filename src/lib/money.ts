@@ -1,5 +1,5 @@
 /**
- * All monetary values in GetSawa are stored and calculated as integer minor
+ * All monetary values in CloudSawa are stored and calculated as integer minor
  * units (cents). Never use floating point arithmetic for money — floats
  * cannot represent currency exactly and will eventually produce off-by-one
  * cent errors that show up as real accounting discrepancies.

@@ -112,7 +112,7 @@ export function DomainLifecycleManager({ domainId }: { domainId: string }) {
       <div className="grid gap-6 xl:grid-cols-2">
         <section className="panel p-5 sm:p-6">
           <p className="eyebrow">Registrant privacy</p><h3 className="section-heading mt-2">WHOIS privacy</h3>
-          <p className="mt-3 text-sm leading-6 text-ink/55">Privacy availability is TLD- and registrar-dependent. GetSawa only sends this mutation when the TLD is configured as supporting privacy.</p>
+          <p className="mt-3 text-sm leading-6 text-ink/55">Privacy availability is TLD- and registrar-dependent. CloudSawa only sends this mutation when the TLD is configured as supporting privacy.</p>
           <div className="mt-5 flex items-center justify-between gap-4 rounded-xl border border-border p-4"><div><p className="font-semibold">{domain.privacyEnabled ? "Privacy enabled" : "Privacy disabled"}</p><p className="mt-1 text-xs text-ink/50">.{domain.tld.extension} · {domain.tld.supportsPrivacy ? "privacy supported in catalog" : "privacy not supported in catalog"}</p></div><button disabled={busy !== null || !domain.tld.supportsPrivacy} onClick={() => mutate("privacy", { enabled: !domain.privacyEnabled }, "privacy", `WHOIS privacy ${domain.privacyEnabled ? "disabled" : "enabled"}.`)} className={domain.privacyEnabled ? "btn-secondary" : "btn-primary"}>{busy === "privacy" ? "Saving…" : domain.privacyEnabled ? "Disable" : "Enable"}</button></div>
         </section>
 
@@ -125,7 +125,7 @@ export function DomainLifecycleManager({ domainId }: { domainId: string }) {
 
       <section className="rounded-2xl border border-amber-300 bg-amber-50 p-5 sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-2xl"><p className="eyebrow text-amber-700">Transfer away</p><h3 className="section-heading mt-2">Request EPP authorization code</h3><p className="mt-3 text-sm leading-6 text-amber-900/70">Use this only when moving the domain to another registrar. The domain must be unlocked first. NameSilo sends the authorization code to the domain administrative contact; GetSawa does not display or store the outbound EPP secret.</p></div>
+          <div className="max-w-2xl"><p className="eyebrow text-amber-700">Transfer away</p><h3 className="section-heading mt-2">Request EPP authorization code</h3><p className="mt-3 text-sm leading-6 text-amber-900/70">Use this only when moving the domain to another registrar. The domain must be unlocked first. NameSilo sends the authorization code to the domain administrative contact; CloudSawa does not display or store the outbound EPP secret.</p></div>
           <button disabled={busy !== null || domain.isLocked} onClick={requestAuthCode} className="btn-secondary shrink-0">{busy === "auth" ? "Requesting…" : domain.isLocked ? "Unlock first" : "Request EPP code"}</button>
         </div>
       </section>

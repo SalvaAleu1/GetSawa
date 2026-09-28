@@ -1,6 +1,6 @@
-# GetSawa Master Platform Roadmap
+# CloudSawa Master Platform Roadmap
 
-This is the canonical rebuild roadmap for GetSawa. A phase is complete when its implementation is committed, reviewed against repository contracts and safety rules, and is ready for the Cloudflare build/deployment gate. GitHub Actions are not required while the account's monthly Actions allowance is exhausted.
+This is the canonical rebuild roadmap for CloudSawa. A phase is complete when its implementation is committed, reviewed against repository contracts and safety rules, and is ready for the Cloudflare build/deployment gate. GitHub Actions are not required while the account's monthly Actions allowance is exhausted.
 
 Repository implementation is complete through Phase 31 as of September 13, 2026. This does **not** by itself approve a public production launch: the Phase 30 launch-readiness evidence gate remains authoritative for Cloudflare runtime validation, disaster-recovery proof, provider acceptance, legal/support readiness and the controlled production handoff.
 
@@ -47,7 +47,7 @@ Complete DNS record editor, validation, nameservers, DNSSEC/DS record management
 Transfer-in/out workflows, authorization codes, transfer status and recovery, domain locks, WHOIS privacy, renewal pricing, multi-year renewals, expiry-state handling and lifecycle controls.
 
 ### Phase 11 — Premium domains and aftermarket — DONE
-Separate registry-premium domains from GetSawa-owned and customer-custody aftermarket inventory; enforce custody verification, acquisition-cost/retail economics, seller consent, protected Buy Now and offer pricing, reservations, PayPal checkout, registrar-verified fulfillment, seller proceeds and auditable settlements. Unverified inventory is never public.
+Separate registry-premium domains from CloudSawa-owned and customer-custody aftermarket inventory; enforce custody verification, acquisition-cost/retail economics, seller consent, protected Buy Now and offer pricing, reservations, PayPal checkout, registrar-verified fulfillment, seller proceeds and auditable settlements. Unverified inventory is never public.
 
 ### Phase 12 — Domain auctions — DONE
 Auction discovery, verified-inventory eligibility, verified-account bidder controls, self-bid prevention, serializable bidding, anti-sniping, reserve logic, closing, winner payment windows, inventory reservation/release, PayPal capture, registrar-verified fulfillment, seller proceeds, admin controls, cancellation notifications and reconciliation/audit paths.

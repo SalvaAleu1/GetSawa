@@ -1,7 +1,7 @@
 import { getPricingSafetyPolicy } from "@/lib/pricing-policy";
 import { computeSafeRetailPrice } from "@/lib/pricing-safety";
 
-export type MarketplaceEconomicSource = "GETSAWA_INVENTORY" | "CUSTOMER_CUSTODY";
+export type MarketplaceEconomicSource = "CLOUDSAWA_INVENTORY" | "CUSTOMER_CUSTODY";
 
 export async function validatePremiumMarketplaceEconomics(params: {
   source: MarketplaceEconomicSource;
@@ -13,8 +13,8 @@ export async function validatePremiumMarketplaceEconomics(params: {
   if (!Number.isInteger(salePrice) || salePrice <= 0) throw new Error("A valid sale price is required.");
   const policy = await getPricingSafetyPolicy();
 
-  if (params.source === "GETSAWA_INVENTORY") {
-    if (params.acquisitionCostCents == null) throw new Error("GetSawa-owned inventory requires an acquisition cost.");
+  if (params.source === "CLOUDSAWA_INVENTORY") {
+    if (params.acquisitionCostCents == null) throw new Error("CloudSawa-owned inventory requires an acquisition cost.");
     const minimumSaleCents = computeSafeRetailPrice(params.acquisitionCostCents, policy).retailCents;
     if (salePrice < minimumSaleCents) {
       throw new Error(`This price is below the protected minimum of ${(minimumSaleCents / 100).toFixed(2)} USD.`);

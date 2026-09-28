@@ -9,7 +9,7 @@ import { logAudit } from "@/lib/audit";
 import { dnsRecordSchema, normalizeDnsHost } from "@/lib/dns";
 
 const schema = z.object({
-  format: z.literal("getsawa-dns-v1").optional(),
+  format: z.literal("cloudsawa-dns-v1").optional(),
   records: z.array(dnsRecordSchema).min(1).max(100),
 });
 

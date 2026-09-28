@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { jsonOk, handleError } from "@/lib/api";
 import { listPublicPremiumDomains, type PremiumInventorySource } from "@/lib/premium-aftermarket";
 
-const PUBLIC_SOURCES = new Set<PremiumInventorySource>(["GETSAWA_INVENTORY", "CUSTOMER_CUSTODY"]);
+const PUBLIC_SOURCES = new Set<PremiumInventorySource>(["CLOUDSAWA_INVENTORY", "CUSTOMER_CUSTODY"]);
 
 export async function GET(req: NextRequest) {
   try {

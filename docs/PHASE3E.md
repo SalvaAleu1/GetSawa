@@ -1,4 +1,4 @@
-# GetSawa Phase 3E — Production Operations & Observability
+# CloudSawa Phase 3E — Production Operations & Observability
 
 ## Delivered
 

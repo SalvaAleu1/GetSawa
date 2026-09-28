@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-: "${APP_URL:?APP_URL is required, for example https://staging.getsawa.app}"
+: "${APP_URL:?APP_URL is required, for example https://staging.cloudsawa.app}"
 : "${CRON_SECRET:?CRON_SECRET is required}"
 
 job="${1:-}"
@@ -29,6 +29,6 @@ printf 'Authorization: Bearer %s\n' "$CRON_SECRET" | \
   curl --fail-with-body --silent --show-error \
     --request GET \
     --header @- \
-    --header "x-getsawa-manual-recovery: true" \
+    --header "x-cloudsawa-manual-recovery: true" \
     "$base$route"
 printf '\nReconciliation job completed: %s\n' "$job"

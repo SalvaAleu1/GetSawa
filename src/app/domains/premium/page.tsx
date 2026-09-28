@@ -15,7 +15,7 @@ interface Listing {
   currency: string;
   category: string | null;
   isFeatured: boolean;
-  source: "GETSAWA_INVENTORY" | "CUSTOMER_CUSTODY";
+  source: "CLOUDSAWA_INVENTORY" | "CUSTOMER_CUSTODY";
   offerEnabled: boolean;
 }
 
@@ -84,7 +84,7 @@ export default function PremiumDomainsPage() {
               </select>
               <select className="input" value={source} onChange={(event) => setSource(event.target.value)} aria-label="Listing type">
                 <option value="">All listings</option>
-                <option value="GETSAWA_INVENTORY">GetSawa inventory</option>
+                <option value="CLOUDSAWA_INVENTORY">CloudSawa inventory</option>
                 <option value="CUSTOMER_CUSTODY">Marketplace sellers</option>
               </select>
               <input className="input" inputMode="decimal" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value.replace(/[^0-9.]/g, ""))} placeholder="Maximum price (USD)" aria-label="Maximum price in US dollars" />
@@ -108,7 +108,7 @@ export default function PremiumDomainsPage() {
           </section>
 
           <section className="mt-12 grid gap-4 lg:grid-cols-3">
-            <Info title="Verified listings" body="Domains are published only after GetSawa confirms that the domain is under managed registrar custody." />
+            <Info title="Verified listings" body="Domains are published only after CloudSawa confirms that the domain is under managed registrar custody." />
             <Info title="Protected checkout" body="A domain is reserved to one buyer while payment is being completed, preventing conflicting sales." />
             <Info title="Ownership delivery" body="After payment, ownership is completed through registrar verification before the domain is released into the buyer's account." />
           </section>
@@ -121,7 +121,7 @@ export default function PremiumDomainsPage() {
 
 function PremiumCard({ listing, onBuy }: { listing: Listing; onBuy: (listing: Listing) => void }) {
   return <article className="card flex h-full flex-col p-5">
-    <div className="flex flex-wrap items-center gap-2">{listing.isFeatured ? <span className="badge-warning">Featured</span> : null}<span className="badge-neutral">{listing.source === "GETSAWA_INVENTORY" ? "GetSawa" : "Marketplace"}</span>{listing.category ? <span className="badge-neutral">{listing.category}</span> : null}</div>
+    <div className="flex flex-wrap items-center gap-2">{listing.isFeatured ? <span className="badge-warning">Featured</span> : null}<span className="badge-neutral">{listing.source === "CLOUDSAWA_INVENTORY" ? "CloudSawa" : "Marketplace"}</span>{listing.category ? <span className="badge-neutral">{listing.category}</span> : null}</div>
     <Link href={`/domains/premium/${listing.id}`} className="mt-4 break-all text-xl font-bold hover:text-brand-600">{listing.domainName}</Link>
     <div className="mt-5"><p className="text-2xl font-bold">{money(listing.retailPriceCents, listing.currency)}</p><p className="mt-1 text-xs text-ink/45">Renewal estimate: {money(listing.renewalPriceCents, listing.currency)}/year</p></div>
     <div className="mt-auto flex gap-2 pt-6"><button type="button" className="btn-primary flex-1" onClick={() => onBuy(listing)}>Buy now</button><Link href={`/domains/premium/${listing.id}`} className="btn-secondary">Details</Link></div>

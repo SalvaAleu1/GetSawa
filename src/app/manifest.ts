@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "GetSawa",
-    short_name: "GetSawa",
+    name: "CloudSawa",
+    short_name: "CloudSawa",
     description: "Domains, hosting, business email, security, and website tools in one account.",
     start_url: "/",
     scope: "/",

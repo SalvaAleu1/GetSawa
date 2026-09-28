@@ -148,7 +148,7 @@ export function PortalShell({ children, navGroups, mode = "customer" }: PortalSh
             </button>
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-ink">{currentLabel}</p>
-              <p className="hidden text-xs text-ink/45 sm:block">{isAdmin ? "GetSawa operations" : "Manage your GetSawa account"}</p>
+              <p className="hidden text-xs text-ink/45 sm:block">{isAdmin ? "CloudSawa operations" : "Manage your CloudSawa account"}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

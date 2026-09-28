@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "getsawa",
+  "name": "cloudsawa",
   "main": "./cloudflare-worker.ts",
   "compatibility_date": "2026-09-12",
   "compatibility_flags": ["nodejs_compat"],
@@ -15,7 +15,7 @@
   },
   "vars": {
     "APP_ENV": "preview",
-    "APP_NAME": "GetSawa",
-    "CLOUDFLARE_WORKER_SERVICE_NAME": "getsawa"
+    "APP_NAME": "CloudSawa",
+    "CLOUDFLARE_WORKER_SERVICE_NAME": "cloudsawa"
   }
 }

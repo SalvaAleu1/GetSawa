@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS "premium_inventory_meta" (
   "sold_at" TIMESTAMP(3),
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "premium_inventory_source_check" CHECK ("source" IN ('UNVERIFIED','GETSAWA_INVENTORY','CUSTOMER_CUSTODY','REGISTRY_PREMIUM')),
+  CONSTRAINT "premium_inventory_source_check" CHECK ("source" IN ('UNVERIFIED','CLOUDSAWA_INVENTORY','CUSTOMER_CUSTODY','REGISTRY_PREMIUM')),
   CONSTRAINT "premium_inventory_fulfillment_check" CHECK ("fulfillment_mode" IN ('MANUAL_REVIEW','INTERNAL_ASSIGNMENT','REGISTRY_REGISTRATION')),
   CONSTRAINT "premium_inventory_cost_check" CHECK ("acquisition_cost_cents" IS NULL OR "acquisition_cost_cents" >= 0),
   CONSTRAINT "premium_inventory_commission_check" CHECK ("commission_bps" >= 0 AND "commission_bps" <= 10000)

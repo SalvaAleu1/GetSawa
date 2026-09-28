@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
         },
       });
       await finalizeOrderCredit(order.id);
-      await transitionOrderStatus({ orderId: order.id, to: "PAYMENT_CONFIRMED", reason: "Order paid in full using GetSawa account credit." });
+      await transitionOrderStatus({ orderId: order.id, to: "PAYMENT_CONFIRMED", reason: "Order paid in full using CloudSawa account credit." });
       await recordPaymentSettlement({ paymentId: payment.id, providerReference: payment.providerCaptureId });
       checkoutReady = true;
       await logAudit({ actorId: user.id, action: "order.paid_with_credit", resource: "order", resourceId: order.id, ipAddress: ip, metadata: { creditAppliedCents } }).catch(() => undefined);
@@ -193,7 +193,7 @@ export async function POST(req: NextRequest) {
       amountCents: amountDueCents,
       currency: priced.currency,
       referenceId: order.id,
-      description: `GetSawa order ${order.orderNumber}`,
+      description: `CloudSawa order ${order.orderNumber}`,
       idempotencyKey,
       returnUrl: `${process.env.APP_URL}/checkout/confirm?orderId=${order.id}`,
       cancelUrl: `${process.env.APP_URL}/checkout?cancelled=1`,

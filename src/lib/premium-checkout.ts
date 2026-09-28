@@ -10,7 +10,7 @@ export interface ReservedPremiumItem {
 export async function validatePricedPremiumCart(priced: PricedCart, buyerUserId: string) {
   const seen = new Set<string>();
   for (const item of priced.items) {
-    if (item.pricingSource !== "GETSAWA_PREMIUM_LISTING") continue;
+    if (item.pricingSource !== "CLOUDSAWA_PREMIUM_LISTING") continue;
     if (!item.domain) throw new CheckoutError("Premium domain checkout is missing its domain reference.");
     const listing = await prisma.premiumDomain.findUnique({ where: { domainName: item.domain.toLowerCase() } });
     if (!listing || listing.status !== "LISTED") throw new CheckoutError(`${item.domain} is no longer available.`);
@@ -29,7 +29,7 @@ export async function reservePricedPremiumCart(priced: PricedCart, buyerUserId: 
   const reserved: ReservedPremiumItem[] = [];
   for (let index = 0; index < priced.items.length; index++) {
     const item = priced.items[index];
-    if (!item || item.pricingSource !== "GETSAWA_PREMIUM_LISTING" || !item.domain) continue;
+    if (!item || item.pricingSource !== "CLOUDSAWA_PREMIUM_LISTING" || !item.domain) continue;
     const listing = await prisma.premiumDomain.findUnique({ where: { domainName: item.domain.toLowerCase() } });
     if (!listing || listing.status !== "LISTED") throw new CheckoutError(`${item.domain} is no longer available.`);
     await reservePremiumInventory(listing.id, buyerUserId);

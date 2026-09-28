@@ -46,7 +46,7 @@ export function BrandLogo({ href = "/", inverse = false, compact = false, classN
   if (!href) return <span className={classes}>{content}</span>;
 
   return (
-    <Link href={href} className={classes} aria-label="GetSawa home">
+    <Link href={href} className={classes} aria-label="CloudSawa home">
       {content}
     </Link>
   );

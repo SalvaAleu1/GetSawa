@@ -1,4 +1,4 @@
-# GetSawa production launch runbook
+# CloudSawa production launch runbook
 
 The repository can be technically complete while launch remains blocked. `npm run ops:launch-readiness` is the final evidence gate and must exit successfully from the exact production commit before launch approval.
 
@@ -11,7 +11,7 @@ Copy `docs/operations/LAUNCH_EVIDENCE.template.json` to `.ops/launch-evidence.js
 - Phase 26 runtime Lighthouse/mobile/accessibility/PWA evidence from Cloudflare staging/production.
 - Phase 27 real database backup + isolated restore drill with measured RPO/RTO and reconciliation.
 - Phase 28 Cloudflare staging deployment/runtime/cron/observability evidence.
-- Phase 29 verified Vercel scheduler shutdown, Cloudflare `getsawa.app` cutover, webhook/scheduler/reconciliation proof.
+- Phase 29 verified Vercel scheduler shutdown, Cloudflare `cloudsawa.app` cutover, webhook/scheduler/reconciliation proof.
 - Prisma production migration status and reviewed migration deployment evidence.
 - Security review including admin/MFA, secret permissions/rotation path, rate limits and audit/incident readiness.
 - Legal approval of public Terms, Privacy and Refund policies for actual launch jurisdictions.

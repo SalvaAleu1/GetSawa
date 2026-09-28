@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
     if (input.action === "ACCEPT" || input.action === "COUNTER") {
       const proposed = input.action === "COUNTER" ? input.counterAmountCents : Number(offer.amount_cents);
-      if (offer.source !== "GETSAWA_INVENTORY" && offer.source !== "CUSTOMER_CUSTODY") return jsonError("This inventory source is not eligible for negotiated aftermarket sales.", 409);
+      if (offer.source !== "CLOUDSAWA_INVENTORY" && offer.source !== "CUSTOMER_CUSTODY") return jsonError("This inventory source is not eligible for negotiated aftermarket sales.", 409);
       await validatePremiumMarketplaceEconomics({
         source: offer.source,
         salePriceCents: proposed,

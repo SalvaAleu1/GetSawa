@@ -19,4 +19,4 @@ For every enabled provider record: environment (`staging`/`production`), provide
 
 ## Financial and registrar safety
 
-A single HTTP timeout must never trigger an unverified second payment capture or domain registration/renewal. First reconcile using the existing payment/domain recovery flows. Premium registry prices must be treated as authoritative and re-quoted when stale; GetSawa markup cannot replace or cap an unknown wholesale price.
+A single HTTP timeout must never trigger an unverified second payment capture or domain registration/renewal. First reconcile using the existing payment/domain recovery flows. Premium registry prices must be treated as authoritative and re-quoted when stale; CloudSawa markup cannot replace or cap an unknown wholesale price.

@@ -295,7 +295,7 @@ export default function SettingsPage() {
           {!user.mfaEnabled && !mfaSetup ? <button type="button" onClick={beginMfa} className="btn-primary mt-5">Set up two-factor authentication</button> : null}
           {!user.mfaEnabled && mfaSetup ? (
             <div className="mt-5 space-y-4 rounded-xl border border-border bg-paper p-4">
-              <div><p className="text-sm font-bold">1. Add GetSawa to your authenticator app</p><p className="mt-1 break-all font-mono text-xs text-ink/60">Secret: {mfaSetup.secret}</p><a href={mfaSetup.otpAuthUri} className="mt-2 inline-block text-sm font-semibold text-brand-600 hover:underline">Open authenticator link</a></div>
+              <div><p className="text-sm font-bold">1. Add CloudSawa to your authenticator app</p><p className="mt-1 break-all font-mono text-xs text-ink/60">Secret: {mfaSetup.secret}</p><a href={mfaSetup.otpAuthUri} className="mt-2 inline-block text-sm font-semibold text-brand-600 hover:underline">Open authenticator link</a></div>
               <div><label className="label">2. Enter the 6-digit code</label><input className="input max-w-52 font-mono" inputMode="numeric" maxLength={6} value={mfaToken} onChange={(event) => setMfaToken(event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="000000" /></div>
               <button type="button" disabled={mfaToken.length !== 6} onClick={verifyMfa} className="btn-primary">Verify and enable</button>
             </div>
@@ -305,7 +305,7 @@ export default function SettingsPage() {
       </section>
 
       <section>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="section-heading">Active sessions</h2><p className="mt-1 text-sm text-ink/50">Review browsers and devices that currently hold an active GetSawa session.</p></div><button onClick={revokeAll} className="btn-danger">Sign out everywhere</button></div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="section-heading">Active sessions</h2><p className="mt-1 text-sm text-ink/50">Review browsers and devices that currently hold an active CloudSawa session.</p></div><button onClick={revokeAll} className="btn-danger">Sign out everywhere</button></div>
         <div className="card mt-3 divide-y divide-border">
           {sessions.map((session) => <div key={session.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><p className="font-semibold">{session.isCurrent ? "This device" : "Active session"}</p>{session.isCurrent ? <span className="badge-success">Current</span> : null}{session.ipAddress ? <span className="text-xs text-ink/45">{session.ipAddress}</span> : null}</div><p className="mt-1 break-words text-xs leading-5 text-ink/45">{session.userAgent || "Unknown browser"}</p><p className="text-xs text-ink/40">Started {new Date(session.createdAt).toLocaleString()} · expires {new Date(session.expiresAt).toLocaleString()}</p></div>{!session.isCurrent ? <button onClick={() => revoke(session.id)} className="btn-secondary shrink-0">Revoke</button> : null}</div>)}
           {sessions.length === 0 ? <p className="p-5 text-sm text-ink/55">No active sessions.</p> : null}

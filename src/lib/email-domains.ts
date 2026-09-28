@@ -135,7 +135,7 @@ export async function inspectEmailDns(userId: string, domainId: string) {
   const publicState = await publicDnsState(domain.name, required);
   const routingReady = publicState.mxReady && publicState.cnameReady;
   const state = {
-    authoritativeDnsManagedByGetSawa: managedHere,
+    authoritativeDnsManagedByCloudSawa: managedHere,
     nameservers: info.nameservers,
     requiredRecords: required,
     configuredAtManagedProvider: managedHere ? { mxReady: configuredMx, cnameReady: configuredCname } : null,
@@ -180,7 +180,7 @@ export async function applyEmailDnsCutover(params: { userId: string; domainId: s
   if (!domainProvider.isConfigured()) throw new Error("The domain provider is not configured.");
   const info = await domainProvider.getDomainInfo(domain.name);
   if (domain.providerName !== domainProvider.name || !isNameSiloManagedDns(info.nameservers)) {
-    throw new Error("This domain uses external DNS. GetSawa will not edit inactive NameSilo DNS records; add the displayed OpenSRS records at the authoritative DNS provider instead.");
+    throw new Error("This domain uses external DNS. CloudSawa will not edit inactive NameSilo DNS records; add the displayed OpenSRS records at the authoritative DNS provider instead.");
   }
 
   let records = await domainProvider.listDnsRecords(domain.name);

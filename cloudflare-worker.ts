@@ -40,11 +40,11 @@ async function runScheduledJob(job: CronJob, scheduledAt: Date, env: WorkerEnv, 
 
   try {
     const response = await handler.fetch(
-      new Request(new URL(job.route, "https://getsawa.internal"), {
+      new Request(new URL(job.route, "https://cloudsawa.internal"), {
         method: "GET",
         headers: {
           authorization: `Bearer ${env.CRON_SECRET}`,
-          "x-getsawa-cron": job.schedule,
+          "x-cloudsawa-cron": job.schedule,
         },
       }),
       env,
@@ -67,7 +67,7 @@ async function runScheduledJob(job: CronJob, scheduledAt: Date, env: WorkerEnv, 
   } finally {
     try {
       await handler.fetch(
-        new Request(new URL("/api/internal/observability/job-run", "https://getsawa.internal"), {
+        new Request(new URL("/api/internal/observability/job-run", "https://cloudsawa.internal"), {
           method: "POST",
           headers: {
             authorization: `Bearer ${env.CRON_SECRET}`,
@@ -97,8 +97,8 @@ export default {
   async fetch(request: Request, env: WorkerEnv, ctx: WorkerContext) {
     const response = await handler.fetch(request, env, ctx);
     const headers = new Headers(response.headers);
-    headers.set("x-getsawa-runtime", "cloudflare-worker");
-    headers.set("x-getsawa-environment", env.APP_ENV || "unknown");
+    headers.set("x-cloudsawa-runtime", "cloudflare-worker");
+    headers.set("x-cloudsawa-environment", env.APP_ENV || "unknown");
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
@@ -116,7 +116,7 @@ export default {
     const batch = Promise.allSettled(dueJobs.map((job) => runScheduledJob(job, scheduledAt, env, ctx))).then((results) => {
       const failures = results.filter((result) => result.status === "rejected");
       if (failures.length > 0) {
-        throw new Error(`${failures.length} of ${results.length} scheduled GetSawa jobs failed.`);
+        throw new Error(`${failures.length} of ${results.length} scheduled CloudSawa jobs failed.`);
       }
     });
 

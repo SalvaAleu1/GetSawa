@@ -1,8 +1,8 @@
 import { Navbar } from "@/components/Navbar";
 
 export const metadata = {
-  title: "Privacy Policy — GetSawa",
-  description: "How GetSawa collects, uses, protects and retains customer information.",
+  title: "Privacy Policy — CloudSawa",
+  description: "How CloudSawa collects, uses, protects and retains customer information.",
 };
 
 export default function PrivacyPage() {
@@ -13,7 +13,7 @@ export default function PrivacyPage() {
         <article className="prose prose-slate max-w-none">
           <h1>Privacy Policy</h1>
           <p className="lead">Last updated: September 13, 2026</p>
-          <p>This policy explains how GetSawa handles information when you create an account, purchase or manage a
+          <p>This policy explains how CloudSawa handles information when you create an account, purchase or manage a
             service, contact support, use our API, or browse the public website.</p>
 
           <h2>1. Information we collect</h2>
@@ -23,7 +23,7 @@ export default function PrivacyPage() {
               renewal settings and other information needed to provide domain services.</li>
             <li><strong>Transaction information:</strong> orders, invoices, payment status, provider transaction IDs,
               refunds and related accounting records. Full payment-card credentials are handled by the payment provider,
-              not stored as raw card data by GetSawa.</li>
+              not stored as raw card data by CloudSawa.</li>
             <li><strong>Security information:</strong> password hashes, session identifiers, login events, IP address,
               user-agent information, verification/reset tokens and audit records.</li>
             <li><strong>Support and content:</strong> support messages, website content, blog submissions and other
@@ -49,7 +49,7 @@ export default function PrivacyPage() {
             is appropriate.</p>
 
           <h2>5. Cookies and sessions</h2>
-          <p>GetSawa uses essential cookies or equivalent session mechanisms to maintain authenticated sessions and
+          <p>CloudSawa uses essential cookies or equivalent session mechanisms to maintain authenticated sessions and
             security. Referral tracking may use a short-lived cookie when a visitor follows a referral link. We do not
             require advertising cookies for core account or checkout functionality.</p>
 
@@ -72,14 +72,14 @@ export default function PrivacyPage() {
           <h2>9. Your choices and rights</h2>
           <p>Depending on your location, you may have rights to access, correct, delete, restrict or object to certain
             processing of your personal information. Some records must be retained for legal or accounting reasons.
-            Requests can be made through GetSawa support.</p>
+            Requests can be made through CloudSawa support.</p>
 
           <h2>10. Children</h2>
-          <p>GetSawa is not directed to children who are not legally able to enter the relevant service agreements. We do
+          <p>CloudSawa is not directed to children who are not legally able to enter the relevant service agreements. We do
             not knowingly request unnecessary personal information from children.</p>
 
           <h2>11. International processing</h2>
-          <p>GetSawa and its service providers may process information in countries different from your country of
+          <p>CloudSawa and its service providers may process information in countries different from your country of
             residence. Where required, appropriate contractual or legal safeguards are used for such transfers.</p>
 
           <h2>12. Changes</h2>
@@ -87,7 +87,7 @@ export default function PrivacyPage() {
             page will be updated when material changes are published.</p>
 
           <h2>13. Contact</h2>
-          <p>For privacy requests or questions, use the official support channels published by GetSawa. Please do not
+          <p>For privacy requests or questions, use the official support channels published by CloudSawa. Please do not
             include passwords, payment-card numbers or other unnecessary secrets in a support request.</p>
         </article>
       </main>

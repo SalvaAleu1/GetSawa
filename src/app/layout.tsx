@@ -26,7 +26,7 @@ const ibmPlexMono = IBM_Plex_Mono({
   preload: false,
 });
 
-const appUrl = process.env.APP_URL || "https://getsawa.app";
+const appUrl = process.env.APP_URL || "http://localhost:3000";
 const normalizedAppUrl = appUrl.replace(/\/$/, "");
 const structuredData = {
   "@context": "https://schema.org",
@@ -34,7 +34,7 @@ const structuredData = {
     {
       "@type": "Organization",
       "@id": `${normalizedAppUrl}/#organization`,
-      name: "GetSawa",
+      name: "CloudSawa",
       url: normalizedAppUrl,
       logo: `${normalizedAppUrl}/icon-512.png`,
     },
@@ -42,7 +42,7 @@ const structuredData = {
       "@type": "WebSite",
       "@id": `${normalizedAppUrl}/#website`,
       url: normalizedAppUrl,
-      name: "GetSawa",
+      name: "CloudSawa",
       publisher: { "@id": `${normalizedAppUrl}/#organization` },
       inLanguage: "en",
     },
@@ -52,12 +52,12 @@ const structuredData = {
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
   title: {
-    default: "GetSawa — Domains, Hosting & Websites",
-    template: "%s | GetSawa",
+    default: "CloudSawa — Domains, Hosting & Websites",
+    template: "%s | CloudSawa",
   },
   description:
-    "Search, register, and manage domains, hosting, business email, website security, and websites from one GetSawa account.",
-  applicationName: "GetSawa",
+    "Search, register, and manage domains, hosting, business email, website security, and websites from one CloudSawa account.",
+  applicationName: "CloudSawa",
   keywords: [
     "domain registration",
     "web hosting",
@@ -65,23 +65,23 @@ export const metadata: Metadata = {
     "website builder",
     "DNS",
     "SSL",
-    "GetSawa",
+    "CloudSawa",
   ],
-  creator: "GetSawa",
-  publisher: "GetSawa",
+  creator: "CloudSawa",
+  publisher: "CloudSawa",
   category: "technology",
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
-    siteName: "GetSawa",
+    siteName: "CloudSawa",
     url: "/",
-    title: "GetSawa — Domains, Hosting & Websites",
+    title: "CloudSawa — Domains, Hosting & Websites",
     description:
       "Domains, hosting, business email, website security, and website tools managed from one account.",
   },
   twitter: {
     card: "summary",
-    title: "GetSawa — Domains, Hosting & Websites",
+    title: "CloudSawa — Domains, Hosting & Websites",
     description:
       "Domains, hosting, business email, website security, and website tools managed from one account.",
   },

@@ -1,6 +1,6 @@
 # Scope — what's in Phase 1 and what isn't
 
-The original GetSawa specification describes a very large platform: domain
+The original CloudSawa specification describes a very large platform: domain
 registration, hosting, business email, an AI website builder, auctions, an
 affiliate/reseller program, and a full commerce/marketing engine on top. That
 is realistically a multi-month build for a team, not something that can be
@@ -74,7 +74,7 @@ as Phase 1 (its own section 162), built with no shortcuts on the core rule:
   isolation, retried on conflict, so two simultaneous bids can never both
   "win"), anti-sniping auto-extension, admin auction management, and a real
   PayPal payment flow for the winning bidder that attempts to register the
-  domain through NameSilo on payment. If GetSawa doesn't directly control
+  domain through NameSilo on payment. If CloudSawa doesn't directly control
   the auctioned domain at the registry, that final handoff needs a manual
   admin step — documented in the code, not hidden.
 - **Premium domain marketplace** — admin-managed listings, public browse and

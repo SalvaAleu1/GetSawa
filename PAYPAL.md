@@ -9,7 +9,7 @@ https://developer.paypal.com/docs/payouts/
 2. Go to **Apps & Credentials**, switch to **Live**, and create an app.
 3. Copy the **Client ID** and **Secret**.
 
-## 2. Configure GetSawa
+## 2. Configure CloudSawa
 
 ```
 PAYPAL_CLIENT_ID=your-live-client-id

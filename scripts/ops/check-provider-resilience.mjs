@@ -49,18 +49,18 @@ if (expandedAutomaticCapabilities.length > 0 && !process.env.PROVIDER_FAILOVER_A
   failures.push("PROVIDER_FAILOVER_APPROVAL_ID is required when automatic failover is requested.");
 }
 
-const currencies = (process.env.GETSAWA_SUPPORTED_CURRENCIES || "USD").split(",").map((v) => v.trim().toUpperCase()).filter(Boolean);
-const locales = (process.env.GETSAWA_SUPPORTED_LOCALES || "en").split(",").map((v) => v.trim()).filter(Boolean);
+const currencies = (process.env.CLOUDSAWA_SUPPORTED_CURRENCIES || "USD").split(",").map((v) => v.trim().toUpperCase()).filter(Boolean);
+const locales = (process.env.CLOUDSAWA_SUPPORTED_LOCALES || "en").split(",").map((v) => v.trim()).filter(Boolean);
 if (!currencies.includes("USD")) failures.push("USD must remain supported until a reviewed base-currency migration is completed.");
 if (!locales.includes("en")) failures.push("English (en) must remain supported while it is the canonical legal/product language.");
 for (const currency of currencies) if (!/^[A-Z]{3}$/.test(currency)) failures.push(`Invalid ISO-style currency code: ${currency}`);
 for (const locale of locales) if (!/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(locale)) failures.push(`Invalid locale tag: ${locale}`);
 
 if (failures.length) {
-  console.error("GETSAWA PROVIDER RESILIENCE: BLOCKED");
+  console.error("CLOUDSAWA PROVIDER RESILIENCE: BLOCKED");
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
 
-console.log("GETSAWA PROVIDER RESILIENCE: SAFE CONFIGURATION");
+console.log("CLOUDSAWA PROVIDER RESILIENCE: SAFE CONFIGURATION");
 console.log("No unimplemented provider or unsafe automatic failover is selected.");

@@ -1,4 +1,4 @@
-# GetSawa Production Checklist
+# CloudSawa Production Checklist
 
 ## Application
 - [ ] Production domain configured

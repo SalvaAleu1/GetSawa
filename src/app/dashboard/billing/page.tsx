@@ -120,13 +120,13 @@ export default function BillingPage() {
     {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
 
     <section className="grid gap-4 md:grid-cols-3">
-      <div className="rounded-2xl border p-5"><p className="text-sm text-gray-500">Available GetSawa credit</p><p className="mt-2 text-2xl font-semibold">{money(availableCredit)}</p><p className="mt-1 text-xs text-gray-500">{reservedCredit > 0 ? `${money(reservedCredit)} is reserved by a pending checkout.` : "No credit is currently reserved by another checkout."}</p></div>
+      <div className="rounded-2xl border p-5"><p className="text-sm text-gray-500">Available CloudSawa credit</p><p className="mt-2 text-2xl font-semibold">{money(availableCredit)}</p><p className="mt-1 text-xs text-gray-500">{reservedCredit > 0 ? `${money(reservedCredit)} is reserved by a pending checkout.` : "No credit is currently reserved by another checkout."}</p></div>
       <div className="rounded-2xl border p-5"><p className="text-sm text-gray-500">PayPal</p><p className="mt-2 text-lg font-semibold">{data?.paymentMethods.paypal.enabled ? "Available" : "Unavailable"}</p><p className="mt-1 text-xs text-gray-500">Payment availability is verified server-side before handoff.</p></div>
       <div className="rounded-2xl border p-5"><p className="text-sm text-gray-500">Direct card gateway</p><p className="mt-2 text-lg font-semibold">Not configured</p><p className="mt-1 text-xs text-gray-500">We do not show a direct-card option until a production gateway is genuinely enabled.</p></div>
     </section>
 
     <section className="space-y-3">
-      <div><h2 className="text-xl font-semibold">Recurring services</h2><p className="mt-1 text-sm text-gray-600">Each service keeps its own registrar/provider lifecycle while sharing one protected GetSawa billing history.</p></div>
+      <div><h2 className="text-xl font-semibold">Recurring services</h2><p className="mt-1 text-sm text-gray-600">Each service keeps its own registrar/provider lifecycle while sharing one protected CloudSawa billing history.</p></div>
       {subscriptions.length === 0 ? <div className="rounded-xl border p-6 text-sm text-gray-600">No recurring services are currently attached to your account.</div> :
         <div className="overflow-x-auto rounded-xl border"><table className="w-full text-left text-sm"><thead className="border-b bg-gray-50"><tr><th className="p-4">Service</th><th className="p-4">Renewal</th><th className="p-4">Period ends</th><th className="p-4">Invoice check</th><th className="p-4">Automation</th></tr></thead><tbody>
           {subscriptions.map((subscription) => <tr key={subscription.id} className="border-b last:border-0">

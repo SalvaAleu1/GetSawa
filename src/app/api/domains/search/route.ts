@@ -12,7 +12,7 @@ import { mapDiscoveryResult, normalizeDomainLabel } from "@/lib/domain-discovery
  *
  * The query is a domain label; callers may submit a full URL/domain and the
  * first label is normalized safely. Availability comes live from the active
- * registrar. Display pricing uses GetSawa's protected price floor while
+ * registrar. Display pricing uses CloudSawa's protected price floor while
  * checkout independently refreshes wholesale pricing again.
  */
 export async function GET(req: NextRequest) {
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
       : activeTlds.slice(0, 20);
 
     if (tldsToCheck.length === 0) {
-      return jsonError("None of the requested domain extensions are active in GetSawa.", 400);
+      return jsonError("None of the requested domain extensions are active in CloudSawa.", 400);
     }
 
     const provider = getDomainProvider();

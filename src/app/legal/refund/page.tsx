@@ -1,8 +1,8 @@
 import { Navbar } from "@/components/Navbar";
 
 export const metadata = {
-  title: "Refund Policy — GetSawa",
-  description: "Refund and cancellation rules for GetSawa services.",
+  title: "Refund Policy — CloudSawa",
+  description: "Refund and cancellation rules for CloudSawa services.",
 };
 
 export default function RefundPolicyPage() {
@@ -13,7 +13,7 @@ export default function RefundPolicyPage() {
         <article className="prose prose-slate max-w-none">
           <h1>Refund & Cancellation Policy</h1>
           <p className="lead">Last updated: September 13, 2026</p>
-          <p>This policy explains how GetSawa handles cancellations, failed provisioning, refunds and domain-related
+          <p>This policy explains how CloudSawa handles cancellations, failed provisioning, refunds and domain-related
             purchases. Product-specific terms shown at checkout also apply.</p>
 
           <h2>1. Domain registrations</h2>
@@ -22,14 +22,14 @@ export default function RefundPolicyPage() {
             customer should verify the domain and registration period before confirming payment.</p>
 
           <h2>2. Failed registration or provisioning</h2>
-          <p>If payment succeeds but GetSawa cannot provision a paid service, the order is recorded as failed rather than
-            being falsely marked active. GetSawa will investigate the failure and, where the service was not delivered,
+          <p>If payment succeeds but CloudSawa cannot provision a paid service, the order is recorded as failed rather than
+            being falsely marked active. CloudSawa will investigate the failure and, where the service was not delivered,
             provide an appropriate refund or remediation subject to the payment provider, registry rules and the specific
             product terms.</p>
 
           <h2>3. Domain transfers</h2>
           <p>Transfer fees may become non-refundable once a transfer has been submitted to the registrar or registry,
-            depending on the provider&apos;s rules. If a transfer fails before the service is consumed, GetSawa may refund
+            depending on the provider&apos;s rules. If a transfer fails before the service is consumed, CloudSawa may refund
             the applicable fee or allow a resubmission where supported.</p>
 
           <h2>4. Renewals</h2>
@@ -47,13 +47,13 @@ export default function RefundPolicyPage() {
             undelivered portion, subject to the applicable product terms and law.</p>
 
           <h2>7. Duplicate or erroneous charges</h2>
-          <p>GetSawa uses server-side pricing and payment idempotency to reduce duplicate charges. If you believe you were
+          <p>CloudSawa uses server-side pricing and payment idempotency to reduce duplicate charges. If you believe you were
             charged twice for the same order, contact support promptly with the order number. We will reconcile the
             payment records with the payment provider and refund a confirmed duplicate charge.</p>
 
           <h2>8. Chargebacks and disputes</h2>
-          <p>Please contact GetSawa support first when a payment or service issue can be resolved directly. Unauthorized
-            transactions should also be reported to your payment provider immediately. GetSawa may suspend affected
+          <p>Please contact CloudSawa support first when a payment or service issue can be resolved directly. Unauthorized
+            transactions should also be reported to your payment provider immediately. CloudSawa may suspend affected
             services while a payment dispute is investigated.</p>
 
           <h2>9. How to request a refund</h2>

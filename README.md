@@ -1,6 +1,6 @@
-# GetSawa
+# CloudSawa
 
-GetSawa is a domain registration, hosting, and digital-services platform. This
+CloudSawa is a domain registration, hosting, and digital-services platform. This
 repository contains the real working platform across the current development
 phases: domain search and registration through NameSilo, PayPal payments,
 customer and admin dashboards, domain transfers, DNS management, AI website

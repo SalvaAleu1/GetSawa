@@ -68,7 +68,7 @@ export function computeTldPrice(tld: Tld): ComputedTldPrice {
 }
 
 /**
- * Applies GetSawa's loss-prevention floor to every configured TLD price.
+ * Applies CloudSawa's loss-prevention floor to every configured TLD price.
  * The `wholesaleOverride` should come from a fresh provider quote in checkout;
  * the values stored on the TLD row are a fallback for display/admin purposes.
  */

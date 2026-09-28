@@ -20,7 +20,7 @@ Implemented contracts:
 - Messaging & Alerts admin workspace shows delivery history, manual retries, support SLA state, operational alerts and inbound provider webhook processing health;
 - alert acknowledgement/resolution and delivery retries are audited.
 
-Phase 22 does **not** add public/customer-configurable outbound webhook subscriptions; that belongs to Phase 23's developer integration platform. This phase monitors the provider webhooks GetSawa already receives and processes.
+Phase 22 does **not** add public/customer-configurable outbound webhook subscriptions; that belongs to Phase 23's developer integration platform. This phase monitors the provider webhooks CloudSawa already receives and processes.
 
 Deployment requires migration `20260913093000_messaging_delivery_support_ops`, a configured `CRON_SECRET`, the new `*/6 * * * *` Cloudflare cron trigger, and production SMTP credentials for email delivery. If SMTP is unavailable, messages remain visible in-app and email failures remain retryable/auditable rather than being reported as sent.
 

@@ -46,7 +46,7 @@ export default async function HomePage() {
                 Start with a domain. Build everything around it.
               </h1>
               <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-ink/60 sm:text-lg">
-                Search domains, see transparent prices, buy through server-verified checkout, and manage your digital services from one GetSawa account.
+                Search domains, see transparent prices, buy through server-verified checkout, and manage your digital services from one CloudSawa account.
               </p>
             </div>
 
@@ -97,10 +97,10 @@ export default async function HomePage() {
 
         <section className="shell-container py-16 lg:py-20">
           <div className="mx-auto max-w-2xl text-center">
-            <p className="eyebrow">GetSawa services</p>
+            <p className="eyebrow">CloudSawa services</p>
             <h2 className="mt-3 text-3xl font-bold text-ink">One account, without pretending every integration is already live.</h2>
             <p className="mt-4 text-sm leading-6 text-ink/55">
-              GetSawa exposes each service according to its real provider state. Products that cannot be provisioned safely stay in preparation instead of being sold as placeholders.
+              CloudSawa exposes each service according to its real provider state. Products that cannot be provisioned safely stay in preparation instead of being sold as placeholders.
             </p>
           </div>
 
@@ -193,7 +193,7 @@ export default async function HomePage() {
                     {product.isFeatured ? <span className="badge-warning">Featured</span> : null}
                   </div>
                   <h3 className="mt-4 text-lg font-bold">{product.name}</h3>
-                  <p className="mt-2 line-clamp-3 flex-1 text-sm leading-6 text-ink/55">{product.description ?? "Available through the GetSawa product catalog."}</p>
+                  <p className="mt-2 line-clamp-3 flex-1 text-sm leading-6 text-ink/55">{product.description ?? "Available through the CloudSawa product catalog."}</p>
                   <div className="mt-5 flex items-baseline gap-1">
                     <span className="text-2xl font-bold">{formatCents(product.retailPriceCents, product.currency)}</span>
                     <span className="text-sm text-ink/45">{billingSuffix(product.billingCycle)}</span>
@@ -210,7 +210,7 @@ export default async function HomePage() {
               <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-200">Commerce safeguards</p>
               <h2 className="mt-3 text-3xl font-bold">A cheaper-looking price is useless if the business loses money fulfilling it.</h2>
               <p className="mt-4 text-sm leading-7 text-white/60">
-                GetSawa now prices domain transactions from server-side data, protects minimum margin, and refuses uncertain registry-premium pricing instead of guessing.
+                CloudSawa now prices domain transactions from server-side data, protects minimum margin, and refuses uncertain registry-premium pricing instead of guessing.
               </p>
               <Link href="/domains/search" className="btn-amber mt-6">Search safely</Link>
             </div>
@@ -234,14 +234,14 @@ export default async function HomePage() {
           <div className="grid gap-5 lg:grid-cols-3">
             <Link href="/domains/transfer" className="panel group p-6 transition hover:border-brand-200 hover:shadow-card">
               <p className="eyebrow">Already own a domain?</p>
-              <h3 className="mt-3 text-xl font-bold">Transfer it to GetSawa</h3>
+              <h3 className="mt-3 text-xl font-bold">Transfer it to CloudSawa</h3>
               <p className="mt-2 text-sm leading-6 text-ink/55">Start a transfer with your authorization code and follow its status from your account.</p>
               <span className="mt-5 inline-block text-sm font-bold text-brand-600">Transfer domain →</span>
             </Link>
             <Link href="/domains/premium" className="panel group p-6 transition hover:border-brand-200 hover:shadow-card">
               <p className="eyebrow">Higher-value names</p>
               <h3 className="mt-3 text-xl font-bold">Browse premium domains</h3>
-              <p className="mt-2 text-sm leading-6 text-ink/55">GetSawa keeps premium pricing separate from ordinary TLD pricing so high-cost names cannot masquerade as standard domains.</p>
+              <p className="mt-2 text-sm leading-6 text-ink/55">CloudSawa keeps premium pricing separate from ordinary TLD pricing so high-cost names cannot masquerade as standard domains.</p>
               <span className="mt-5 inline-block text-sm font-bold text-brand-600">Browse premium →</span>
             </Link>
             <Link href="/domains/auctions" className="panel group p-6 transition hover:border-brand-200 hover:shadow-card">

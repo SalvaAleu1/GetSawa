@@ -135,7 +135,7 @@ export function DnsManager({ domainId }: { domainId: string }) {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `getsawa-dns-${domainId}.json`;
+      anchor.download = `cloudsawa-dns-${domainId}.json`;
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (err) { setError(err instanceof Error ? err.message : "DNS export failed."); } finally { setBusy(false); }
@@ -161,7 +161,7 @@ export function DnsManager({ domainId }: { domainId: string }) {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h2 className="section-heading">DNS records</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-ink/55">Changes are written to the configured registrar first, then persisted in GetSawa. Reconcile whenever you suspect the registrar was changed outside GetSawa.</p>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-ink/55">Changes are written to the configured registrar first, then persisted in CloudSawa. Reconcile whenever you suspect the registrar was changed outside CloudSawa.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button disabled={busy} onClick={reconcile} className="btn-secondary">Reconcile registrar</button>
@@ -177,7 +177,7 @@ export function DnsManager({ domainId }: { domainId: string }) {
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <p className="eyebrow">Quick templates</p>
-            <p className="mt-2 text-sm text-ink/55">Templates only prefill the editor. GetSawa never invents the destination IP, hostname, verification token or mail server.</p>
+            <p className="mt-2 text-sm text-ink/55">Templates only prefill the editor. CloudSawa never invents the destination IP, hostname, verification token or mail server.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => useTemplate("root-a")} className="btn-secondary">Root A record</button>
@@ -199,9 +199,9 @@ export function DnsManager({ domainId }: { domainId: string }) {
 
       {showImport ? (
         <section className="panel p-5">
-          <h3 className="font-semibold">Import GetSawa DNS JSON</h3>
+          <h3 className="font-semibold">Import CloudSawa DNS JSON</h3>
           <p className="mt-1 text-sm text-ink/50">Import is additive and limited to 100 validated records. Existing records are not deleted. Use an export backup before making large changes.</p>
-          <textarea className="textarea mt-4 min-h-56 font-mono text-xs" value={importText} onChange={(e) => setImportText(e.target.value)} placeholder='{"format":"getsawa-dns-v1","records":[{"type":"A","host":"@","value":"203.0.113.10","ttl":3600}]}' />
+          <textarea className="textarea mt-4 min-h-56 font-mono text-xs" value={importText} onChange={(e) => setImportText(e.target.value)} placeholder='{"format":"cloudsawa-dns-v1","records":[{"type":"A","host":"@","value":"203.0.113.10","ttl":3600}]}' />
           <div className="mt-3 flex gap-2"><button disabled={busy || !importText.trim()} onClick={importDns} className="btn-primary">Import records</button><button onClick={() => setShowImport(false)} className="btn-secondary">Cancel</button></div>
         </section>
       ) : null}
@@ -210,7 +210,7 @@ export function DnsManager({ domainId }: { domainId: string }) {
         <table className="w-full min-w-[850px] text-left text-sm">
           <thead className="border-b border-border bg-paper text-xs uppercase tracking-[0.08em] text-ink/40"><tr><th className="px-4 py-3">Type</th><th className="px-4 py-3">Host</th><th className="px-4 py-3">Value</th><th className="px-4 py-3">TTL</th><th className="px-4 py-3">Priority</th><th className="px-4 py-3"></th></tr></thead>
           <tbody className="divide-y divide-border bg-white">
-            {records.length === 0 ? <tr><td colSpan={6} className="px-4 py-8 text-center text-ink/50">No DNS records are cached in GetSawa. Reconcile with the registrar before assuming the zone is empty.</td></tr> : records.map((record) => (
+            {records.length === 0 ? <tr><td colSpan={6} className="px-4 py-8 text-center text-ink/50">No DNS records are cached in CloudSawa. Reconcile with the registrar before assuming the zone is empty.</td></tr> : records.map((record) => (
               <tr key={record.id}>
                 <td className="px-4 py-3"><span className="rounded-md bg-brand-50 px-2 py-1 font-mono text-xs font-bold text-brand-700">{record.type}</span></td>
                 <td className="px-4 py-3 font-medium">{record.host}</td>
@@ -227,7 +227,7 @@ export function DnsManager({ domainId }: { domainId: string }) {
       <div className="grid gap-6 xl:grid-cols-2">
         <section className="panel p-5">
           <div className="flex items-start justify-between gap-4"><div><p className="eyebrow">DNSSEC</p><h3 className="section-heading mt-2">Registry DS-record protection</h3></div>{dnssec ? <span className={dnssec.supported ? (dnssec.enabled ? "badge-success" : "badge-warning") : "badge-neutral"}>{dnssec.supported ? (dnssec.enabled ? "Enabled" : "Available") : "Adapter unavailable"}</span> : null}</div>
-          <p className="mt-3 text-sm leading-6 text-ink/55">DNSSEC can cause the domain to stop resolving if DS records do not match the authoritative DNS zone. GetSawa only enables mutation controls when the registrar adapter exposes verified DNSSEC operations.</p>
+          <p className="mt-3 text-sm leading-6 text-ink/55">DNSSEC can cause the domain to stop resolving if DS records do not match the authoritative DNS zone. CloudSawa only enables mutation controls when the registrar adapter exposes verified DNSSEC operations.</p>
           {dnssec?.message ? <p className="mt-4 rounded-xl bg-paper p-3 text-xs leading-5 text-ink/60">{dnssec.message}</p> : null}
           {dnssec?.enabled && dnssec.records.length > 0 ? <div className="mt-4 space-y-2">{dnssec.records.map((record, index) => <div key={`${record.keyTag}-${index}`} className="rounded-xl border border-border p-3 text-xs"><p><strong>Key tag:</strong> {record.keyTag} · <strong>Algorithm:</strong> {record.algorithm} · <strong>Digest type:</strong> {record.digestType}</p><p className="mt-1 break-all font-mono text-ink/55">{record.digest}</p></div>)}</div> : null}
         </section>
@@ -240,7 +240,7 @@ export function DnsManager({ domainId }: { domainId: string }) {
 
       <section className="panel">
         <div className="border-b border-border p-5"><p className="eyebrow">Change history</p><h3 className="section-heading mt-2">Recent DNS operations</h3></div>
-        <div className="divide-y divide-border">{history.length === 0 ? <p className="p-5 text-sm text-ink/50">No GetSawa DNS changes have been logged yet.</p> : history.slice(0, 15).map((event) => <div key={event.id} className="flex flex-col gap-1 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{humanAction(event.action)}</p><p className="text-xs text-ink/45">{event.ipAddress ? `IP ${event.ipAddress}` : "IP not recorded"}</p></div><time className="text-xs text-ink/45">{new Date(event.createdAt).toLocaleString()}</time></div>)}</div>
+        <div className="divide-y divide-border">{history.length === 0 ? <p className="p-5 text-sm text-ink/50">No CloudSawa DNS changes have been logged yet.</p> : history.slice(0, 15).map((event) => <div key={event.id} className="flex flex-col gap-1 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-medium">{humanAction(event.action)}</p><p className="text-xs text-ink/45">{event.ipAddress ? `IP ${event.ipAddress}` : "IP not recorded"}</p></div><time className="text-xs text-ink/45">{new Date(event.createdAt).toLocaleString()}</time></div>)}</div>
       </section>
     </div>
   );

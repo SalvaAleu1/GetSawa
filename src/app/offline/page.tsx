@@ -17,7 +17,7 @@ export default function OfflinePage() {
           You&apos;re offline
         </h1>
         <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-ink/60">
-          GetSawa could not reach the network. Previously visited public pages may still open from this device, but payments and account changes require a connection.
+          CloudSawa could not reach the network. Previously visited public pages may still open from this device, but payments and account changes require a connection.
         </p>
         <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">
           <Link className="btn-primary" href="/">

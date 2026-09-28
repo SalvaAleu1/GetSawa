@@ -29,7 +29,7 @@ SQL
 )
 
 {
-  echo "GetSawa disaster-recovery restore verification"
+  echo "CloudSawa disaster-recovery restore verification"
   echo "verified_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "target_label=$DR_TARGET_LABEL"
   echo

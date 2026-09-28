@@ -4,7 +4,7 @@ Phase 25 is implementation-complete at the repository gate. This record does not
 
 ## Business and finance analytics
 
-- `/admin/analytics` reads authoritative GetSawa tables for captured gross, refunds, provider fees, net settlement, disputes, customers, orders, paid invoices, active domains, support load and campaign conversion.
+- `/admin/analytics` reads authoritative CloudSawa tables for captured gross, refunds, provider fees, net settlement, disputes, customers, orders, paid invoices, active domains, support load and campaign conversion.
 - Product reporting groups paid order items by product and reports units, revenue and a clearly labeled current-cost margin estimate from verified catalog wholesale metadata.
 - Rows with missing wholesale cost are surfaced instead of silently treating unknown cost as zero profit evidence.
 - Signup cohorts report whether a customer reached a paid invoice within 30 days of signup.
@@ -42,7 +42,7 @@ These counts are evidence/attention signals only; Phase 25 does not automaticall
 
 ## Cross-phase runtime correction
 
-The final static review identified that Phase 19 custom-domain middleware treated `getsawa.internal` as an unknown customer hostname even though Cloudflare scheduled jobs dispatch through that internal host. `getsawa.internal` is now explicitly a platform host, preventing cron/internal observability calls from being rewritten into website rendering.
+The final static review identified that Phase 19 custom-domain middleware treated `cloudsawa.internal` as an unknown customer hostname even though Cloudflare scheduled jobs dispatch through that internal host. `cloudsawa.internal` is now explicitly a platform host, preventing cron/internal observability calls from being rewritten into website rendering.
 
 ## Remaining deployment gates
 

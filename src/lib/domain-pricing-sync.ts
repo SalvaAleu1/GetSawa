@@ -32,7 +32,7 @@ export interface PricingSyncResult {
 }
 
 /**
- * Pulls the registrar's account-specific wholesale prices into GetSawa.
+ * Pulls the registrar's account-specific wholesale prices into CloudSawa.
  * This is a cache/snapshot for browsing and admin reporting. Checkout still
  * fetches a fresh provider snapshot before allowing a domain transaction.
  */

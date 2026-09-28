@@ -6,7 +6,7 @@ export type CartItem =
   | { kind: "DOMAIN_TRANSFER"; domain: string; authCode: string }
   | { kind: "PRODUCT"; sku: string; quantity: number; domainId?: string; configuration?: Record<string, string> };
 
-const CART_KEY = "getsawa_cart_v1";
+const CART_KEY = "cloudsawa_cart_v1";
 
 /**
  * The cart stores customer selections/configuration but never trusted prices.

@@ -4,10 +4,10 @@ set -Eeuo pipefail
 environment="${1:-}"
 case "$environment" in
   staging)
-    expected_worker="getsawa-staging"
+    expected_worker="cloudsawa-staging"
     ;;
   production)
-    expected_worker="getsawa"
+    expected_worker="cloudsawa"
     ;;
   *)
     echo "Usage: $0 {staging|production}" >&2
@@ -58,8 +58,8 @@ if [[ "${WORKERS_CI:-}" != "1" ]]; then
     exit 1
   fi
 
-  if [[ "$environment" == "production" && "${CONFIRM_PRODUCTION_DEPLOY:-}" != "DEPLOY_GETSAWA_PRODUCTION" ]]; then
-    echo "Set CONFIRM_PRODUCTION_DEPLOY=DEPLOY_GETSAWA_PRODUCTION for an approved production deployment." >&2
+  if [[ "$environment" == "production" && "${CONFIRM_PRODUCTION_DEPLOY:-}" != "DEPLOY_CLOUDSAWA_PRODUCTION" ]]; then
+    echo "Set CONFIRM_PRODUCTION_DEPLOY=DEPLOY_CLOUDSAWA_PRODUCTION for an approved production deployment." >&2
     exit 1
   fi
 fi

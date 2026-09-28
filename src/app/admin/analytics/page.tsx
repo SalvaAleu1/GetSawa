@@ -82,7 +82,7 @@ export default function AnalyticsPage() {
           <p className="text-sm font-medium">Operations &amp; Finance</p>
           <h1 className="text-3xl font-bold">Analytics &amp; Observability</h1>
           <p className="mt-2 max-w-3xl text-sm text-ink/60">
-            Authoritative business, finance, provider, API, scheduled-job and reconciliation evidence from GetSawa production tables.
+            Authoritative business, finance, provider, API, scheduled-job and reconciliation evidence from CloudSawa production tables.
           </p>
         </div>
         <a href={exportUrl} className="btn-secondary">

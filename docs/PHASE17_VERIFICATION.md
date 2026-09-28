@@ -12,9 +12,9 @@ Phase 17 is implementation-complete at the repository gate. This does **not** cl
 - Customer Cloudflare DNS editor for the supported record set before and after cutover.
 - Explicit nameserver cutover requiring DNS review confirmation and an `IMPORTED` migration state.
 - Existing registrar DNSSEC is disabled before a nameserver change to avoid validation failure during delegation migration.
-- Universal SSL and Always Use HTTPS are enabled/reconciled after zone activation. GetSawa does not force an origin SSL mode it cannot prove safe.
+- Universal SSL and Always Use HTTPS are enabled/reconciled after zone activation. CloudSawa does not force an origin SSL mode it cannot prove safe.
 - CDN proxying is explicit and limited to apex/www A, AAAA and CNAME web records; mail and verification records remain DNS-only.
-- DNSSEC enablement is two-sided: Cloudflare creates DS material and GetSawa publishes it through the registrar integration before recording the resulting Cloudflare state.
+- DNSSEC enablement is two-sided: Cloudflare creates DS material and CloudSawa publishes it through the registrar integration before recording the resulting Cloudflare state.
 - Protected monthly/yearly billing through the shared renewal engine with fresh price validation before PayPal handoff.
 - Overdue/refunded service disables CDN proxying but preserves authoritative DNS so a billing event cannot make the customer domain disappear.
 - Customer auto-renew and staff suspend/reactivate operations.

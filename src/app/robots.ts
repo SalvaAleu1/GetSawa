@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const baseUrl = process.env.APP_URL || "https://getsawa.app";
+const baseUrl = process.env.APP_URL || "https://cloudsawa.app";
 
 export default function robots(): MetadataRoute.Robots {
   return {

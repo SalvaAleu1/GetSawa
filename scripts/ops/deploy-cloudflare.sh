@@ -4,19 +4,19 @@ set -Eeuo pipefail
 environment="${1:-}"
 case "$environment" in
   staging)
-    export APP_URL="${APP_URL:-https://staging.getsawa.app}"
-    export APP_NAME="GetSawa"
-    export WEBSITE_PLATFORM_HOST="${WEBSITE_PLATFORM_HOST:-staging.getsawa.app}"
-    export CLOUDFLARE_WORKER_SERVICE_NAME="getsawa-staging"
+    export APP_URL="${APP_URL:-https://staging.cloudsawa.app}"
+    export APP_NAME="CloudSawa"
+    export WEBSITE_PLATFORM_HOST="${WEBSITE_PLATFORM_HOST:-staging.cloudsawa.app}"
+    export CLOUDFLARE_WORKER_SERVICE_NAME="cloudsawa-staging"
     ;;
   production)
     # Pre-domain deployment: publish the root Worker to workers.dev first.
     # Cloudflare assigns the exact public hostname after upload, so do not bake
     # a future custom domain into the application during this phase.
-    export APP_NAME="GetSawa"
-    export CLOUDFLARE_WORKER_SERVICE_NAME="getsawa"
-    if [[ "${APP_URL:-}" == "https://getsawa.app" ]]; then unset APP_URL; fi
-    if [[ "${WEBSITE_PLATFORM_HOST:-}" == "getsawa.app" ]]; then unset WEBSITE_PLATFORM_HOST; fi
+    export APP_NAME="CloudSawa"
+    export CLOUDFLARE_WORKER_SERVICE_NAME="cloudsawa"
+    if [[ "${APP_URL:-}" == "https://cloudsawa.app" || "${APP_URL:-}" == "https://cloudsawa.com" ]]; then unset APP_URL; fi
+    if [[ "${WEBSITE_PLATFORM_HOST:-}" == "cloudsawa.app" || "${WEBSITE_PLATFORM_HOST:-}" == "cloudsawa.com" ]]; then unset WEBSITE_PLATFORM_HOST; fi
     ;;
   *)
     echo "Usage: $0 {staging|production}" >&2
@@ -32,8 +32,8 @@ cd "$repo_root"
 # Interactive/local production deploys keep explicit cutover confirmation.
 # In Cloudflare Workers Builds, selecting the production deploy command is the
 # deployment approval and pushes to the configured production branch may deploy.
-if [[ "${WORKERS_CI:-}" != "1" && "$environment" == "production" && "${CONFIRM_PRODUCTION_CUTOVER:-}" != "SWITCH_GETSAWA_TO_CLOUDFLARE" ]]; then
-  echo "Production deployment is approved only with CONFIRM_PRODUCTION_CUTOVER=SWITCH_GETSAWA_TO_CLOUDFLARE." >&2
+if [[ "${WORKERS_CI:-}" != "1" && "$environment" == "production" && "${CONFIRM_PRODUCTION_CUTOVER:-}" != "SWITCH_CLOUDSAWA_TO_CLOUDFLARE" ]]; then
+  echo "Production deployment is approved only with CONFIRM_PRODUCTION_CUTOVER=SWITCH_CLOUDSAWA_TO_CLOUDFLARE." >&2
   exit 1
 fi
 
@@ -72,7 +72,7 @@ NODE
 )"
 
 if [[ "$user_table_count" == "0" ]]; then
-  echo "Fresh PostgreSQL database detected. Creating the current GetSawa Prisma schema..."
+  echo "Fresh PostgreSQL database detected. Creating the current CloudSawa Prisma schema..."
   DATABASE_URL="$migration_database_url" npx prisma db push --skip-generate
 
   echo "Creating retained raw-SQL operational tables before baselining migrations..."
@@ -121,7 +121,7 @@ if [[ "${WORKERS_CI:-}" == "1" ]]; then
   done
 fi
 
-printf 'Building GetSawa for Cloudflare environment %s...\n' "$environment"
+printf 'Building CloudSawa for Cloudflare environment %s...\n' "$environment"
 if [[ "$environment" == "staging" ]]; then
   npx opennextjs-cloudflare build --env=staging
 else
@@ -133,12 +133,12 @@ if [[ "${WORKERS_CI:-}" != "1" && "$environment" == "production" && "${CONFIRM_P
   exit 1
 fi
 
-printf 'Deploying GetSawa Cloudflare environment %s...\n' "$environment"
+printf 'Deploying CloudSawa Cloudflare environment %s...\n' "$environment"
 if [[ "$environment" == "staging" ]]; then
   npx opennextjs-cloudflare deploy --env=staging -- --keep-vars
-  APP_URL="https://staging.getsawa.app" ./scripts/ops/verify-deployment-health.sh
+  APP_URL="https://staging.cloudsawa.app" ./scripts/ops/verify-deployment-health.sh
 else
   npx opennextjs-cloudflare deploy -- --keep-vars
-  echo "GetSawa Worker uploaded as 'getsawa' with workers.dev enabled."
+  echo "CloudSawa Worker uploaded as 'cloudsawa' with workers.dev enabled."
   echo "Use the workers.dev URL printed by Wrangler for preview/testing. No custom domain is required at this stage."
 fi

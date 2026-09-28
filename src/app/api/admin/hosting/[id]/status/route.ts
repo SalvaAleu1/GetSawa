@@ -28,7 +28,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
     const provider = getHostingProvider();
     if (input.action === "SUSPEND") {
-      if (service.status !== "SUSPENDED") await provider.suspendAccount(service.provider_resource_id, input.reason || "Suspended by GetSawa staff");
+      if (service.status !== "SUSPENDED") await provider.suspendAccount(service.provider_resource_id, input.reason || "Suspended by CloudSawa staff");
       await prisma.$executeRaw`UPDATE "product_service_instances" SET "status"='SUSPENDED',"updated_at"=CURRENT_TIMESTAMP WHERE "id"=${service.id}`;
     } else {
       if (service.status !== "ACTIVE") await provider.unsuspendAccount(service.provider_resource_id);

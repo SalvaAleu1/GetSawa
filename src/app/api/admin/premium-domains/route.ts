@@ -37,14 +37,14 @@ export async function POST(req: NextRequest) {
     if (existing) return jsonError("This domain already has a premium inventory record.", 409);
 
     const domain = await prisma.domain.findUnique({ where: { name: input.domainName }, include: { tld: true, user: true } });
-    if (!domain) return jsonError("The domain must already be managed in GetSawa before it can be listed for sale.", 400);
+    if (!domain) return jsonError("The domain must already be managed in CloudSawa before it can be listed for sale.", 400);
     if (!["ACTIVE", "EXPIRING"].includes(domain.status)) return jsonError("Only active managed domains can be listed for sale.", 400);
     if (!domain.user.adminRole) return jsonError("Customer-owned domains must be submitted by their owner through the marketplace listing workflow.", 403);
 
     const policy = await getPricingSafetyPolicy();
     const protectedFloor = computeSafeRetailPrice(input.acquisitionCostCents, policy).retailCents;
     if (input.retailPriceCents < protectedFloor) {
-      return jsonError(`The retail price is below GetSawa's protected minimum of ${(protectedFloor / 100).toFixed(2)} USD for this acquisition cost.`, 400);
+      return jsonError(`The retail price is below CloudSawa's protected minimum of ${(protectedFloor / 100).toFixed(2)} USD for this acquisition cost.`, 400);
     }
 
     const renewalPriceCents = computeTldPrice(domain.tld).renewCents;
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       await verifyPremiumInventory({
         premiumDomainId: listing.id,
         adminUserId: admin.id,
-        source: "GETSAWA_INVENTORY",
+        source: "CLOUDSAWA_INVENTORY",
         acquisitionCostCents: input.acquisitionCostCents,
         commissionBps: 0,
         autoBuyEnabled: input.autoBuyEnabled,

@@ -1,7 +1,7 @@
 /**
  * Creates the first SUPER_ADMIN account from INITIAL_ADMIN_EMAIL /
  * INITIAL_ADMIN_PASSWORD in the environment. There is no default admin
- * account and no default password shipped with GetSawa (spec section 98) —
+ * account and no default password shipped with CloudSawa (spec section 98) —
  * this script is the only way to create the first admin, and it refuses to
  * run if an admin already exists.
  *

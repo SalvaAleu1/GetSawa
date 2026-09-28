@@ -39,7 +39,7 @@ export default function AffiliateDashboardPage() {
       <div>
         <h1 className="text-2xl font-semibold">Affiliate Program</h1>
         <div className="card mt-6 p-8 text-center">
-          <p className="font-medium">Earn a commission for every customer you refer to GetSawa.</p>
+          <p className="font-medium">Earn a commission for every customer you refer to CloudSawa.</p>
           <button onClick={handleJoin} disabled={joining} className="btn-primary mt-4 inline-flex">
             {joining ? "Joining…" : "Join the affiliate program"}
           </button>

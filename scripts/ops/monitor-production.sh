@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-APP_URL="${APP_URL:-https://getsawa.app}"
+APP_URL="${APP_URL:-https://cloudsawa.app}"
 base="${APP_URL%/}"
 max_seconds="${MONITOR_MAX_SECONDS:-4}"
 failures=0
@@ -30,8 +30,8 @@ done
 headers=$(mktemp)
 trap 'rm -f "$headers"' EXIT
 curl --silent --show-error --output /dev/null --dump-header "$headers" --max-time 15 "$base/" || failures=$((failures + 1))
-grep -qi '^x-getsawa-runtime: cloudflare-worker' "$headers" || { echo "FAIL production runtime fingerprint missing"; failures=$((failures + 1)); }
-grep -qi '^x-getsawa-environment: production' "$headers" || { echo "FAIL production environment fingerprint missing"; failures=$((failures + 1)); }
+grep -qi '^x-cloudsawa-runtime: cloudflare-worker' "$headers" || { echo "FAIL production runtime fingerprint missing"; failures=$((failures + 1)); }
+grep -qi '^x-cloudsawa-environment: production' "$headers" || { echo "FAIL production environment fingerprint missing"; failures=$((failures + 1)); }
 
 paypal_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 15 --request POST --header 'content-type: application/json' --data '{}' "$base/api/webhooks/paypal" || printf '000')
 if [[ "$paypal_status" != "400" ]]; then

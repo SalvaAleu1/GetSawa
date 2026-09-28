@@ -27,7 +27,7 @@ Before routing real traffic: map TLD capability differences, normalize provider 
 
 ## Adding a regional/local payment provider
 
-Do not integrate a provider solely because it advertises card/mobile-money support in another country. Production eligibility requires merchant onboarding for GetSawa's actual business/account jurisdiction, supported settlement route/currency, refund/dispute/webhook capability, API access, idempotency, reconciliation and a controlled production transaction.
+Do not integrate a provider solely because it advertises card/mobile-money support in another country. Production eligibility requires merchant onboarding for CloudSawa's actual business/account jurisdiction, supported settlement route/currency, refund/dispute/webhook capability, API access, idempotency, reconciliation and a controlled production transaction.
 
 A second payment adapter should implement the shared `PaymentProvider` contract and keep provider transaction IDs. Automatic payment failover must never retry an ambiguous capture on another gateway until the original provider state is known.
 

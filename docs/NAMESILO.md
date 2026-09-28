@@ -18,7 +18,7 @@ balance at the time of the API call — NameSilo does not invoice you
 separately. Keep a balance on the account and consider setting up NameSilo's
 own low-balance notifications.
 
-## 3. Configure GetSawa
+## 3. Configure CloudSawa
 
 Set in your `.env`:
 

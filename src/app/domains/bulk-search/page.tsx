@@ -71,7 +71,7 @@ export default function BulkDomainSearchPage() {
           <div className="shell-container">
             <p className="eyebrow">Bulk domain search</p>
             <h1 className="mt-2 text-3xl font-bold sm:text-4xl">Check up to 25 exact domains at once.</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-ink/60">Enter full domains such as example.com or example.africa. GetSawa only checks active extensions and preserves the same premium-price safety rules used by normal search.</p>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-ink/60">Enter full domains such as example.com or example.africa. CloudSawa only checks active extensions and preserves the same premium-price safety rules used by normal search.</p>
           </div>
         </section>
 

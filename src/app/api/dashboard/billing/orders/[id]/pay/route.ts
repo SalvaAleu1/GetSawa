@@ -79,7 +79,7 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
       amountCents,
       currency,
       referenceId: order.id,
-      description: `GetSawa renewal ${order.orderNumber}`,
+      description: `CloudSawa renewal ${order.orderNumber}`,
       idempotencyKey,
       returnUrl: `${process.env.APP_URL}/dashboard/orders/${order.id}?payment=success`,
       cancelUrl: `${process.env.APP_URL}/dashboard/orders/${order.id}?payment=cancelled`,

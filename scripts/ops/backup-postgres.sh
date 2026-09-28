@@ -5,7 +5,7 @@ umask 077
 
 : "${DATABASE_URL:?DATABASE_URL must point to the PostgreSQL database to back up}"
 BACKUP_DIR="${BACKUP_DIR:-.ops/backups}"
-BACKUP_PREFIX="${BACKUP_PREFIX:-getsawa}"
+BACKUP_PREFIX="${BACKUP_PREFIX:-cloudsawa}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
 
 for command in pg_dump sha256sum date; do

@@ -73,8 +73,8 @@ export function SiteFooter() {
         </div>
 
         <div className="mt-12 flex flex-col gap-4 border-t border-white/10 pt-6 text-xs text-white/40 sm:flex-row sm:items-center sm:justify-between">
-          <p>© {new Date().getFullYear()} GetSawa. All rights reserved.</p>
-          <p>Provider-backed products are shown with their current availability in GetSawa.</p>
+          <p>© {new Date().getFullYear()} CloudSawa. All rights reserved.</p>
+          <p>Provider-backed products are shown with their current availability in CloudSawa.</p>
         </div>
       </div>
     </footer>

@@ -31,7 +31,7 @@ export async function sendEmail(message: EmailMessage): Promise<{ sent: boolean;
   });
 
   await transport.sendMail({
-    from: process.env.SMTP_FROM || "GetSawa <no-reply@getsawa.app>",
+    from: process.env.SMTP_FROM || "CloudSawa <no-reply@cloudsawa.app>",
     to: message.to,
     subject: message.subject,
     html: message.html,
@@ -42,15 +42,15 @@ export async function sendEmail(message: EmailMessage): Promise<{ sent: boolean;
 
 export const emailTemplates = {
   welcome: (firstName: string) => ({
-    subject: "Welcome to GetSawa",
-    html: `<p>Hi ${escapeHtml(firstName)},</p><p>Your GetSawa account is ready. Start by searching for a domain.</p>`,
+    subject: "Welcome to CloudSawa",
+    html: `<p>Hi ${escapeHtml(firstName)},</p><p>Your CloudSawa account is ready. Start by searching for a domain.</p>`,
   }),
   verifyEmail: (verifyUrl: string) => ({
-    subject: "Verify your GetSawa email",
+    subject: "Verify your CloudSawa email",
     html: `<p>Confirm your email address to activate your account:</p><p><a href="${escapeHtml(verifyUrl)}">${escapeHtml(verifyUrl)}</a></p>`,
   }),
   passwordReset: (resetUrl: string) => ({
-    subject: "Reset your GetSawa password",
+    subject: "Reset your CloudSawa password",
     html: `<p>Reset your password using the link below. If you didn't request this, you can ignore this email.</p><p><a href="${escapeHtml(resetUrl)}">${escapeHtml(resetUrl)}</a></p>`,
   }),
   orderConfirmation: (orderNumber: string, totalFormatted: string) => ({

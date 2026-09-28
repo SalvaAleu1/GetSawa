@@ -43,7 +43,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const payout = await prisma.payout.create({ data: { affiliateId: affiliate.id, amountCents: totalCents, status: "PENDING", providerBatchId: batchId } });
 
     try {
-      const providerResult = await PayPalProvider.createPayout({ senderBatchId: batchId, recipientEmail, amountCents: totalCents, currency: "USD", note: "GetSawa affiliate commission payout" });
+      const providerResult = await PayPalProvider.createPayout({ senderBatchId: batchId, recipientEmail, amountCents: totalCents, currency: "USD", note: "CloudSawa affiliate commission payout" });
       const providerBatchId = typeof providerResult?.batch_header?.payout_batch_id === "string" ? providerResult.batch_header.payout_batch_id : batchId;
       await prisma.$transaction([
         prisma.payout.update({ where: { id: payout.id }, data: { status: "SENT", providerBatchId } }),

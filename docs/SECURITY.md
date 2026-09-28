@@ -1,6 +1,6 @@
 # Security notes
 
-GetSawa is designed to fail closed around authentication, payments, registrar operations and provider provisioning.
+CloudSawa is designed to fail closed around authentication, payments, registrar operations and provider provisioning.
 
 ## Implemented
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-APP_URL="${APP_URL:-https://getsawa.app}"
+APP_URL="${APP_URL:-https://cloudsawa.app}"
 base="${APP_URL%/}"
 
 ./scripts/ops/verify-deployment-health.sh
@@ -12,11 +12,11 @@ trap 'rm -f "$headers" "$body"' EXIT
 
 curl --fail-with-body --silent --show-error --dump-header "$headers" --output "$body" "$base/"
 
-grep -qi '^x-getsawa-runtime: cloudflare-worker' "$headers" || {
-  echo "Cutover verification failed: getsawa.app is not fingerprinted as the GetSawa Cloudflare Worker." >&2
+grep -qi '^x-cloudsawa-runtime: cloudflare-worker' "$headers" || {
+  echo "Cutover verification failed: cloudsawa.app is not fingerprinted as the CloudSawa Cloudflare Worker." >&2
   exit 1
 }
-grep -qi '^x-getsawa-environment: production' "$headers" || {
+grep -qi '^x-cloudsawa-environment: production' "$headers" || {
   echo "Cutover verification failed: Cloudflare Worker is not running with APP_ENV=production." >&2
   exit 1
 }

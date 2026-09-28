@@ -46,7 +46,7 @@ exist. Production requires all of the following:
 2. An authorized administrator runs the live **cPanel / WHM Hosting** provider
    test.
 3. The live test succeeds with the currently deployed credential fingerprint.
-4. WHM reports at least the account/package capabilities required by GetSawa,
+4. WHM reports at least the account/package capabilities required by CloudSawa,
    including bandwidth reporting.
 5. Each hosting product references a WHM package code returned as creatable by
    that successful test.
@@ -55,7 +55,7 @@ exist. Production requires all of the following:
    / renewal contracts.
 
 If credentials rotate or the live test becomes invalid, product readiness
-fails closed and GetSawa does not advertise the provider as operational.
+fails closed and CloudSawa does not advertise the provider as operational.
 
 ## Cloudflare scheduled enforcement
 

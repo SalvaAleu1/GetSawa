@@ -265,7 +265,7 @@ class CpanelWhmHostingProvider implements HostingProvider {
     return { url, expiresAt: Number.isFinite(expirySeconds) ? new Date(expirySeconds * 1000) : null };
   }
 
-  async suspendAccount(providerAccountId: string, reason = "GetSawa service suspended") {
+  async suspendAccount(providerAccountId: string, reason = "CloudSawa service suspended") {
     await this.call("suspendacct", { user: providerAccountId, reason });
   }
 

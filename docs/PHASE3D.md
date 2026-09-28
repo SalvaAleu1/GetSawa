@@ -1,4 +1,4 @@
-# GetSawa Phase 3D — Refunds, Disputes & Finance Operations
+# CloudSawa Phase 3D — Refunds, Disputes & Finance Operations
 
 ## Delivered
 
@@ -14,7 +14,7 @@
 
 ## Production safety
 
-The refund endpoint calls PayPal's live API through the existing provider boundary. It never fabricates a refund. GetSawa only records a completed refund after PayPal returns a completed refund with a provider refund ID.
+The refund endpoint calls PayPal's live API through the existing provider boundary. It never fabricates a refund. CloudSawa only records a completed refund after PayPal returns a completed refund with a provider refund ID.
 
 Refund amounts are checked against the captured payment and previously completed refunds. Provider credentials must be configured before a live refund can be executed.
 
@@ -29,4 +29,4 @@ Refund amounts are checked against the captured payment and previously completed
 
 Before public launch, run a real low-value payment and refund using live PayPal credentials, verify the PayPal refund webhook updates the same payment, test a partial then final refund, and verify disputes are visible to finance users.
 
-The provider remains the source of truth for payment/refund execution; GetSawa's database is the operational ledger and audit record.
+The provider remains the source of truth for payment/refund execution; CloudSawa's database is the operational ledger and audit record.

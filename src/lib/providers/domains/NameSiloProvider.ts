@@ -125,7 +125,7 @@ export class NameSiloProvider implements DomainProvider {
   async requestAuthCode(domain: string): Promise<AuthCodeRequestResult> {
     const reply = await this.call<any>("retrieveAuthCode", { domain });
     if (!this.isSuccessCode(reply.code)) throw new Error(reply.detail || "Could not request the transfer authorization code.");
-    return { requested: true, delivery: "ADMIN_EMAIL", message: "NameSilo accepted the EPP authorization-code request. The code is delivered to the domain administrative contact rather than returned through GetSawa." };
+    return { requested: true, delivery: "ADMIN_EMAIL", message: "NameSilo accepted the EPP authorization-code request. The code is delivered to the domain administrative contact rather than returned through CloudSawa." };
   }
 
   async updateTransferAuthCode(domain: string, authCode: string): Promise<void> {

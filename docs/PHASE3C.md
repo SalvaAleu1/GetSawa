@@ -1,4 +1,4 @@
-# GetSawa Phase 3C — Payment Reliability & Reconciliation
+# CloudSawa Phase 3C — Payment Reliability & Reconciliation
 
 ## Delivered
 
@@ -15,7 +15,7 @@
 
 ## Production safety
 
-The reconciliation worker never creates a charge and never trusts client-side payment state. It only reads the PayPal order state, validates the amount/currency against GetSawa's recorded `Payment`, and then uses the existing provisioning lifecycle.
+The reconciliation worker never creates a charge and never trusts client-side payment state. It only reads the PayPal order state, validates the amount/currency against CloudSawa's recorded `Payment`, and then uses the existing provisioning lifecycle.
 
 A mismatch is marked `DISPUTED` for investigation rather than being treated as paid. PayPal credentials must be configured before reconciliation can run.
 

@@ -50,7 +50,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     const verified = await getPremiumListingForCheckout(offer.premium_domain_id, user.id, id);
     if (verified.meta.sellerUserId === user.id) return jsonError("You cannot purchase your own aftermarket domain.", 400);
     if (verified.listing.currency !== "USD") return jsonError("This negotiated checkout is not available in the listing currency.", 409);
-    if (verified.meta.source !== "GETSAWA_INVENTORY" && verified.meta.source !== "CUSTOMER_CUSTODY") return jsonError("This premium inventory source does not support negotiated checkout.", 409);
+    if (verified.meta.source !== "CLOUDSAWA_INVENTORY" && verified.meta.source !== "CUSTOMER_CUSTODY") return jsonError("This premium inventory source does not support negotiated checkout.", 409);
     await validatePremiumMarketplaceEconomics({
       source: verified.meta.source,
       salePriceCents: verified.priceCents,
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
       amountCents: verified.priceCents,
       currency: verified.listing.currency,
       referenceId: order.id,
-      description: `GetSawa order ${order.orderNumber}`,
+      description: `CloudSawa order ${order.orderNumber}`,
       idempotencyKey,
       returnUrl: `${process.env.APP_URL}/checkout/confirm?orderId=${order.id}`,
       cancelUrl: `${process.env.APP_URL}/dashboard/marketplace?payment=cancelled`,

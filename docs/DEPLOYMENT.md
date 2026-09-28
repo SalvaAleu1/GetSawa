@@ -1,6 +1,6 @@
 # Deployment
 
-GetSawa is a standard Next.js 14 app and can be deployed anywhere that runs
+CloudSawa is a standard Next.js 14 app and can be deployed anywhere that runs
 Node.js 18.18+ and can reach a PostgreSQL database. These instructions are
 generic; adapt them to your specific host (Vercel, Render, Railway, a plain
 VPS, etc).

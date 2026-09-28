@@ -2,7 +2,7 @@
 
 A provider cannot enter routing merely because credentials exist.
 
-1. Commercial/merchant/reseller account approved for GetSawa's real operating entity/jurisdiction.
+1. Commercial/merchant/reseller account approved for CloudSawa's real operating entity/jurisdiction.
 2. Provider terms, pricing, settlement and limits reviewed.
 3. Adapter implements the existing capability contract without bypassing server-authoritative pricing or authorization.
 4. Credentials stored per environment with minimum permissions; no shared staging/production secret.

@@ -4,7 +4,7 @@ import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = (process.env.APP_URL || "https://getsawa.app").replace(/\/$/, "");
+  const base = (process.env.APP_URL || "https://cloudsawa.app").replace(/\/$/, "");
   const [tlds, posts] = await Promise.all([
     prisma.tld.findMany({ where: { isActive: true }, select: { extension: true } }),
     prisma.blogPost.findMany({ where: { status: "PUBLISHED" }, select: { slug: true, updatedAt: true } }),

@@ -25,4 +25,4 @@ Before merge, verify:
 
 ## Live acceptance
 
-Phase 30's repository implementation can be complete without declaring GetSawa production-ready. Actual launch approval requires the ignored evidence file to contain reviewed proof for runtime quality, restore drill, Cloudflare staging, production cutover, migrations, security, legal, support, monitoring, operator handover and all enabled providers. The checker must pass from the exact release commit.
+Phase 30's repository implementation can be complete without declaring CloudSawa production-ready. Actual launch approval requires the ignored evidence file to contain reviewed proof for runtime quality, restore drill, Cloudflare staging, production cutover, migrations, security, legal, support, monitoring, operator handover and all enabled providers. The checker must pass from the exact release commit.

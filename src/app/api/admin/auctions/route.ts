@@ -43,7 +43,7 @@ export async function GET() {
         JOIN "premium_inventory_meta" pim ON pim."premium_domain_id"=pd."id"
         WHERE pd."status"='LISTED' AND pd."isAuction"=FALSE
           AND pim."ownership_verified_at" IS NOT NULL AND pim."sold_at" IS NULL
-          AND pim."source" IN ('GETSAWA_INVENTORY','CUSTOMER_CUSTODY')
+          AND pim."source" IN ('CLOUDSAWA_INVENTORY','CUSTOMER_CUSTODY')
           AND (pim."reserved_until" IS NULL OR pim."reserved_until" < CURRENT_TIMESTAMP)
           AND NOT EXISTS (
             SELECT 1 FROM "auction_inventory" ai JOIN "Auction" a ON a."id"=ai."auction_id"

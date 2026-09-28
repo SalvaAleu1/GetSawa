@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getDomainProvider } from "@/lib/providers/domains/DomainProviderFactory";
 
-export type PremiumInventorySource = "UNVERIFIED" | "GETSAWA_INVENTORY" | "CUSTOMER_CUSTODY" | "REGISTRY_PREMIUM";
+export type PremiumInventorySource = "UNVERIFIED" | "CLOUDSAWA_INVENTORY" | "CUSTOMER_CUSTODY" | "REGISTRY_PREMIUM";
 export type PremiumFulfillmentMode = "MANUAL_REVIEW" | "INTERNAL_ASSIGNMENT" | "REGISTRY_REGISTRATION";
 export type PremiumOfferStatus = "PENDING" | "COUNTERED" | "ACCEPTED" | "REJECTED" | "WITHDRAWN" | "EXPIRED" | "PURCHASED";
 
@@ -213,7 +213,7 @@ export async function verifyPremiumInventory(params: {
   const listing = await prisma.premiumDomain.findUnique({ where: { id: params.premiumDomainId } });
   if (!listing) throw new Error("Premium listing not found.");
   const domain = await prisma.domain.findUnique({ where: { name: listing.domainName }, include: { user: true } });
-  if (!domain) throw new Error("The domain must already exist in GetSawa's managed domain portfolio before it can be sold as aftermarket inventory.");
+  if (!domain) throw new Error("The domain must already exist in CloudSawa's managed domain portfolio before it can be sold as aftermarket inventory.");
   if (!["ACTIVE", "EXPIRING"].includes(domain.status)) throw new Error("Only active managed domains can be verified for aftermarket sale.");
 
   const provider = getDomainProvider();

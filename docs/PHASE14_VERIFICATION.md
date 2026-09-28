@@ -8,12 +8,12 @@ Phase 14 is implementation-complete and ready for the Cloudflare build/deploymen
 - Browser capture, PayPal webhook delivery and reconciliation converge through idempotent finance events.
 - Provider fees are recorded when PayPal supplies authoritative fee data.
 - Paid invoices converge to `PAID`; full refunds converge payment, order and invoice state to `REFUNDED`.
-- Refunds performed directly in PayPal are imported through verified webhooks instead of drifting outside GetSawa.
+- Refunds performed directly in PayPal are imported through verified webhooks instead of drifting outside CloudSawa.
 - Disputes are recorded as financial events without being treated as completed refunds.
-- Domain renewal invoices are priced from a fresh registrar wholesale quote protected by GetSawa's pricing safety policy.
+- Domain renewal invoices are priced from a fresh registrar wholesale quote protected by CloudSawa's pricing safety policy.
 - Renewal payment attempts refresh pricing again before PayPal handoff.
 - Failed renewal payments remain retryable while ordinary failed checkouts release reserved inventory and account credit.
-- GetSawa account credit has serialized balance controls, checkout reservations, partial-payment support, full-credit checkout and refund restoration.
+- CloudSawa account credit has serialized balance controls, checkout reservations, partial-payment support, full-credit checkout and refund restoration.
 - Credit cannot be double-spent by concurrent checkout/admin adjustments.
 - Finance/admin reporting exposes captures, refunds, provider fees, disputes, renewal state and customer-credit liabilities.
 - The customer billing surface reports invoices, renewal attempts, spendable credit and truthful payment-method availability.

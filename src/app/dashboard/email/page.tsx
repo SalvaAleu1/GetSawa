@@ -52,7 +52,7 @@ type EmailData = {
 };
 
 type DnsState = {
-  authoritativeDnsManagedByGetSawa: boolean;
+  authoritativeDnsManagedByCloudSawa: boolean;
   nameservers: string[];
   requiredRecords: Array<{ type: string; host: string; value: string; priority?: number; purpose: string }>;
   mxReady: boolean;
@@ -138,7 +138,7 @@ export default function BusinessEmailPage() {
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Unable to change mailbox password.");
       setPasswords((current) => ({ ...current, [serviceId]: "" }));
-      setNotice("Mailbox password changed. GetSawa did not store the password.");
+      setNotice("Mailbox password changed. CloudSawa did not store the password.");
       await load();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to change mailbox password."); }
     finally { setBusy(""); }
@@ -244,7 +244,7 @@ export default function BusinessEmailPage() {
           <div className="mt-6 grid gap-5 lg:grid-cols-2">
             <section className="rounded-xl border border-border p-4">
               <h3 className="font-semibold">Mailbox password</h3>
-              <p className="mt-1 text-xs leading-5 text-ink/50">12–54 printable characters; no spaces or double quotes. The password is sent directly to OpenSRS and is never stored by GetSawa.</p>
+              <p className="mt-1 text-xs leading-5 text-ink/50">12–54 printable characters; no spaces or double quotes. The password is sent directly to OpenSRS and is never stored by CloudSawa.</p>
               <div className="mt-3 flex gap-2"><input type="password" className="input" value={passwords[service.id] || ""} onChange={(event) => setPasswords((current) => ({ ...current, [service.id]: event.target.value }))} placeholder="New mailbox password" autoComplete="new-password" /><button type="button" className="btn-secondary shrink-0" disabled={busy === `password:${service.id}` || !data.provider.verified} onClick={() => void changePassword(service.id)}>{busy === `password:${service.id}` ? "Saving…" : "Set password"}</button></div>
             </section>
 
@@ -270,8 +270,8 @@ export default function BusinessEmailPage() {
           </div>
 
           {service.domainId ? <section className="mt-5 rounded-xl border border-border p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">Email DNS · {service.domainName}</h3><p className="mt-1 text-xs leading-5 text-ink/50">Provider provisioning happens first. Mail routing changes only after you explicitly approve them.</p></div><div className="flex gap-2"><button type="button" className="btn-secondary" disabled={busy === `dns:${service.domainId}`} onClick={() => void checkDns(service.domainId!)}>{busy === `dns:${service.domainId}` ? "Checking…" : "Check DNS"}</button>{dnsState?.authoritativeDnsManagedByGetSawa && !dnsState.routingReady ? <button type="button" className="btn-primary" disabled={busy === `dns:${service.domainId}`} onClick={() => void applyDns(service.domainId!)}>Apply email DNS</button> : null}</div></div>
-            {dnsState ? <div className="mt-4"><div className="flex flex-wrap gap-2"><span className={dnsState.routingReady ? "badge-success" : "badge-warning"}>{dnsState.routingReady ? "Mail routing configured" : "Mail routing incomplete"}</span><span className={dnsState.spfReady ? "badge-success" : "badge-neutral"}>{dnsState.spfReady ? "SPF includes OpenSRS" : dnsState.spfNeedsManualMerge ? "SPF merge required" : "SPF not configured"}</span></div>{!dnsState.authoritativeDnsManagedByGetSawa ? <p className="mt-3 text-sm text-amber-700">This domain uses external nameservers. Add the records below at the authoritative DNS provider; GetSawa will not edit inactive NameSilo DNS.</p> : null}<div className="mt-3 overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b"><th className="py-2 pr-3">Type</th><th className="py-2 pr-3">Host</th><th className="py-2 pr-3">Value</th><th className="py-2">Priority</th></tr></thead><tbody>{dnsState.requiredRecords.map((record, index) => <tr key={`${record.type}-${index}`} className="border-b last:border-0"><td className="py-2 pr-3 font-semibold">{record.type}</td><td className="py-2 pr-3">{record.host}</td><td className="py-2 pr-3 break-all">{record.value}</td><td className="py-2">{record.priority ?? "—"}</td></tr>)}</tbody></table></div></div> : <p className="mt-3 text-sm text-ink/50">Check DNS to compare the current managed records with the OpenSRS routing requirements.</p>}
+            <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold">Email DNS · {service.domainName}</h3><p className="mt-1 text-xs leading-5 text-ink/50">Provider provisioning happens first. Mail routing changes only after you explicitly approve them.</p></div><div className="flex gap-2"><button type="button" className="btn-secondary" disabled={busy === `dns:${service.domainId}`} onClick={() => void checkDns(service.domainId!)}>{busy === `dns:${service.domainId}` ? "Checking…" : "Check DNS"}</button>{dnsState?.authoritativeDnsManagedByCloudSawa && !dnsState.routingReady ? <button type="button" className="btn-primary" disabled={busy === `dns:${service.domainId}`} onClick={() => void applyDns(service.domainId!)}>Apply email DNS</button> : null}</div></div>
+            {dnsState ? <div className="mt-4"><div className="flex flex-wrap gap-2"><span className={dnsState.routingReady ? "badge-success" : "badge-warning"}>{dnsState.routingReady ? "Mail routing configured" : "Mail routing incomplete"}</span><span className={dnsState.spfReady ? "badge-success" : "badge-neutral"}>{dnsState.spfReady ? "SPF includes OpenSRS" : dnsState.spfNeedsManualMerge ? "SPF merge required" : "SPF not configured"}</span></div>{!dnsState.authoritativeDnsManagedByCloudSawa ? <p className="mt-3 text-sm text-amber-700">This domain uses external nameservers. Add the records below at the authoritative DNS provider; CloudSawa will not edit inactive NameSilo DNS.</p> : null}<div className="mt-3 overflow-x-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b"><th className="py-2 pr-3">Type</th><th className="py-2 pr-3">Host</th><th className="py-2 pr-3">Value</th><th className="py-2">Priority</th></tr></thead><tbody>{dnsState.requiredRecords.map((record, index) => <tr key={`${record.type}-${index}`} className="border-b last:border-0"><td className="py-2 pr-3 font-semibold">{record.type}</td><td className="py-2 pr-3">{record.host}</td><td className="py-2 pr-3 break-all">{record.value}</td><td className="py-2">{record.priority ?? "—"}</td></tr>)}</tbody></table></div></div> : <p className="mt-3 text-sm text-ink/50">Check DNS to compare the current managed records with the OpenSRS routing requirements.</p>}
           </section> : null}
         </article>;
       })}</div>}

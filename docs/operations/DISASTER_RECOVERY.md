@@ -1,6 +1,6 @@
-# GetSawa disaster recovery and continuity runbook
+# CloudSawa disaster recovery and continuity runbook
 
-This runbook defines the recovery order for GetSawa. It is operational guidance, not evidence that a live restore has already been performed.
+This runbook defines the recovery order for CloudSawa. It is operational guidance, not evidence that a live restore has already been performed.
 
 ## Recovery objectives
 
@@ -44,7 +44,7 @@ Example flow:
 export DATABASE_URL='...production-or-source-url...'
 ./scripts/ops/backup-postgres.sh
 
-export BACKUP_FILE='.ops/backups/getsawa-YYYYMMDDTHHMMSSZ.dump'
+export BACKUP_FILE='.ops/backups/cloudsawa-YYYYMMDDTHHMMSSZ.dump'
 export RESTORE_DATABASE_URL='...isolated-disposable-db...'
 export CONFIRM_ISOLATED_RESTORE=RESTORE_ISOLATED_DATABASE
 ./scripts/ops/restore-postgres.sh

@@ -1,4 +1,4 @@
-# GetSawa Phase 3B — Billing & Renewals
+# CloudSawa Phase 3B — Billing & Renewals
 
 ## Delivered
 
@@ -15,9 +15,9 @@
 
 ## Production behavior
 
-The application never fabricates a successful renewal or payment. PayPal must be configured before a renewal invoice can be paid. The renewal scheduler creates a real GetSawa renewal order and invoice; it does not claim that a card or PayPal account was charged when no authorized recurring-payment instrument exists.
+The application never fabricates a successful renewal or payment. PayPal must be configured before a renewal invoice can be paid. The renewal scheduler creates a real CloudSawa renewal order and invoice; it does not claim that a card or PayPal account was charged when no authorized recurring-payment instrument exists.
 
-PayPal's current Subscriptions API uses products, plans and subscriber-approved subscriptions. Access to the current partner integration is subject to PayPal onboarding/eligibility. Once GetSawa has the required PayPal subscription access and production credentials, the stored `provider_subscription_id` field can be populated and subscription webhook events can be connected to the same billing lifecycle without changing the customer-facing renewal model.
+PayPal's current Subscriptions API uses products, plans and subscriber-approved subscriptions. Access to the current partner integration is subject to PayPal onboarding/eligibility. Once CloudSawa has the required PayPal subscription access and production credentials, the stored `provider_subscription_id` field can be populated and subscription webhook events can be connected to the same billing lifecycle without changing the customer-facing renewal model.
 
 ## Database deployment
 

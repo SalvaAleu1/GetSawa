@@ -8,7 +8,7 @@ Implemented contracts:
 - publish/unpublish transitions that retire or activate production pointers;
 - rollback to an earlier immutable deployment without deleting later versions;
 - Cloudflare Worker Custom Domains using the documented account Workers Domains API;
-- custom-domain eligibility restricted to customer-owned active GetSawa domains whose Phase 17 Cloudflare zone/cutover is already ACTIVE;
+- custom-domain eligibility restricted to customer-owned active CloudSawa domains whose Phase 17 Cloudflare zone/cutover is already ACTIVE;
 - explicit review/approval before replacing conflicting apex/www web DNS records;
 - persisted Cloudflare domain and certificate identifiers;
 - host-based Worker routing to the same safe website renderer used by platform URLs;

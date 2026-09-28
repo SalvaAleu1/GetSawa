@@ -4,10 +4,10 @@ Status: cutover configuration and verification tooling are repository-complete; 
 
 ## Repository implementation
 
-- Production Wrangler environment now declares `getsawa.app` as a Cloudflare Worker Custom Domain.
+- Production Wrangler environment now declares `cloudsawa.app` as a Cloudflare Worker Custom Domain.
 - Production Cloudflare schedules contain all 12 Worker cron mappings.
 - Production deploy requires a third explicit cutover acknowledgement in addition to the existing production deployment/upload acknowledgements.
-- Cloudflare responses carry non-secret `x-getsawa-runtime` and `x-getsawa-environment` fingerprints so traffic origin can be proven after cutover.
+- Cloudflare responses carry non-secret `x-cloudsawa-runtime` and `x-cloudsawa-environment` fingerprints so traffic origin can be proven after cutover.
 - A zero-dependency Node configuration checker validates Vercel cron coverage, Cloudflare cron/mapping equality, Custom Domain ownership and production workers.dev shutdown.
 - Production verification checks the Cloudflare runtime fingerprint, public health and PayPal webhook configuration without creating a payment.
 - Detailed cutover, scheduler handoff and rollback sequence is documented.
@@ -15,7 +15,7 @@ Status: cutover configuration and verification tooling are repository-complete; 
 ## Static gate completed — 13 September 2026
 
 - `node scripts/ops/check-cutover-config.mjs` passes: all 8 committed Vercel cron jobs are covered by the 12 Cloudflare production jobs and all 12 Worker mappings match the production schedule.
-- `wrangler.jsonc` parses successfully; production has one `getsawa.app` Custom Domain, `workers_dev=false` and 12 unique crons.
+- `wrangler.jsonc` parses successfully; production has one `cloudsawa.app` Custom Domain, `workers_dev=false` and 12 unique crons.
 - The production deploy and cutover verification shell scripts were syntax-reviewed; the added cutover guard is a fail-closed production-only condition.
 - `vercel.json` remains unchanged. Disabling the live legacy scheduler is intentionally a controlled operational action during the cutover window, not an early source-code side effect.
 
@@ -24,7 +24,7 @@ Status: cutover configuration and verification tooling are repository-complete; 
 Phase 29 is not DONE until evidence shows:
 
 - the verified Vercel production scheduler was disabled at the handoff timestamp;
-- the Cloudflare production deployment attached `getsawa.app` and served valid TLS;
+- the Cloudflare production deployment attached `cloudsawa.app` and served valid TLS;
 - `verify-production-cutover.sh` passed against the public hostname;
 - PayPal webhook handling remained configured and provider events were verified;
 - Cloudflare scheduled jobs ran successfully without duplicate Vercel executions;

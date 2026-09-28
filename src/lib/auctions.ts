@@ -29,12 +29,12 @@ export async function createVerifiedAuction(params: {
   if (listing.status !== "LISTED" || listing.isAuction) throw new AuctionError("This premium domain is not available for auction.");
   const meta = await getPremiumInventoryMeta(listing.id);
   if (!meta?.ownershipVerifiedAt || meta.soldAt) throw new AuctionError("Registrar custody must be verified before this domain can be auctioned.");
-  if (!["GETSAWA_INVENTORY", "CUSTOMER_CUSTODY"].includes(meta.source)) throw new AuctionError("This inventory source is not eligible for auction.");
+  if (!["CLOUDSAWA_INVENTORY", "CUSTOMER_CUSTODY"].includes(meta.source)) throw new AuctionError("This inventory source is not eligible for auction.");
   if (meta.reservedUntil && meta.reservedUntil.getTime() > now.getTime()) throw new AuctionError("This domain is currently reserved by a buyer.");
 
   const protectedSalePrice = params.reservePriceCents && params.reservePriceCents > 0 ? params.reservePriceCents : params.startingBidCents;
   if (params.reservePriceCents != null && params.reservePriceCents < params.startingBidCents) throw new AuctionError("Reserve price cannot be below the starting bid.");
-  await validatePremiumMarketplaceEconomics({ source: meta.source as "GETSAWA_INVENTORY" | "CUSTOMER_CUSTODY", salePriceCents: protectedSalePrice, acquisitionCostCents: meta.acquisitionCostCents, commissionBps: meta.commissionBps });
+  await validatePremiumMarketplaceEconomics({ source: meta.source as "CLOUDSAWA_INVENTORY" | "CUSTOMER_CUSTODY", salePriceCents: protectedSalePrice, acquisitionCostCents: meta.acquisitionCostCents, commissionBps: meta.commissionBps });
 
   return prisma.$transaction(async (tx) => {
     const activeLink = await tx.$queryRaw<Array<{ auction_id: string }>>`

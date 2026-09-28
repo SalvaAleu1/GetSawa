@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
       select: { type: true, host: true, value: true, ttl: true, priority: true },
     });
     return jsonOk({
-      format: "getsawa-dns-v1",
+      format: "cloudsawa-dns-v1",
       domain: domain.name,
       exportedAt: new Date().toISOString(),
       records,

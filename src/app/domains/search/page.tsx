@@ -166,7 +166,7 @@ export default function DomainSearchPage() {
               <p className="eyebrow">Domain discovery</p>
               <h1 className="mt-2 text-3xl font-bold sm:text-4xl">Find the right domain, with pricing you can trust.</h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-ink/60">
-                Availability is checked live with the registrar. Display prices are protected by GetSawa&apos;s wholesale-cost floor, and checkout refreshes supplier pricing again before payment.
+                Availability is checked live with the registrar. Display prices are protected by CloudSawa&apos;s wholesale-cost floor, and checkout refreshes supplier pricing again before payment.
               </p>
             </div>
 
@@ -201,7 +201,7 @@ export default function DomainSearchPage() {
                     </button>
                   ) : null}
                 </div>
-                <p className="mt-1 text-xs leading-5 text-ink/45">Choose up to 25 extensions. With none selected, GetSawa checks the first 20 active TLDs.</p>
+                <p className="mt-1 text-xs leading-5 text-ink/45">Choose up to 25 extensions. With none selected, CloudSawa checks the first 20 active TLDs.</p>
                 <div className="mt-4 max-h-72 space-y-1 overflow-y-auto pr-1">
                   {tlds.map((tld) => (
                     <label key={tld.extension} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-2 hover:bg-paper">
@@ -222,7 +222,7 @@ export default function DomainSearchPage() {
 
               <div className="panel p-4 text-xs leading-5 text-ink/55">
                 <p className="font-bold text-ink">Premium-domain safety</p>
-                <p className="mt-2">If the active registrar cannot provide an authoritative premium quote before payment, GetSawa blocks instant checkout rather than risk charging an ordinary TLD price for an expensive registry-premium name.</p>
+                <p className="mt-2">If the active registrar cannot provide an authoritative premium quote before payment, CloudSawa blocks instant checkout rather than risk charging an ordinary TLD price for an expensive registry-premium name.</p>
               </div>
             </aside>
 

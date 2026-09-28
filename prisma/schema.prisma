@@ -1,4 +1,4 @@
-// GetSawa — Phase 1 database schema
+// CloudSawa — Phase 1 database schema
 // Money is always stored as integer minor units (cents) — never floats.
 
 generator client {

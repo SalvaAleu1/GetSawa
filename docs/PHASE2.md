@@ -1,4 +1,4 @@
-# GetSawa Phase 2 — Production Readiness
+# CloudSawa Phase 2 — Production Readiness
 
 Phase 2 hardens the platform for production operation. The codebase must fail closed when external provider credentials are missing, expose operational health, protect privileged accounts with MFA, and automate recurring domain and auction lifecycle work.
 
@@ -14,7 +14,7 @@ Phase 2 hardens the platform for production operation. The codebase must fail cl
 
 ## Provider boundary
 
-Hosting and mailbox provisioning are deliberately not faked. A real provider account/API and credentials are required before GetSawa can advertise those services as live. Missing credentials must return an explicit unavailable/configuration state and never a successful provisioning result.
+Hosting and mailbox provisioning are deliberately not faked. A real provider account/API and credentials are required before CloudSawa can advertise those services as live. Missing credentials must return an explicit unavailable/configuration state and never a successful provisioning result.
 
 ## Definition of done
 

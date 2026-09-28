@@ -125,14 +125,14 @@ export default function HostingDashboardPage() {
         <div>
           <p className="text-sm font-medium">My Services</p>
           <h1 className="text-3xl font-bold">Web Hosting</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-ink/60">Manage provider-backed cPanel hosting, live resource usage, renewal status and secure control-panel access from GetSawa.</p>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-ink/60">Manage provider-backed cPanel hosting, live resource usage, renewal status and secure control-panel access from CloudSawa.</p>
         </div>
         <Link href="/products/hosting" className="btn-primary">Browse hosting plans</Link>
       </div>
 
       {!data.provider.verified ? (
         <div className="rounded-2xl border border-amber-300/50 bg-amber-50 p-4 text-sm text-amber-900">
-          Live WHM management is temporarily unavailable. Existing billing records remain visible, but GetSawa will not claim the provider is operational until its live verification passes again.{data.provider.reason ? ` ${data.provider.reason}` : ""}
+          Live WHM management is temporarily unavailable. Existing billing records remain visible, but CloudSawa will not claim the provider is operational until its live verification passes again.{data.provider.reason ? ` ${data.provider.reason}` : ""}
         </div>
       ) : null}
       {error ? <div className="rounded-xl border border-danger/20 bg-danger/5 p-4 text-sm text-danger">{error}</div> : null}
@@ -201,7 +201,7 @@ export default function HostingDashboardPage() {
                   </div>
                 </div>
 
-                <p className="mt-4 text-xs leading-5 text-ink/45">Open cPanel for provider-supported site files, backups, FTP accounts, databases and other hosting controls. GetSawa uses a temporary sign-in session and does not store a cPanel password.</p>
+                <p className="mt-4 text-xs leading-5 text-ink/45">Open cPanel for provider-supported site files, backups, FTP accounts, databases and other hosting controls. CloudSawa uses a temporary sign-in session and does not store a cPanel password.</p>
               </article>
             );
           })}

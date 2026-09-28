@@ -29,7 +29,7 @@ export async function GET() {
       { key: "email", label: "Verify email address", complete: Boolean(user.emailVerifiedAt) },
       { key: "profile", label: "Complete contact profile", complete: profileComplete },
       { key: "mfa", label: "Enable two-factor authentication", complete: user.mfaEnabled },
-      { key: "first-service", label: "Add your first GetSawa service", complete: domainCount > 0 || orderCount > 0 },
+      { key: "first-service", label: "Add your first CloudSawa service", complete: domainCount > 0 || orderCount > 0 },
     ];
     const completed = checklist.filter((item) => item.complete).length;
 

@@ -82,7 +82,7 @@ export function decryptTotpSecret(secret: string): string {
 }
 
 export function buildOtpAuthUri(secret: string, email: string): string {
-  const issuer = encodeURIComponent(process.env.APP_NAME || "GetSawa");
+  const issuer = encodeURIComponent(process.env.APP_NAME || "CloudSawa");
   const account = encodeURIComponent(email);
   return `otpauth://totp/${issuer}:${account}?secret=${secret}&issuer=${issuer}&algorithm=SHA1&digits=6&period=30`;
 }

@@ -277,7 +277,7 @@ export async function handleFullyRefundedHostingOrder(orderId: string) {
     if (service.status === "TERMINATED" || service.status === "SUSPENDED") continue;
     if (operational.verified) {
       try {
-        await provider.suspendAccount(service.provider_resource_id, "GetSawa order fully refunded");
+        await provider.suspendAccount(service.provider_resource_id, "CloudSawa order fully refunded");
         await prisma.$executeRaw`UPDATE "product_service_instances" SET "status"='SUSPENDED',"updated_at"=CURRENT_TIMESTAMP WHERE "id"=${service.id}`;
         await logAudit({ actorId: null, action: "hosting.suspended_after_refund", resource: "hosting_service", resourceId: service.id, metadata: { orderId } }).catch(() => undefined);
         suspended++;
@@ -325,10 +325,10 @@ export async function enforceHostingPastDue(limit = 100) {
   for (const row of rows) {
     try {
       const reason = row.enforcement_reason === "PERIOD_ENDED"
-        ? "GetSawa hosting subscription ended"
+        ? "CloudSawa hosting subscription ended"
         : row.enforcement_reason === "SUSPENSION_PENDING"
-          ? "GetSawa hosting suspension retry"
-          : "GetSawa hosting renewal payment overdue";
+          ? "CloudSawa hosting suspension retry"
+          : "CloudSawa hosting renewal payment overdue";
       await provider.suspendAccount(row.provider_resource_id, reason);
       await prisma.$executeRaw`UPDATE "product_service_instances" SET "status"='SUSPENDED',"updated_at"=CURRENT_TIMESTAMP WHERE "id"=${row.service_instance_id}`;
       if (row.subscription_id && row.enforcement_reason === "PERIOD_ENDED") {

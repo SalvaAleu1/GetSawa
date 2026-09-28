@@ -1,6 +1,6 @@
 # Provider reconciliation and recovery
 
-GetSawa never treats its database as proof that an external side effect happened. After outage, restore or uncertain request outcome, provider truth must be reconciled before retrying actions that can charge money, register/renew/transfer a domain, provision a service, settle an auction or send a payout.
+CloudSawa never treats its database as proof that an external side effect happened. After outage, restore or uncertain request outcome, provider truth must be reconciled before retrying actions that can charge money, register/renew/transfer a domain, provision a service, settle an auction or send a payout.
 
 ## Existing recovery jobs
 

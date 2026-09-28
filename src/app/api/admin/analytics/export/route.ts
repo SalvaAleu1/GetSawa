@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     const lines = [header.join(","),...rows.map(row=>[
       row.created_at.toISOString(),row.event_type,row.provider,row.gross_cents,row.provider_fee_cents,row.net_cents,row.currency,row.order_id,row.payment_id,row.refund_id,row.provider_reference
     ].map(csvCell).join(","))];
-    const filename = `getsawa-finance-${from.toISOString().slice(0,10)}-${to.toISOString().slice(0,10)}.csv`;
+    const filename = `cloudsawa-finance-${from.toISOString().slice(0,10)}-${to.toISOString().slice(0,10)}.csv`;
     return new Response(lines.join("\n"),{headers:{"content-type":"text/csv; charset=utf-8","content-disposition":`attachment; filename="${filename}"`,"cache-control":"no-store"}});
   } catch (error) { return handleError(error); }
 }

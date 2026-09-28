@@ -139,7 +139,7 @@ export default function CheckoutPage() {
           <div className="mb-8 max-w-3xl">
             <p className="eyebrow">Secure checkout</p>
             <h1 className="mt-2 text-3xl font-bold">Review your order before payment.</h1>
-            <p className="mt-3 text-sm leading-6 text-ink/55">Your browser stores selections only—not trusted prices. GetSawa calculates this quote on the server and calculates it again when the payment order is created.</p>
+            <p className="mt-3 text-sm leading-6 text-ink/55">Your browser stores selections only—not trusted prices. CloudSawa calculates this quote on the server and calculates it again when the payment order is created.</p>
           </div>
 
           {params.get("cancelled") === "1" ? (
@@ -149,7 +149,7 @@ export default function CheckoutPage() {
           {cart.length === 0 ? (
             <div className="empty-state">
               <p className="text-lg font-bold">Your cart is empty.</p>
-              <p className="mt-2 text-sm text-ink/50">Search for a domain or choose an active GetSawa product to get started.</p>
+              <p className="mt-2 text-sm text-ink/50">Search for a domain or choose an active CloudSawa product to get started.</p>
               <div className="mt-5 flex flex-wrap justify-center gap-3"><Link href="/domains/search" className="btn-primary">Search domains</Link><Link href="/products" className="btn-secondary">Browse products</Link></div>
             </div>
           ) : (
@@ -162,7 +162,7 @@ export default function CheckoutPage() {
                       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="font-bold">{priced?.description || (item.kind === "PRODUCT" ? item.sku : "GetSawa service")}</h2>
+                            <h2 className="font-bold">{priced?.description || (item.kind === "PRODUCT" ? item.sku : "CloudSawa service")}</h2>
                             {priced?.isPremium ? <span className="badge-warning">Premium</span> : null}
                           </div>
                           <p className="mt-2 text-xs leading-5 text-ink/45">{priced?.pricingSource ? `Pricing source: ${priced.pricingSource.replaceAll("_", " ").toLowerCase()}` : quoteLoading ? "Refreshing protected price…" : "Awaiting server quote"}</p>
@@ -194,7 +194,7 @@ export default function CheckoutPage() {
                     <div className="flex items-start gap-3">
                       <input id="account-credit" type="checkbox" checked={applyCredit} disabled={quoteLoading} onChange={(event) => void toggleCredit(event.target.checked)} className="mt-1" />
                       <label htmlFor="account-credit" className="min-w-0 cursor-pointer">
-                        <span className="font-bold">Use GetSawa account credit</span>
+                        <span className="font-bold">Use CloudSawa account credit</span>
                         <span className="mt-1 block text-sm text-ink/55">Available balance: {money(quote.creditBalanceCents, quote.currency)}. Credit is reserved only when you start payment and consumed only after the order is paid.</span>
                       </label>
                     </div>
@@ -203,7 +203,7 @@ export default function CheckoutPage() {
 
                 <div className="panel p-5 text-sm leading-6 text-ink/55">
                   <p className="font-bold text-ink">Price protection</p>
-                  <p className="mt-2">Domain wholesale costs are refreshed on the server. Promotions and coupons cannot reduce protected domain lines below the configured wholesale cost, payment-fee allowance, FX reserve, and minimum GetSawa margin.</p>
+                  <p className="mt-2">Domain wholesale costs are refreshed on the server. Promotions and coupons cannot reduce protected domain lines below the configured wholesale cost, payment-fee allowance, FX reserve, and minimum CloudSawa margin.</p>
                 </div>
               </div>
 
@@ -226,7 +226,7 @@ export default function CheckoutPage() {
                   <button type="button" onClick={quoteExpired ? () => refreshQuote() : handlePay} disabled={submitting || quoteLoading || !quote} className="btn-primary mt-5 w-full !py-3.5 text-base">
                     {quoteExpired ? "Refresh quote" : submitting ? "Preparing payment…" : quote?.amountDueCents === 0 ? "Pay with account credit" : "Continue to PayPal"}
                   </button>
-                  <p className="mt-3 text-center text-[11px] leading-5 text-ink/40">GetSawa verifies server-side pricing, reserved credit and the final payment amount before fulfilment begins.</p>
+                  <p className="mt-3 text-center text-[11px] leading-5 text-ink/40">CloudSawa verifies server-side pricing, reserved credit and the final payment amount before fulfilment begins.</p>
                 </div>
               </aside>
             </div>

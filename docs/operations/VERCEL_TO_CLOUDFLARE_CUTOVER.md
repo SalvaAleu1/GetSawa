@@ -12,7 +12,7 @@ The old Vercel project is not bound to this repository by `.vercel/project.json`
 
 1. Phase 27 has real restore-drill evidence meeting the agreed RPO/RTO target.
 2. Phase 28 staging is live and has passed Cloudflare runtime, migration, cron, observability, Phase 26 accessibility/performance/PWA and representative product tests.
-3. `getsawa-production` has been built/uploaded and verified on a non-production endpoint before the production Custom Domain is activated.
+3. `cloudsawa-production` has been built/uploaded and verified on a non-production endpoint before the production Custom Domain is activated.
 4. Production Cloudflare runtime/build variables and secrets are complete.
 5. PayPal webhook ID/credentials, NameSilo, database, SMTP and every launch-enabled product provider have passed their Phase 30 preflight tests.
 6. The last-known-good Vercel deployment and its DNS configuration are recorded for rollback.
@@ -26,23 +26,23 @@ The old Vercel project is not bound to this repository by `.vercel/project.json`
 3. Verify Vercel is healthy one final time and record the current production deployment identifier.
 4. Disable the **live production Vercel cron scheduler**. Because the actual legacy Vercel project is not repository-bound, do this on the verified project/dashboard rather than assuming a Git push changed it.
 5. Confirm no Vercel cron execution starts after the recorded handoff timestamp.
-6. If `getsawa.app` currently has a DNS record that conflicts with a Cloudflare Worker Custom Domain, record it for rollback and remove it only at this point. Cloudflare Custom Domains require the hostname to be in an active Cloudflare zone and cannot be created over a conflicting CNAME.
+6. If `cloudsawa.app` currently has a DNS record that conflicts with a Cloudflare Worker Custom Domain, record it for rollback and remove it only at this point. Cloudflare Custom Domains require the hostname to be in an active Cloudflare zone and cannot be created over a conflicting CNAME.
 7. Export the production deployment acknowledgements:
 
 ```bash
-export APP_URL=https://getsawa.app
-export WEBSITE_PLATFORM_HOST=getsawa.app
-export CLOUDFLARE_WORKER_SERVICE_NAME=getsawa-production
-export CONFIRM_PRODUCTION_DEPLOY=DEPLOY_GETSAWA_PRODUCTION
+export APP_URL=https://cloudsawa.app
+export WEBSITE_PLATFORM_HOST=cloudsawa.app
+export CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa-production
+export CONFIRM_PRODUCTION_DEPLOY=DEPLOY_CLOUDSAWA_PRODUCTION
 export CONFIRM_PRODUCTION_WORKER_UPLOAD=UPLOAD_PRODUCTION_WORKER
-export CONFIRM_PRODUCTION_CUTOVER=SWITCH_GETSAWA_TO_CLOUDFLARE
+export CONFIRM_PRODUCTION_CUTOVER=SWITCH_CLOUDSAWA_TO_CLOUDFLARE
 export APPLY_DATABASE_MIGRATIONS=APPLY_REVIEWED_MIGRATIONS
 npm run deploy:cloudflare:production
 ```
 
 Do not paste actual secret values into shell history; inject them through the approved secret mechanism.
 
-8. The production deploy attaches the `getsawa.app` Custom Domain and enables all 12 Cloudflare crons. The deploy wrapper immediately runs `verify-production-cutover.sh`.
+8. The production deploy attaches the `cloudsawa.app` Custom Domain and enables all 12 Cloudflare crons. The deploy wrapper immediately runs `verify-production-cutover.sh`.
 9. Verify TLS, root/login/domains/products/support, `robots.txt`, sitemap, manifest, and the Worker runtime headers.
 10. The verifier sends `{}` to the PayPal webhook endpoint. A configured receiver must return HTTP 400 for that invalid event; 503 blocks launch and means provider/webhook configuration is incomplete. The probe cannot create a payment because it has no event ID/type/signature.
 11. Run `payment-reconciliation`, then `domain-sync`, then `provisioning-recovery` using the Phase 27 manual reconciliation tool. Review results before resuming normal mutations.
@@ -52,7 +52,7 @@ Do not paste actual secret values into shell history; inject them through the ap
 
 ## Webhooks
 
-The public PayPal webhook hostname remains `https://getsawa.app/api/webhooks/paypal`, so a hostname change is not required if PayPal already targets that URL. The origin changes from Vercel to Cloudflare. Verify signature validation and event processing after cutover, and make sure no firewall/access policy blocks PayPal.
+The public PayPal webhook hostname remains `https://cloudsawa.app/api/webhooks/paypal`, so a hostname change is not required if PayPal already targets that URL. The origin changes from Vercel to Cloudflare. Verify signature validation and event processing after cutover, and make sure no firewall/access policy blocks PayPal.
 
 ## Rollback
 
@@ -60,7 +60,7 @@ Rollback is triggered by payment integrity risk, domain/provider divergence, aut
 
 1. Freeze customer mutations that could duplicate external side effects.
 2. Disable Cloudflare production cron triggers before re-enabling the previous scheduler.
-3. Restore the previously recorded DNS/route configuration so `getsawa.app` reaches the last-known-good Vercel deployment.
+3. Restore the previously recorded DNS/route configuration so `cloudsawa.app` reaches the last-known-good Vercel deployment.
 4. Verify Vercel production health.
 5. Re-enable the Vercel scheduler only after Cloudflare schedules are disabled.
 6. Reconcile payments/domains/provisioning; code/DNS rollback does not undo provider side effects.

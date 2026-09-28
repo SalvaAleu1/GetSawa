@@ -1,8 +1,8 @@
 import { Navbar } from "@/components/Navbar";
 
 export const metadata = {
-  title: "Terms of Service — GetSawa",
-  description: "Terms governing the use of GetSawa domain and digital services.",
+  title: "Terms of Service — CloudSawa",
+  description: "Terms governing the use of CloudSawa domain and digital services.",
 };
 
 export default function TermsPage() {
@@ -14,7 +14,7 @@ export default function TermsPage() {
           <h1>Terms of Service</h1>
           <p className="lead">Last updated: September 13, 2026</p>
           <p>
-            These Terms govern your use of GetSawa, including domain search and registration, transfers, renewals,
+            These Terms govern your use of CloudSawa, including domain search and registration, transfers, renewals,
             DNS management, websites, digital products, support, auctions, premium domains, developer APIs and other
             services made available through the platform. By creating an account or purchasing a service, you agree to
             these Terms.
@@ -22,7 +22,7 @@ export default function TermsPage() {
 
           <h2>1. Accounts</h2>
           <p>You must provide accurate information and keep your login credentials confidential. You are responsible
-            for activity performed through your account. GetSawa may suspend an account where required for security,
+            for activity performed through your account. CloudSawa may suspend an account where required for security,
             fraud prevention, abuse prevention, legal compliance, or non-payment.</p>
 
           <h2>2. Domain services</h2>
@@ -35,21 +35,21 @@ export default function TermsPage() {
 
           <h2>3. Payments and taxes</h2>
           <p>Prices are shown before checkout and may vary by TLD, product, term, promotion, currency and applicable
-            taxes. Payment must be successfully authorized before paid services are provisioned. You authorize GetSawa
+            taxes. Payment must be successfully authorized before paid services are provisioned. You authorize CloudSawa
             and its payment providers to process the amount displayed at checkout.</p>
 
           <h2>4. Renewals and expiry</h2>
-          <p>Customers are responsible for keeping domains renewed. Where auto-renew is enabled, GetSawa may attempt
+          <p>Customers are responsible for keeping domains renewed. Where auto-renew is enabled, CloudSawa may attempt
             renewal using the configured payment method. Failed renewal can result in suspension, expiry or loss of a
             domain according to the applicable registry&apos;s lifecycle rules.</p>
 
           <h2>5. Acceptable use</h2>
-          <p>You may not use GetSawa to facilitate fraud, phishing, malware, unlawful surveillance, intellectual-property
+          <p>You may not use CloudSawa to facilitate fraud, phishing, malware, unlawful surveillance, intellectual-property
             infringement, abuse of third-party systems, spam, impersonation, or any activity prohibited by applicable
             law or the rules of a relevant registry or service provider.</p>
 
           <h2>6. Websites and content</h2>
-          <p>You retain responsibility for content you publish through GetSawa. You must have the necessary rights to
+          <p>You retain responsibility for content you publish through CloudSawa. You must have the necessary rights to
             use text, images, trademarks, code and other material. AI-generated content is provided as an assistance
             tool and should be reviewed for accuracy, rights, safety and suitability before publication.</p>
 
@@ -59,21 +59,21 @@ export default function TermsPage() {
             for the particular domain.</p>
 
           <h2>8. Intellectual property</h2>
-          <p>GetSawa and its software, branding and platform materials are protected by applicable intellectual-property
+          <p>CloudSawa and its software, branding and platform materials are protected by applicable intellectual-property
             laws. Except for rights expressly granted to you, no ownership rights are transferred to you.</p>
 
           <h2>9. Third-party services</h2>
           <p>Some services depend on third-party providers such as domain registries, registrars, payment networks,
-            email services and AI providers. Their availability and rules may affect service delivery. GetSawa does not
+            email services and AI providers. Their availability and rules may affect service delivery. CloudSawa does not
             control third-party outages or policy changes.</p>
 
           <h2>10. Service availability</h2>
           <p>We aim to keep the platform available and secure, but continuous availability is not guaranteed. We may
             perform maintenance, security work or changes to services. Where a paid service cannot be provisioned,
-            GetSawa will record the failure and apply the applicable refund or remediation policy.</p>
+            CloudSawa will record the failure and apply the applicable refund or remediation policy.</p>
 
           <h2>11. Disclaimers and limitation of liability</h2>
-          <p>To the maximum extent permitted by applicable law, GetSawa is not responsible for indirect, incidental,
+          <p>To the maximum extent permitted by applicable law, CloudSawa is not responsible for indirect, incidental,
             special or consequential losses arising from use of the platform, third-party outages, registry decisions,
             domain expiry caused by customer inaction, or content published by customers.</p>
 
@@ -83,7 +83,7 @@ export default function TermsPage() {
             where permitted by law.</p>
 
           <h2>13. Contact</h2>
-          <p>Questions about these Terms should be sent through the official support channels published by GetSawa.</p>
+          <p>Questions about these Terms should be sent through the official support channels published by CloudSawa.</p>
         </article>
       </main>
     </>

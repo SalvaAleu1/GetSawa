@@ -15,7 +15,7 @@ interface Listing {
   currency: string;
   category: string | null;
   isFeatured: boolean;
-  source: "GETSAWA_INVENTORY" | "CUSTOMER_CUSTODY";
+  source: "CLOUDSAWA_INVENTORY" | "CUSTOMER_CUSTODY";
   offerEnabled: boolean;
 }
 
@@ -79,9 +79,9 @@ export default function PremiumDomainDetailPage() {
           <div className="mt-6 grid gap-7 lg:grid-cols-[minmax(0,1fr)_380px]">
             <div className="space-y-6">
               <section className="panel p-6 lg:p-8">
-                <div className="flex flex-wrap gap-2">{listing.isFeatured ? <span className="badge-warning">Featured</span> : null}<span className="badge-neutral">{listing.source === "GETSAWA_INVENTORY" ? "GetSawa inventory" : "Marketplace seller"}</span>{listing.category ? <span className="badge-neutral">{listing.category}</span> : null}</div>
+                <div className="flex flex-wrap gap-2">{listing.isFeatured ? <span className="badge-warning">Featured</span> : null}<span className="badge-neutral">{listing.source === "CLOUDSAWA_INVENTORY" ? "CloudSawa inventory" : "Marketplace seller"}</span>{listing.category ? <span className="badge-neutral">{listing.category}</span> : null}</div>
                 <h1 className="mt-5 break-all text-3xl font-bold tracking-tight sm:text-4xl">{listing.domainName}</h1>
-                <p className="mt-4 max-w-2xl text-sm leading-6 text-ink/55">A verified premium domain ready for acquisition through GetSawa's protected marketplace checkout.</p>
+                <p className="mt-4 max-w-2xl text-sm leading-6 text-ink/55">A verified premium domain ready for acquisition through CloudSawa's protected marketplace checkout.</p>
                 <div className="mt-7 grid gap-4 sm:grid-cols-2">
                   <Info label="Purchase price" value={money(listing.retailPriceCents, listing.currency)} />
                   <Info label="Renewal estimate" value={`${money(listing.renewalPriceCents, listing.currency)} / year`} />
@@ -93,7 +93,7 @@ export default function PremiumDomainDetailPage() {
                 <div className="mt-5 grid gap-4 md:grid-cols-3">
                   <Step number="1" title="Secure payment" body="The domain is reserved to your account while payment is completed." />
                   <Step number="2" title="Registrar verification" body="Ownership and registrant details are completed and verified through the registrar." />
-                  <Step number="3" title="Account delivery" body="The domain is released into your GetSawa domain portfolio after verification." />
+                  <Step number="3" title="Account delivery" body="The domain is released into your CloudSawa domain portfolio after verification." />
                 </div>
               </section>
 

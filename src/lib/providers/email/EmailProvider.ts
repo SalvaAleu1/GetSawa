@@ -117,7 +117,7 @@ function credentials() {
   return {
     user: process.env.OPENSRS_EMAIL_ADMIN_USER!,
     password: process.env.OPENSRS_EMAIL_ADMIN_PASSWORD!,
-    client: "GetSawa Hosted Email",
+    client: "CloudSawa Hosted Email",
   };
 }
 
@@ -292,7 +292,7 @@ class OpenSrsHostedEmailProvider implements EmailProvider {
             service_smtprelay: "enabled",
             service_smtprelay_webmail: "enabled",
             service_webmail: "enabled",
-            notes_external: `GetSawa order-item ${req.idempotencyKey}`,
+            notes_external: `CloudSawa order-item ${req.idempotencyKey}`,
           },
         });
       } catch (error) {
@@ -361,7 +361,7 @@ class OpenSrsHostedEmailProvider implements EmailProvider {
       user: normalizeAddress(providerMailboxId),
       type: "sso",
       duration: 1,
-      reason: "GetSawa customer webmail sign-in",
+      reason: "CloudSawa customer webmail sign-in",
     });
     if (typeof body.token !== "string" || !body.token) throw new Error("OpenSRS did not return a webmail login token.");
     const cluster = this.cluster();

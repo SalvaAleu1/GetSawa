@@ -1,6 +1,6 @@
 # Hosting & Business Email
 
-GetSawa deliberately keeps provider-backed products fail-closed. A catalog
+CloudSawa deliberately keeps provider-backed products fail-closed. A catalog
 card is never considered a delivered product unless the provider,
 provisioning, billing and recovery paths behind it are real.
 
@@ -18,7 +18,7 @@ Web hosting is implemented against **cPanel/WHM API 1** through:
 Required production secrets:
 
 - `WHM_BASE_URL` — HTTPS WHM control-plane origin, commonly port 2087.
-- `WHM_USERNAME` — reseller/root account used by GetSawa.
+- `WHM_USERNAME` — reseller/root account used by CloudSawa.
 - `WHM_API_TOKEN` — API token for that account.
 
 Do not put the real token in this repository. Configure it in the deployment
@@ -43,7 +43,7 @@ checkout lifecycle exists.
 ### Provisioning, access and recovery
 
 A paid initial hosting order provisions a deterministic WHM account. Customers
-access cPanel using a fresh temporary session; GetSawa does not persist a
+access cPanel using a fresh temporary session; CloudSawa does not persist a
 cPanel password. Recurring hosting reuses the existing provider account,
 refreshes protected pricing before payment, supports grace/suspension,
 cancel-at-period-end, reactivation after payment, and full-refund suspension.
@@ -54,7 +54,7 @@ Cloudflare runs renewal/suspension enforcement through
 
 Business email is implemented against **OpenSRS Hosted Email OMA JSON API**.
 It is intentionally separate from the cPanel hosting account so a customer can
-buy a professional mailbox without first buying GetSawa web hosting.
+buy a professional mailbox without first buying CloudSawa web hosting.
 
 Core implementation:
 
@@ -109,7 +109,7 @@ Checkout requires an active/expiring domain already owned by the signed-in
 customer and a validated mailbox local part. Pricing remains entirely server
 authoritative.
 
-After payment, GetSawa:
+After payment, CloudSawa:
 
 1. creates/reconciles the OpenSRS email domain;
 2. creates the mailbox with a generated bootstrap password;
@@ -118,7 +118,7 @@ After payment, GetSawa:
 5. requires the customer to replace the bootstrap password from the dashboard.
 
 Mailbox passwords are sent directly to OpenSRS and are **never stored in the
-GetSawa database**. Webmail access uses a fresh provider SSO token rather than a
+CloudSawa database**. Webmail access uses a fresh provider SSO token rather than a
 stored mailbox password.
 
 ### Mailbox management
@@ -135,7 +135,7 @@ stored mailbox password.
 - automatic-renewal controls; and
 - email DNS verification/cutover.
 
-OpenSRS external forwarding requires recipient opt-in. GetSawa therefore does
+OpenSRS external forwarding requires recipient opt-in. CloudSawa therefore does
 not describe a new external forwarding recipient as active merely because the
 provider accepted the request.
 
@@ -147,11 +147,11 @@ Staff can inspect mailbox/customer/product/DNS/billing/provider state in
 Mailbox/provider provisioning happens **before** MX changes. Buying email does
 not silently replace existing mail routing.
 
-GetSawa derives the exact cluster-specific MX/CNAME records plus the OpenSRS
-SPF include. The customer must explicitly approve a DNS cutover before GetSawa
+CloudSawa derives the exact cluster-specific MX/CNAME records plus the OpenSRS
+SPF include. The customer must explicitly approve a DNS cutover before CloudSawa
 changes mail routing.
 
-When the domain is genuinely authoritative on NameSilo/DNSOwl, GetSawa can:
+When the domain is genuinely authoritative on NameSilo/DNSOwl, CloudSawa can:
 
 - replace root MX records with the OpenSRS routing MX;
 - replace conflicting `mail` A/AAAA/CNAME records with the required CNAME; and
@@ -160,7 +160,7 @@ When the domain is genuinely authoritative on NameSilo/DNSOwl, GetSawa can:
 An existing SPF policy is never overwritten. If it does not already include
 OpenSRS, the dashboard reports that a safe SPF merge is required.
 
-For domains using external nameservers, GetSawa refuses to edit inactive
+For domains using external nameservers, CloudSawa refuses to edit inactive
 NameSilo DNS and instead displays the exact records for the customer to add at
 the authoritative DNS provider.
 

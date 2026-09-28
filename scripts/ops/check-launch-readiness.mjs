@@ -92,10 +92,10 @@ function validateGate(gate, label) {
 }
 
 if (failures.length) {
-  console.error("GETSAWA LAUNCH STATUS: BLOCKED");
+  console.error("CLOUDSAWA LAUNCH STATUS: BLOCKED");
   for (const failure of [...new Set(failures)]) console.error(`- ${failure}`);
   process.exit(1);
 }
 
-console.log("GETSAWA LAUNCH STATUS: APPROVED BY RECORDED EVIDENCE");
+console.log("CLOUDSAWA LAUNCH STATUS: APPROVED BY RECORDED EVIDENCE");
 console.log(`Evidence file: ${path.resolve(evidencePath)}`);

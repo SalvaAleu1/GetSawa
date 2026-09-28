@@ -1,6 +1,6 @@
-# GetSawa deployment — Cloudflare Workers
+# CloudSawa deployment — Cloudflare Workers
 
-GetSawa targets Cloudflare Workers through `@opennextjs/cloudflare`. The production Wrangler environment is `production`, which deploys the Worker as `getsawa-production` and attaches the custom domain `getsawa.app`. Staging uses `getsawa-staging` and `staging.getsawa.app`.
+CloudSawa targets Cloudflare Workers through `@opennextjs/cloudflare`. The production Wrangler environment is `production`, which deploys the Worker as `cloudsawa-production` and attaches the custom domain `cloudsawa.app`. Staging uses `cloudsawa-staging` and `staging.cloudsawa.app`.
 
 GitHub Actions are not required for deployment. Cloudflare Workers Builds can connect directly to the GitHub repository and build/deploy `main` inside Cloudflare.
 
@@ -8,7 +8,7 @@ GitHub Actions are not required for deployment. Cloudflare Workers Builds can co
 
 Before production cutover, ensure:
 
-- `getsawa.app` is in the Cloudflare account that will own the Worker custom domain.
+- `cloudsawa.app` is in the Cloudflare account that will own the Worker custom domain.
 - The production PostgreSQL database is reachable from Cloudflare Workers.
 - Reviewed Prisma migrations are ready.
 - Production provider credentials are available for the products being launched.
@@ -16,12 +16,12 @@ Before production cutover, ensure:
 
 ## 2. Create the Wrangler environment Worker
 
-GetSawa uses Wrangler environments. Create the environment Worker before connecting Git Builds:
+CloudSawa uses Wrangler environments. Create the environment Worker before connecting Git Builds:
 
-- Staging Worker: `getsawa-staging`
-- Production Worker: `getsawa-production`
+- Staging Worker: `cloudsawa-staging`
+- Production Worker: `cloudsawa-production`
 
-A temporary starter/Hello World Worker is sufficient; the first successful GetSawa deployment replaces its code. Configure runtime variables/secrets on that Worker before the repository deployment so `--keep-vars` preserves them.
+A temporary starter/Hello World Worker is sufficient; the first successful CloudSawa deployment replaces its code. Configure runtime variables/secrets on that Worker before the repository deployment so `--keep-vars` preserves them.
 
 ## 3. Connect the GitHub repository through Workers Builds
 
@@ -31,7 +31,7 @@ In the selected Worker:
 2. Connect GitHub and authorize repository `SalvaAleu1/GetSawa`.
 3. Use branch `main`.
 4. Keep the repository root as `/`.
-5. Leave **Build command** empty. The guarded GetSawa deployment script performs the OpenNext build itself.
+5. Leave **Build command** empty. The guarded CloudSawa deployment script performs the OpenNext build itself.
 6. Use the matching deploy command:
 
 ### Staging deploy command
@@ -46,7 +46,7 @@ npm run deploy:cloudflare:staging
 npm run deploy:cloudflare:production
 ```
 
-These scripts run Cloudflare preflight, Prisma generation/migration status, the OpenNext build, explicit deployment acknowledgements, Worker upload and post-deploy verification. The `production` Wrangler environment resolves to Worker `getsawa-production`; staging resolves to `getsawa-staging`.
+These scripts run Cloudflare preflight, Prisma generation/migration status, the OpenNext build, explicit deployment acknowledgements, Worker upload and post-deploy verification. The `production` Wrangler environment resolves to Worker `cloudsawa-production`; staging resolves to `cloudsawa-staging`.
 
 ## 4. Build variables and secrets
 
@@ -56,13 +56,13 @@ Workers Builds **build variables/secrets** exist only during the deployment job.
 
 ```text
 NODE_ENV=production
-APP_URL=https://getsawa.app
-APP_NAME=GetSawa
-WEBSITE_PLATFORM_HOST=getsawa.app
-CLOUDFLARE_WORKER_SERVICE_NAME=getsawa-production
+APP_URL=https://cloudsawa.app
+APP_NAME=CloudSawa
+WEBSITE_PLATFORM_HOST=cloudsawa.app
+CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa-production
 CLOUDFLARE_ACCOUNT_ID=<your account id>
-CONFIRM_PRODUCTION_DEPLOY=DEPLOY_GETSAWA_PRODUCTION
-CONFIRM_PRODUCTION_CUTOVER=SWITCH_GETSAWA_TO_CLOUDFLARE
+CONFIRM_PRODUCTION_DEPLOY=DEPLOY_CLOUDSAWA_PRODUCTION
+CONFIRM_PRODUCTION_CUTOVER=SWITCH_CLOUDSAWA_TO_CLOUDFLARE
 CONFIRM_PRODUCTION_WORKER_UPLOAD=UPLOAD_PRODUCTION_WORKER
 ```
 
@@ -70,10 +70,10 @@ CONFIRM_PRODUCTION_WORKER_UPLOAD=UPLOAD_PRODUCTION_WORKER
 
 ```text
 NODE_ENV=production
-APP_URL=https://staging.getsawa.app
-APP_NAME=GetSawa
-WEBSITE_PLATFORM_HOST=staging.getsawa.app
-CLOUDFLARE_WORKER_SERVICE_NAME=getsawa-staging
+APP_URL=https://staging.cloudsawa.app
+APP_NAME=CloudSawa
+WEBSITE_PLATFORM_HOST=staging.cloudsawa.app
+CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa-staging
 CLOUDFLARE_ACCOUNT_ID=<your account id>
 CONFIRM_STAGING_ISOLATED=STAGING_IS_ISOLATED
 ```
@@ -104,13 +104,13 @@ Core runtime secrets:
 - `PAYPAL_CLIENT_SECRET`
 - `PAYPAL_WEBHOOK_ID`
 - `SMTP_PASSWORD` and the remaining sensitive `SMTP_*` values
-- `CLOUDFLARE_API_TOKEN` for GetSawa customer DNS/CDN/publishing operations
+- `CLOUDFLARE_API_TOKEN` for CloudSawa customer DNS/CDN/publishing operations
 - provider credentials for any enabled hosting/email/AI product
 
 Core runtime plain variables include:
 
 - `APP_URL`
-- `APP_NAME=GetSawa`
+- `APP_NAME=CloudSawa`
 - `WEBSITE_PLATFORM_HOST`
 - `CLOUDFLARE_WORKER_SERVICE_NAME`
 - `CLOUDFLARE_ACCOUNT_ID`
@@ -139,8 +139,8 @@ The deployment wrapper will then run `prisma migrate deploy` before the OpenNext
 
 `wrangler.jsonc` already defines:
 
-- staging custom domain `staging.getsawa.app`
-- production custom domain `getsawa.app`
+- staging custom domain `staging.cloudsawa.app`
+- production custom domain `cloudsawa.app`
 - staging and production cron triggers
 
 A production deployment therefore changes real traffic and activates production scheduled jobs. Keep the previous Vercel deployment available until post-deploy checks pass.
@@ -150,7 +150,7 @@ A production deployment therefore changes real traffic and activates production 
 The guarded production deploy automatically runs:
 
 ```bash
-APP_URL=https://getsawa.app ./scripts/ops/verify-production-cutover.sh
+APP_URL=https://cloudsawa.app ./scripts/ops/verify-production-cutover.sh
 ```
 
 Then verify in the application/admin portal:

@@ -24,7 +24,7 @@ Status: repository implementation complete; Cloudflare runtime measurements rema
 
 ## Static review performed
 
-- Root metadata uses the existing `APP_URL` contract and defaults to `https://getsawa.app`.
+- Root metadata uses the existing `APP_URL` contract and defaults to `https://cloudsawa.app`.
 - New TypeScript/TSX files use Next.js App Router metadata route types.
 - PWA cache logic only handles `GET` and same-origin requests.
 - Service-worker and Next configuration JavaScript passed local JavaScript syntax checks. Full application type/build verification remains unavailable in the isolated local runtime because repository dependencies cannot be downloaded there and GitHub Actions allowance is exhausted.

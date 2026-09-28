@@ -1,6 +1,6 @@
-# GetSawa Platform Audit — 12 September 2026
+# CloudSawa Platform Audit — 12 September 2026
 
-This document is the rebuild baseline for turning the existing GetSawa codebase into a deep, production-grade domain and digital-services platform and moving deployment from Vercel to Cloudflare Workers.
+This document is the rebuild baseline for turning the existing CloudSawa codebase into a deep, production-grade domain and digital-services platform and moving deployment from Vercel to Cloudflare Workers.
 
 ## Executive conclusion
 
@@ -11,7 +11,7 @@ The main shortcomings are:
 1. The public/customer/admin UI is much shallower than the backend surface.
 2. Hosting and business-email products have provider interfaces but no actual vendor implementation.
 3. Premium-domain and standard-domain pricing do not yet have the loss-proof live quote/markup/fee/floor architecture required for production commerce.
-4. The AI website builder publishes structured content inside the GetSawa application rather than provisioning a complete independent website-hosting pipeline.
+4. The AI website builder publishes structured content inside the CloudSawa application rather than provisioning a complete independent website-hosting pipeline.
 5. Cloudflare Workers compatibility and scheduled operations have not previously been tested.
 6. Several production controls are single-instance or incomplete for an edge-distributed deployment.
 7. The documented production launch checklist has not been completed.
@@ -133,7 +133,7 @@ Current delivery uses Nodemailer/SMTP. It needs a Workers compatibility test and
 
 ### AI website builder
 
-Current publish changes a database state and serves generated content through the GetSawa app. Custom-domain connection creates a `www` CNAME and explicitly does not automate custom-domain TLS.
+Current publish changes a database state and serves generated content through the CloudSawa app. Custom-domain connection creates a `www` CNAME and explicitly does not automate custom-domain TLS.
 
 Required rebuild:
 - Real visual/site editor.
@@ -168,7 +168,7 @@ Needed:
 - Usage/storage/bandwidth synchronization.
 - Plan upgrades/downgrades.
 - Backups and restore.
-- Control panel or GetSawa-native management.
+- Control panel or CloudSawa-native management.
 - Domain/DNS integration.
 - Recurring billing and dunning.
 
@@ -187,7 +187,7 @@ Needed:
 
 ### SSL/security products
 
-GetSawa lacks a complete sell/provision/manage lifecycle for SSL/security add-ons. AI-site custom-domain TLS is not automated.
+CloudSawa lacks a complete sell/provision/manage lifecycle for SSL/security add-ons. AI-site custom-domain TLS is not automated.
 
 ---
 
@@ -293,7 +293,7 @@ Use Cloudflare Workers with `@opennextjs/cloudflare` for the existing Next.js 15
 - Database migration process that runs outside request handling.
 - Distributed rate limiting.
 - Transactional email compatibility/provider.
-- PayPal webhook URL changed to final GetSawa domain after cutover.
+- PayPal webhook URL changed to final CloudSawa domain after cutover.
 - NameSilo API access verified from Cloudflare egress.
 - Observability/logging and alerts.
 - Custom domain and DNS cutover plan.

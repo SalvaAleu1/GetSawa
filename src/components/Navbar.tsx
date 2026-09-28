@@ -9,7 +9,7 @@ const NAV_GROUPS = [
     label: "Domains",
     items: [
       { href: "/domains/search", title: "Search domains", description: "Find and register your next domain." },
-      { href: "/domains/transfer", title: "Transfer a domain", description: "Bring an existing domain to GetSawa." },
+      { href: "/domains/transfer", title: "Transfer a domain", description: "Bring an existing domain to CloudSawa." },
       { href: "/domains/premium", title: "Premium domains", description: "Browse higher-value domain inventory." },
       { href: "/domains/auctions", title: "Auctions", description: "Bid on domains listed at auction." },
     ],
@@ -17,7 +17,7 @@ const NAV_GROUPS = [
   {
     label: "Products",
     items: [
-      { href: "/products", title: "All products", description: "See the GetSawa catalog and current availability." },
+      { href: "/products", title: "All products", description: "See the CloudSawa catalog and current availability." },
       { href: "/dashboard/websites", title: "AI website builder", description: "Generate and manage a website project." },
       { href: "/products/HOSTING", title: "Web hosting", description: "Explore currently active hosting products." },
       { href: "/products/EMAIL", title: "Business email", description: "Explore currently active mailbox products." },
@@ -26,7 +26,7 @@ const NAV_GROUPS = [
   {
     label: "Resources",
     items: [
-      { href: "/blog", title: "Blog", description: "Guides and updates from GetSawa." },
+      { href: "/blog", title: "Blog", description: "Guides and updates from CloudSawa." },
       { href: "/dashboard/support", title: "Support", description: "Open and manage support requests." },
       { href: "/dashboard/affiliate", title: "Affiliate program", description: "Track referrals and commissions." },
       { href: "/dashboard/developer", title: "Developer API", description: "Manage API access for integrations." },

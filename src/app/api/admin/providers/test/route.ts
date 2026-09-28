@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     }
     if (provider === "paypal") {
       if (!PayPalProvider.isConfigured()) message = "PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET are not set.";
-      else { try { await PayPalProvider.createOrder({ amountCents:100,currency:"USD",referenceId:`test-${Date.now()}`,description:"GetSawa connection test (not captured)",idempotencyKey:`test-${admin.id}-${Date.now()}`,returnUrl:`${process.env.APP_URL}/admin/providers`,cancelUrl:`${process.env.APP_URL}/admin/providers` }); ok=true; message="Connected successfully. A test order was created but not captured, so no charge occurred."; } catch(error:any){message=error.message||"Connection failed.";} }
+      else { try { await PayPalProvider.createOrder({ amountCents:100,currency:"USD",referenceId:`test-${Date.now()}`,description:"CloudSawa connection test (not captured)",idempotencyKey:`test-${admin.id}-${Date.now()}`,returnUrl:`${process.env.APP_URL}/admin/providers`,cancelUrl:`${process.env.APP_URL}/admin/providers` }); ok=true; message="Connected successfully. A test order was created but not captured, so no charge occurred."; } catch(error:any){message=error.message||"Connection failed.";} }
     }
     if (provider === "hosting") {
       const hosting=getHostingProvider();const health=await hosting.healthCheck();ok=health.ok;message=health.message;metadata={implementation:hosting.name,credentialFingerprint:currentHostingCredentialFingerprint()??null,creatablePlanCodes:health.plans.map((plan)=>plan.code),planCount:health.plans.length};

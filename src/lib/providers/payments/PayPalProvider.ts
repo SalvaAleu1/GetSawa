@@ -75,7 +75,7 @@ export const PayPalProvider = {
     return paypalFetch("/v2/checkout/orders", {
       method: "POST",
       idempotencyKey: params.idempotencyKey,
-      body: JSON.stringify({ intent: "CAPTURE", purchase_units: [{ reference_id: params.referenceId, description: params.description.slice(0, 127), amount: { currency_code: params.currency.toUpperCase(), value } }], application_context: { brand_name: "GetSawa", user_action: "PAY_NOW", return_url: params.returnUrl, cancel_url: params.cancelUrl } }),
+      body: JSON.stringify({ intent: "CAPTURE", purchase_units: [{ reference_id: params.referenceId, description: params.description.slice(0, 127), amount: { currency_code: params.currency.toUpperCase(), value } }], application_context: { brand_name: "CloudSawa", user_action: "PAY_NOW", return_url: params.returnUrl, cancel_url: params.cancelUrl } }),
     });
   },
 
@@ -103,6 +103,6 @@ export const PayPalProvider = {
 
   async createPayout(params: { senderBatchId: string; recipientEmail: string; amountCents: number; currency: string; note?: string }) {
     if (!params.senderBatchId || !params.recipientEmail || !Number.isSafeInteger(params.amountCents) || params.amountCents <= 0) throw new Error("Invalid PayPal payout request.");
-    return paypalFetch("/v1/payments/payouts", { method: "POST", idempotencyKey: params.senderBatchId, body: JSON.stringify({ sender_batch_header: { sender_batch_id: params.senderBatchId, email_subject: "You have a payout from GetSawa" }, items: [{ recipient_type: "EMAIL", amount: { value: (params.amountCents / 100).toFixed(2), currency: params.currency.toUpperCase() }, receiver: params.recipientEmail, note: params.note, sender_item_id: params.senderBatchId }] }) });
+    return paypalFetch("/v1/payments/payouts", { method: "POST", idempotencyKey: params.senderBatchId, body: JSON.stringify({ sender_batch_header: { sender_batch_id: params.senderBatchId, email_subject: "You have a payout from CloudSawa" }, items: [{ recipient_type: "EMAIL", amount: { value: (params.amountCents / 100).toFixed(2), currency: params.currency.toUpperCase() }, receiver: params.recipientEmail, note: params.note, sender_item_id: params.senderBatchId }] }) });
   },
 };

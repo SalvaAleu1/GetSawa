@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 
-const SESSION_COOKIE = "getsawa_session";
+const SESSION_COOKIE = "cloudsawa_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
 const SESSION_SECRET_MIN_LENGTH = 32;
 

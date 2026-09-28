@@ -111,7 +111,7 @@ export default function AdminPricingPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-ink/40">Commerce controls</p>
           <h1 className="mt-1 text-3xl font-semibold">Pricing & Margins</h1>
           <p className="mt-2 max-w-3xl text-sm text-ink/60">
-            GetSawa calculates domain retail prices from registrar wholesale cost, margin rules, payment cost and FX reserve. Promotions cannot cross the protected price floor.
+            CloudSawa calculates domain retail prices from registrar wholesale cost, margin rules, payment cost and FX reserve. Promotions cannot cross the protected price floor.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

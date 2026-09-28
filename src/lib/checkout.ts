@@ -91,7 +91,7 @@ function applyItemMarginFloors(items: PricedItem[]) {
 
 /**
  * Recomputes the entire cart from authoritative server-side sources. Domain
- * transactions use a fresh registrar wholesale snapshot, then GetSawa's
+ * transactions use a fresh registrar wholesale snapshot, then CloudSawa's
  * pricing safety policy is applied before any promotion or coupon.
  */
 export async function priceCart(input: CheckoutInput, userId: string): Promise<PricedCart> {
@@ -127,7 +127,7 @@ export async function priceCart(input: CheckoutInput, userId: string): Promise<P
         throw new CheckoutError(`.${ext} is not currently available for registration.`);
       }
 
-      // GetSawa-managed premium/aftermarket inventory has an explicit listed
+      // CloudSawa-managed premium/aftermarket inventory has an explicit listed
       // customer price and therefore does not inherit the ordinary TLD rate.
       const premiumListing = await prisma.premiumDomain.findUnique({ where: { domainName: normalizedDomain } });
       const isListedPremium = Boolean(premiumListing && premiumListing.status === "LISTED");
@@ -147,7 +147,7 @@ export async function priceCart(input: CheckoutInput, userId: string): Promise<P
           unitPriceCents: unit,
           discountCents: 0,
           totalCents: unit,
-          pricingSource: "GETSAWA_PREMIUM_LISTING",
+          pricingSource: "CLOUDSAWA_PREMIUM_LISTING",
         });
         continue;
       }

@@ -1,4 +1,4 @@
-const CACHE_NAME = "getsawa-public-v1";
+const CACHE_NAME = "cloudsawa-public-v1";
 const OFFLINE_URL = "/offline";
 const PRECACHE = [OFFLINE_URL, "/icon.svg", "/icon-192.png", "/icon-512.png"];
 const PRIVATE_PREFIXES = ["/admin", "/api", "/checkout", "/dashboard", "/login", "/forgot-password", "/reset-password"];
@@ -12,7 +12,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key.startsWith("getsawa-") && key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith("cloudsawa-") && key !== CACHE_NAME).map((key) => caches.delete(key))))
       .then(() => self.clients.claim()),
   );
 });

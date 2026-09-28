@@ -44,8 +44,8 @@ export async function PUT(req: NextRequest, { params }: RouteContext) {
 
     const nextAcquisition = input.acquisitionCostCents !== undefined ? input.acquisitionCostCents : meta.acquisition_cost_cents;
     const nextRetail = input.retailPriceCents ?? listing.purchasePriceCents;
-    if (meta.source === "GETSAWA_INVENTORY") {
-      if (nextAcquisition == null) return jsonError("GetSawa-owned inventory requires an acquisition cost for margin protection.", 400);
+    if (meta.source === "CLOUDSAWA_INVENTORY") {
+      if (nextAcquisition == null) return jsonError("CloudSawa-owned inventory requires an acquisition cost for margin protection.", 400);
       const protectedFloor = computeSafeRetailPrice(nextAcquisition, await getPricingSafetyPolicy()).retailCents;
       if (nextRetail < protectedFloor) return jsonError(`The retail price is below the protected minimum of ${(protectedFloor / 100).toFixed(2)} USD.`, 400);
     }

@@ -2,8 +2,8 @@ import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 
 export const metadata = {
-  title: "Support — GetSawa",
-  description: "Get help with domains, billing, security, hosting, email and other GetSawa services.",
+  title: "Support — CloudSawa",
+  description: "Get help with domains, billing, security, hosting, email and other CloudSawa services.",
 };
 
 const topics = [
@@ -11,7 +11,7 @@ const topics = [
   { title: "Orders & billing", text: "Review orders, invoices, payment status and service delivery from your account.", href: "/dashboard/orders", action: "View orders" },
   { title: "Account security", text: "Manage sign-in, MFA and account-security settings from your dashboard.", href: "/dashboard/security", action: "Security settings" },
   { title: "Refunds & cancellations", text: "Understand how failed provisioning, domains, renewals and refunds are handled.", href: "/legal/refund", action: "Refund policy" },
-  { title: "Developer API", text: "Read the API documentation and integration guidance for GetSawa developer features.", href: "/developers", action: "Developer docs" },
+  { title: "Developer API", text: "Read the API documentation and integration guidance for CloudSawa developer features.", href: "/developers", action: "Developer docs" },
   { title: "Service management", text: "Manage active hosting, email, security and website services from your account.", href: "/dashboard/services", action: "My services" },
 ];
 
@@ -44,7 +44,7 @@ export default function SupportPage() {
             {supportEmail ? (
               <>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-ink/60">
-                  If the self-service options do not resolve the issue, contact GetSawa support from the email address on your account whenever possible. Include only the information needed to identify the affected service.
+                  If the self-service options do not resolve the issue, contact CloudSawa support from the email address on your account whenever possible. Include only the information needed to identify the affected service.
                 </p>
                 <a className="btn-primary mt-5" href={`mailto:${supportEmail}`}>Contact support</a>
               </>

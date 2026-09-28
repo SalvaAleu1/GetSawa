@@ -7,7 +7,7 @@ import { jsonOk, handleError } from "@/lib/api";
 export async function POST() {
   try {
     const cookieStore = await cookies();
-    const jwt = cookieStore.get("getsawa_session")?.value;
+    const jwt = cookieStore.get("cloudsawa_session")?.value;
     if (jwt && process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32) {
       try {
         const { payload } = await jwtVerify(

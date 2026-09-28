@@ -8,7 +8,7 @@ export class CloudflareWorkerDomainsProvider {
   isConfigured() {
     return Boolean(process.env.CLOUDFLARE_ACCOUNT_ID?.trim() && process.env.CLOUDFLARE_API_TOKEN?.trim() && this.serviceName());
   }
-  serviceName() { return process.env.CLOUDFLARE_WORKER_SERVICE_NAME?.trim() || "getsawa"; }
+  serviceName() { return process.env.CLOUDFLARE_WORKER_SERVICE_NAME?.trim() || "cloudsawa"; }
 
   private async call<T>(path: string, init: RequestInit = {}) {
     if (!this.isConfigured()) throw new Error("Cloudflare Worker custom-domain provider is not configured.");

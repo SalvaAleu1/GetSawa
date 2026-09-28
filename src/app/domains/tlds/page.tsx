@@ -56,7 +56,7 @@ export default function TldExplorerPage() {
           <div className="shell-container">
             <p className="eyebrow">TLD explorer</p>
             <h1 className="mt-2 text-3xl font-bold sm:text-4xl">Registration, renewal, and transfer pricing in one place.</h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-ink/60">These are current storefront prices built from GetSawa&apos;s configured rules and latest wholesale snapshot. Exact domain availability and premium status are checked separately during search and checkout.</p>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-ink/60">These are current storefront prices built from CloudSawa&apos;s configured rules and latest wholesale snapshot. Exact domain availability and premium status are checked separately during search and checkout.</p>
             <div className="mt-6 max-w-lg">
               <input className="input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter extensions, e.g. com or africa" aria-label="Filter TLDs" />
             </div>
@@ -116,7 +116,7 @@ export default function TldExplorerPage() {
 
           <div className="mt-8 panel p-5 text-sm leading-6 text-ink/60">
             <p className="font-bold text-ink">Why registration and renewal prices differ</p>
-            <p className="mt-2">Registries and wholesale providers can charge different amounts for registration, renewal, transfer, restoration, and premium names. GetSawa keeps those operations separate instead of assuming the first-year price is the lifetime renewal price.</p>
+            <p className="mt-2">Registries and wholesale providers can charge different amounts for registration, renewal, transfer, restoration, and premium names. CloudSawa keeps those operations separate instead of assuming the first-year price is the lifetime renewal price.</p>
           </div>
         </section>
       </main>

@@ -76,7 +76,7 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
       amountCents: auctionOrder.amount_cents,
       currency: auctionOrder.currency,
       referenceId: order.id,
-      description: `GetSawa auction win — ${auction.domainName}`,
+      description: `CloudSawa auction win — ${auction.domainName}`,
       idempotencyKey: `paypal-${idempotencyKey}`,
       returnUrl: `${process.env.APP_URL}/domains/auctions/${auction.id}/confirm?orderId=${order.id}`,
       cancelUrl: `${process.env.APP_URL}/domains/auctions/${auction.id}?payment=cancelled`,

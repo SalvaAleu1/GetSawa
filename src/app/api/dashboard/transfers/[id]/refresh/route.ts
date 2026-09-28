@@ -30,12 +30,12 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
       const info = await provider.getDomainInfo(transfer.domainName);
       const extension = transfer.domainName.split(".").slice(1).join(".");
       const tld = await prisma.tld.findUnique({ where: { extension } });
-      if (!tld) return jsonError(`Transfer completed, but .${extension} is not configured in GetSawa. Staff reconciliation is required.`, 409);
+      if (!tld) return jsonError(`Transfer completed, but .${extension} is not configured in CloudSawa. Staff reconciliation is required.`, 409);
 
       const existing = await prisma.domain.findUnique({ where: { name: transfer.domainName } });
       if (existing && existing.userId !== user.id) {
         await logAudit({ actorId: user.id, action: "domain.transfer.ownership_conflict", resource: "domain_transfer", resourceId: transfer.id, metadata: { existingDomainId: existing.id } });
-        return jsonError("Transfer completed at the registrar, but this domain is already attached to another GetSawa customer. Staff review is required before assignment.", 409);
+        return jsonError("Transfer completed at the registrar, but this domain is already attached to another CloudSawa customer. Staff review is required before assignment.", 409);
       }
 
       const lifecycleData = {

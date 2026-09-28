@@ -54,13 +54,13 @@ Mailbox provisioning does not change MX records automatically.
 
 For automated cutover, all of the following are required:
 
-1. the domain is owned by the signed-in GetSawa customer;
+1. the domain is owned by the signed-in CloudSawa customer;
 2. the OpenSRS email provider is currently live-verified;
 3. the active domain provider is configured;
 4. the domain is actually using NameSilo/DNSOwl authoritative nameservers; and
 5. the customer explicitly confirms the mail-routing cutover.
 
-For external nameservers, GetSawa returns the exact required records but does
+For external nameservers, CloudSawa returns the exact required records but does
 not mutate inactive NameSilo DNS. In all cases the final `ACTIVE` email-domain
 state depends on public DNS visibility of the required MX and mail CNAME.
 

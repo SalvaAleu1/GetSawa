@@ -8,8 +8,8 @@ const production = wrangler?.env?.production;
 if (!production) throw new Error("wrangler.jsonc is missing env.production.");
 
 const productionRoutes = production.routes || [];
-const ownsApex = productionRoutes.some((route) => route?.pattern === "getsawa.app" && route?.custom_domain === true);
-if (!ownsApex) throw new Error("Production Cloudflare environment does not declare getsawa.app as a Custom Domain.");
+const ownsApex = productionRoutes.some((route) => route?.pattern === "cloudsawa.app" && route?.custom_domain === true);
+if (!ownsApex) throw new Error("Production Cloudflare environment does not declare cloudsawa.app as a Custom Domain.");
 if (production.workers_dev !== false) throw new Error("Production workers.dev must be disabled at cutover.");
 
 const cloudflareCrons = production?.triggers?.crons || [];
