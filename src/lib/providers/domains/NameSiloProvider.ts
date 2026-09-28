@@ -23,6 +23,12 @@ export class NameSiloProvider implements DomainProvider {
   private get apiKey() { return process.env.NAMESILO_API_KEY; }
   private get baseUrl() { return process.env.NAMESILO_API_BASE_URL || "https://www.namesilo.com/api"; }
   isConfigured() { return Boolean(this.apiKey); }
+
+  // NameSilo's classic Domain API exposes standard TLD prices, but it does not
+  // provide a reliable authoritative registry-premium amount before purchase.
+  // Premium-capable TLDs therefore remain fail-closed at checkout.
+  supportsExactPremiumPricing() { return false; }
+
   private assertConfigured() { if (!this.isConfigured()) throw new ProviderNotConfiguredError("NameSilo"); }
 
   private async call<T = any>(operation: string, params: Record<string, string | number | boolean | undefined>): Promise<T> {
