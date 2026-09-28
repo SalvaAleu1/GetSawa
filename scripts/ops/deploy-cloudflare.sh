@@ -4,9 +4,9 @@ set -Eeuo pipefail
 environment="${1:-}"
 case "$environment" in
   staging)
-    export APP_URL="${APP_URL:-https://staging.cloudsawa.app}"
+    export APP_URL="${APP_URL:-https://staging.cloudsawa.com}"
     export APP_NAME="CloudSawa"
-    export WEBSITE_PLATFORM_HOST="${WEBSITE_PLATFORM_HOST:-staging.cloudsawa.app}"
+    export WEBSITE_PLATFORM_HOST="${WEBSITE_PLATFORM_HOST:-staging.cloudsawa.com}"
     export CLOUDFLARE_WORKER_SERVICE_NAME="cloudsawa-staging"
     ;;
   production)
@@ -15,8 +15,8 @@ case "$environment" in
     # a future custom domain into the application during this phase.
     export APP_NAME="CloudSawa"
     export CLOUDFLARE_WORKER_SERVICE_NAME="cloudsawa"
-    if [[ "${APP_URL:-}" == "https://cloudsawa.app" || "${APP_URL:-}" == "https://cloudsawa.com" ]]; then unset APP_URL; fi
-    if [[ "${WEBSITE_PLATFORM_HOST:-}" == "cloudsawa.app" || "${WEBSITE_PLATFORM_HOST:-}" == "cloudsawa.com" ]]; then unset WEBSITE_PLATFORM_HOST; fi
+    if [[ "${APP_URL:-}" == "https://cloudsawa.com" ]]; then unset APP_URL; fi
+    if [[ "${WEBSITE_PLATFORM_HOST:-}" == "cloudsawa.com" ]]; then unset WEBSITE_PLATFORM_HOST; fi
     ;;
   *)
     echo "Usage: $0 {staging|production}" >&2
@@ -136,7 +136,7 @@ fi
 printf 'Deploying CloudSawa Cloudflare environment %s...\n' "$environment"
 if [[ "$environment" == "staging" ]]; then
   npx opennextjs-cloudflare deploy --env=staging -- --keep-vars
-  APP_URL="https://staging.cloudsawa.app" ./scripts/ops/verify-deployment-health.sh
+  APP_URL="https://staging.cloudsawa.com" ./scripts/ops/verify-deployment-health.sh
 else
   npx opennextjs-cloudflare deploy -- --keep-vars
   echo "CloudSawa Worker uploaded as 'cloudsawa' with workers.dev enabled."

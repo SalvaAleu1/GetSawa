@@ -6,7 +6,7 @@ Status: repository infrastructure configuration complete; creation/deployment of
 
 - Explicit `staging` and `production` Wrangler environments.
 - Non-routable/default root Worker to reduce accidental deployment risk.
-- Staging Custom Domain `staging.cloudsawa.app`, isolated environment identity and full scheduled-job configuration.
+- Staging Custom Domain `staging.cloudsawa.com`, isolated environment identity and full scheduled-job configuration.
 - Production Worker identity prepared without production route or crons so Phase 28 cannot accidentally cut over traffic or duplicate the current Vercel scheduler.
 - Environment-aware OpenNext build/preview/type generation/deployment scripts.
 - Deployment preflight enforcing core secrets, exact environment identity, Cloudflare authentication and explicit staging/production acknowledgements.
@@ -26,12 +26,12 @@ Status: repository infrastructure configuration complete; creation/deployment of
 
 Phase 28 cannot be called fully verified until all of the following have evidence:
 
-1. `cloudsawa-staging` is deployed and reachable at `https://staging.cloudsawa.app` with valid Cloudflare TLS.
+1. `cloudsawa-staging` is deployed and reachable at `https://staging.cloudsawa.com` with valid Cloudflare TLS.
 2. Staging uses its own database and session/cron secrets; required migrations completed successfully.
 3. Representative login, domain search, cart, checkout-safe path, dashboard and admin pages run in the Workers runtime.
 4. Staging cron invocations reach the correct routes and persist job outcomes; no unintended provider side effects occur.
 5. Worker observability/logs capture requests and errors without exposing secrets.
-6. `cloudsawa-production` is uploaded and verified on a non-production endpoint without changing `cloudsawa.app` traffic or enabling its crons.
+6. `cloudsawa-production` is uploaded and verified on a non-production endpoint without changing `cloudsawa.com` traffic or enabling its crons.
 7. Phase 26 Lighthouse/accessibility/PWA checks are executed against staging.
 8. Deployment/version IDs and rollback target are recorded.
 

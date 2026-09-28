@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-: "${APP_URL:?APP_URL is required, for example https://staging.cloudsawa.app}"
+: "${APP_URL:?APP_URL is required, for example https://staging.cloudsawa.com}"
 : "${CRON_SECRET:?CRON_SECRET is required}"
 
 job="${1:-}"

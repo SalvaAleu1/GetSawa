@@ -6,15 +6,15 @@ Phase 28 introduces explicit Wrangler environments so staging and production can
 
 | Environment | Worker | Public endpoint in Phase 28 | Scheduled jobs |
 | --- | --- | --- | --- |
-| staging | `cloudsawa-staging` | `https://staging.cloudsawa.app` plus workers.dev | enabled only against isolated staging data |
+| staging | `cloudsawa-staging` | `https://staging.cloudsawa.com` plus workers.dev | enabled only against isolated staging data |
 | production | `cloudsawa-production` | workers.dev/preview verification only | disabled until Phase 29 cutover |
 | root/default | `cloudsawa` | none | none |
 
-`cloudsawa.app` remains on the previous production deployment until Phase 29. This is intentional: a Phase 28 production upload must not become a DNS cutover or create duplicate schedulers.
+`cloudsawa.com` remains on the previous production deployment until Phase 29. This is intentional: a Phase 28 production upload must not become a DNS cutover or create duplicate schedulers.
 
 ## Cloudflare account prerequisites
 
-1. The `cloudsawa.app` zone must be active in the same Cloudflare account used for the Worker deployment.
+1. The `cloudsawa.com` zone must be active in the same Cloudflare account used for the Worker deployment.
 2. The deploying identity must be authorized for Workers Scripts, the staging Custom Domain, logs/observability, and the product-specific Cloudflare zone operations already required by Phase 17/19.
 3. Create a staging PostgreSQL database that is isolated from production. Do not point staging at the production `DATABASE_URL`.
 4. Decide which live providers may safely be exercised from staging. Provider credentials that are absent must leave their dependent products fail-closed.
@@ -39,8 +39,8 @@ Non-secret environment identity values are defined in `wrangler.jsonc`: `APP_ENV
 The repository deployment wrapper requires the variables above plus this explicit isolation acknowledgement:
 
 ```bash
-export APP_URL=https://staging.cloudsawa.app
-export WEBSITE_PLATFORM_HOST=staging.cloudsawa.app
+export APP_URL=https://staging.cloudsawa.com
+export WEBSITE_PLATFORM_HOST=staging.cloudsawa.com
 export CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa-staging
 export CONFIRM_STAGING_ISOLATED=STAGING_IS_ISOLATED
 export APPLY_DATABASE_MIGRATIONS=APPLY_REVIEWED_MIGRATIONS
@@ -55,7 +55,7 @@ The deployment wrapper runs `prisma migrate status`, applies migrations only aft
 
 A production Worker may be built/uploaded for verification, but `wrangler.jsonc` deliberately has no production Custom Domain and no production cron triggers yet. Two explicit acknowledgements are required before the wrapper uploads it. Verify the resulting workers.dev/preview URL via `VERIFY_URL`.
 
-Do not attach `cloudsawa.app` or enable the production cron list until the Phase 29 scheduler/DNS cutover procedure is executing.
+Do not attach `cloudsawa.com` or enable the production cron list until the Phase 29 scheduler/DNS cutover procedure is executing.
 
 ## Logs and observability
 

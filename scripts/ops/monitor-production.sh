@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-APP_URL="${APP_URL:-https://cloudsawa.app}"
+APP_URL="${APP_URL:-https://cloudsawa.com}"
 base="${APP_URL%/}"
 max_seconds="${MONITOR_MAX_SECONDS:-4}"
 failures=0

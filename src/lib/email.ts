@@ -31,7 +31,7 @@ export async function sendEmail(message: EmailMessage): Promise<{ sent: boolean;
   });
 
   await transport.sendMail({
-    from: process.env.SMTP_FROM || "CloudSawa <no-reply@cloudsawa.app>",
+    from: process.env.SMTP_FROM || "CloudSawa <no-reply@cloudsawa.com>",
     to: message.to,
     subject: message.subject,
     html: message.html,

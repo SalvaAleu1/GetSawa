@@ -1,6 +1,6 @@
 # CloudSawa deployment — Cloudflare Workers
 
-CloudSawa targets Cloudflare Workers through `@opennextjs/cloudflare`. The production Wrangler environment is `production`, which deploys the Worker as `cloudsawa-production` and attaches the custom domain `cloudsawa.app`. Staging uses `cloudsawa-staging` and `staging.cloudsawa.app`.
+CloudSawa targets Cloudflare Workers through `@opennextjs/cloudflare`. The production Wrangler environment is `production`, which deploys the Worker as `cloudsawa-production` and attaches the custom domain `cloudsawa.com`. Staging uses `cloudsawa-staging` and `staging.cloudsawa.com`.
 
 GitHub Actions are not required for deployment. Cloudflare Workers Builds can connect directly to the GitHub repository and build/deploy `main` inside Cloudflare.
 
@@ -8,7 +8,7 @@ GitHub Actions are not required for deployment. Cloudflare Workers Builds can co
 
 Before production cutover, ensure:
 
-- `cloudsawa.app` is in the Cloudflare account that will own the Worker custom domain.
+- `cloudsawa.com` is in the Cloudflare account that will own the Worker custom domain.
 - The production PostgreSQL database is reachable from Cloudflare Workers.
 - Reviewed Prisma migrations are ready.
 - Production provider credentials are available for the products being launched.
@@ -56,9 +56,9 @@ Workers Builds **build variables/secrets** exist only during the deployment job.
 
 ```text
 NODE_ENV=production
-APP_URL=https://cloudsawa.app
+APP_URL=https://cloudsawa.com
 APP_NAME=CloudSawa
-WEBSITE_PLATFORM_HOST=cloudsawa.app
+WEBSITE_PLATFORM_HOST=cloudsawa.com
 CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa-production
 CLOUDFLARE_ACCOUNT_ID=<your account id>
 CONFIRM_PRODUCTION_DEPLOY=DEPLOY_CLOUDSAWA_PRODUCTION
@@ -70,9 +70,9 @@ CONFIRM_PRODUCTION_WORKER_UPLOAD=UPLOAD_PRODUCTION_WORKER
 
 ```text
 NODE_ENV=production
-APP_URL=https://staging.cloudsawa.app
+APP_URL=https://staging.cloudsawa.com
 APP_NAME=CloudSawa
-WEBSITE_PLATFORM_HOST=staging.cloudsawa.app
+WEBSITE_PLATFORM_HOST=staging.cloudsawa.com
 CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa-staging
 CLOUDFLARE_ACCOUNT_ID=<your account id>
 CONFIRM_STAGING_ISOLATED=STAGING_IS_ISOLATED
@@ -139,8 +139,8 @@ The deployment wrapper will then run `prisma migrate deploy` before the OpenNext
 
 `wrangler.jsonc` already defines:
 
-- staging custom domain `staging.cloudsawa.app`
-- production custom domain `cloudsawa.app`
+- staging custom domain `staging.cloudsawa.com`
+- production custom domain `cloudsawa.com`
 - staging and production cron triggers
 
 A production deployment therefore changes real traffic and activates production scheduled jobs. Keep the previous Vercel deployment available until post-deploy checks pass.
@@ -150,7 +150,7 @@ A production deployment therefore changes real traffic and activates production 
 The guarded production deploy automatically runs:
 
 ```bash
-APP_URL=https://cloudsawa.app ./scripts/ops/verify-production-cutover.sh
+APP_URL=https://cloudsawa.com ./scripts/ops/verify-production-cutover.sh
 ```
 
 Then verify in the application/admin portal:
