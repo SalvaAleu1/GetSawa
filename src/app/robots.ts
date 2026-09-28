@@ -1,8 +1,18 @@
 import type { MetadataRoute } from "next";
-
-const baseUrl = process.env.APP_URL || "https://cloudsawa.com";
+import { getCloudSawaPublicUrl } from "@/lib/public-site";
 
 export default function robots(): MetadataRoute.Robots {
+  const publicUrl = getCloudSawaPublicUrl();
+
+  if (!publicUrl) {
+    return {
+      rules: {
+        userAgent: "*",
+        disallow: "/",
+      },
+    };
+  }
+
   return {
     rules: {
       userAgent: "*",
@@ -17,7 +27,7 @@ export default function robots(): MetadataRoute.Robots {
         "/reset-password",
       ],
     },
-    sitemap: `${baseUrl.replace(/\/$/, "")}/sitemap.xml`,
-    host: baseUrl,
+    sitemap: `${publicUrl}/sitemap.xml`,
+    host: publicUrl,
   };
 }
