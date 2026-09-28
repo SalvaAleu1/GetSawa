@@ -1,34 +1,35 @@
-# Phase 29 verification — Vercel to Cloudflare cutover
+# Phase 29 verification — CloudSawa public-domain activation
 
-Status: cutover configuration and verification tooling are repository-complete; the live scheduler/DNS/traffic handoff remains blocked on successful Phase 27/28 live gates and verified access to the actual legacy Vercel project.
+Status: repository cutover tooling is complete; the live public-domain activation remains intentionally blocked until `cloudsawa.com` is purchased and the pre-domain runtime/provider gates pass.
 
 ## Repository implementation
 
-- Production Wrangler environment now declares `cloudsawa.com` as a Cloudflare Worker Custom Domain.
-- Production Cloudflare schedules contain all 12 Worker cron mappings.
-- Production deploy requires a third explicit cutover acknowledgement in addition to the existing production deployment/upload acknowledgements.
-- Cloudflare responses carry non-secret `x-cloudsawa-runtime` and `x-cloudsawa-environment` fingerprints so traffic origin can be proven after cutover.
-- A zero-dependency Node configuration checker validates Vercel cron coverage, Cloudflare cron/mapping equality, Custom Domain ownership and production workers.dev shutdown.
-- Production verification checks the Cloudflare runtime fingerprint, public health and PayPal webhook configuration without creating a payment.
-- Detailed cutover, scheduler handoff and rollback sequence is documented.
+- `scripts/ops/activate-custom-domain.mjs` refuses activation unless `CONFIRM_CLOUDSAWA_DOMAIN_OWNED=cloudsawa.com` is explicitly supplied.
+- Final activation binds `cloudsawa.com` to the root `cloudsawa` Worker, disables workers.dev, sets `APP_ENV=production`, and enables one minute-level Cloudflare trigger.
+- The Worker internally dispatches the 12 CloudSawa scheduled jobs.
+- Cloudflare responses carry non-secret `x-cloudsawa-runtime` and `x-cloudsawa-environment` fingerprints.
+- Production verification checks TLS/public health/runtime identity and PayPal webhook configuration without creating a payment.
+- Rollback and reconciliation steps remain documented.
 
-## Static gate completed — 13 September 2026
+## Static gate — 28 September 2026
 
-- `node scripts/ops/check-cutover-config.mjs` passes: all 8 committed Vercel cron jobs are covered by the 12 Cloudflare production jobs and all 12 Worker mappings match the production schedule.
-- `wrangler.jsonc` parses successfully; production has one `cloudsawa.com` Custom Domain, `workers_dev=false` and 12 unique crons.
-- The production deploy and cutover verification shell scripts were syntax-reviewed; the added cutover guard is a fail-closed production-only condition.
-- `vercel.json` remains unchanged. Disabling the live legacy scheduler is intentionally a controlled operational action during the cutover window, not an early source-code side effect.
+- Pre-domain configuration passes `node scripts/ops/check-cutover-config.mjs`.
+- `wrangler.jsonc` contains no custom domain before ownership is confirmed.
+- Production-domain activation is a separate explicit command, not a side effect of ordinary pushes.
+- The deployment wrapper uses `CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa` for the root Worker.
+- The CloudSawa quality gate passed on the current rebrand commit.
 
 ## Live gate
 
 Phase 29 is not DONE until evidence shows:
 
-- the verified Vercel production scheduler was disabled at the handoff timestamp;
-- the Cloudflare production deployment attached `cloudsawa.com` and served valid TLS;
-- `verify-production-cutover.sh` passed against the public hostname;
-- PayPal webhook handling remained configured and provider events were verified;
-- Cloudflare scheduled jobs ran successfully without duplicate Vercel executions;
-- payment/domain/provisioning reconciliation had no unexplained divergences;
-- the rollback target remained available through the validation window.
-
-The connected Vercel tool returned no team/project and the repository has no `.vercel/project.json`, so the actual Vercel shutdown was intentionally not guessed or performed in this session.
+1. `cloudsawa.com` was actually purchased and is controlled by the company.
+2. The domain was added to the correct Cloudflare account.
+3. Pre-domain Cloudflare runtime, database, provider and restore gates already passed.
+4. `CONFIRM_CLOUDSAWA_DOMAIN_OWNED=cloudsawa.com npm run ops:activate-domain` was run from the exact approved release commit.
+5. Final runtime variables use `APP_URL=https://cloudsawa.com` and `WEBSITE_PLATFORM_HOST=cloudsawa.com`.
+6. The Worker served valid TLS and the CloudSawa runtime fingerprints at the public hostname.
+7. PayPal webhook configuration points to the final public endpoint and signature verification succeeds.
+8. Cloudflare scheduled jobs run successfully without duplicate scheduler execution.
+9. Payment/domain/provisioning reconciliation has no unexplained divergence.
+10. A rollback deployment/version remains recorded through the launch validation window.
