@@ -2,9 +2,11 @@ export const dynamic = "force-dynamic";
 
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
+import { getCloudSawaPublicUrl } from "@/lib/public-site";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = (process.env.APP_URL || "https://cloudsawa.com").replace(/\/$/, "");
+  const base = getCloudSawaPublicUrl();
+  if (!base) return [];
   const [tlds, posts] = await Promise.all([
     prisma.tld.findMany({ where: { isActive: true }, select: { extension: true } }),
     prisma.blogPost.findMany({ where: { status: "PUBLISHED" }, select: { slug: true, updatedAt: true } }),
