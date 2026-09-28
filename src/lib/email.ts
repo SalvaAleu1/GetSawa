@@ -14,21 +14,49 @@ export function isEmailConfigured(): boolean {
   return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASSWORD);
 }
 
+async function createEmailTransport() {
+  if (!isEmailConfigured()) throw new Error("SMTP is not configured.");
+  const nodemailer = await import("nodemailer").catch(() => null);
+  if (!nodemailer) throw new Error("Email transport is not installed.");
+
+  return nodemailer.default.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: Number(process.env.SMTP_PORT) === 465,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
+  });
+}
+
+/**
+ * Performs a live SMTP handshake/authentication check without sending mail.
+ * Used by the launch-provider health gate.
+ */
+export async function verifyEmailTransport(): Promise<{ ok: boolean; message: string }> {
+  if (!isEmailConfigured()) return { ok: false, message: "SMTP_HOST / SMTP_USER / SMTP_PASSWORD are not set." };
+  try {
+    const transport = await createEmailTransport();
+    await transport.verify();
+    return { ok: true, message: "SMTP connection and authentication verified successfully." };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : "SMTP verification failed.",
+    };
+  }
+}
+
 export async function sendEmail(message: EmailMessage): Promise<{ sent: boolean; reason?: string }> {
   if (!isEmailConfigured()) {
     console.warn(`[email] SMTP not configured — email to ${message.to} ("${message.subject}") was not sent.`);
     return { sent: false, reason: "SMTP not configured" };
   }
 
-  const nodemailer = await import("nodemailer").catch(() => null);
-  if (!nodemailer) return { sent: false, reason: "Email transport not installed" };
-
-  const transport = nodemailer.default.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: Number(process.env.SMTP_PORT) === 465,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
-  });
+  let transport;
+  try {
+    transport = await createEmailTransport();
+  } catch (error) {
+    return { sent: false, reason: error instanceof Error ? error.message : "Email transport unavailable" };
+  }
 
   await transport.sendMail({
     from: process.env.SMTP_FROM || "CloudSawa <no-reply@cloudsawa.com>",
