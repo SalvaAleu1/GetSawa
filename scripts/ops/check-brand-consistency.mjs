@@ -26,6 +26,9 @@ function walk(directory) {
       continue;
     }
     if (!entry.isFile() || path.normalize(relative) === self) continue;
+    // Applied Prisma migrations are immutable database history. They may
+    // legitimately contain legacy identifiers required for a forward rename.
+    if (path.normalize(relative).startsWith(path.normalize("prisma/migrations/"))) continue;
 
     const buffer = fs.readFileSync(absolute);
     if (buffer.includes(0)) continue;

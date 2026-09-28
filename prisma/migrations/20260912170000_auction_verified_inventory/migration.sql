@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS "auction_inventory" (
   "released_at" TIMESTAMP(3),
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "auction_inventory_source_check" CHECK ("source" IN ('CLOUDSAWA_INVENTORY','CUSTOMER_CUSTODY')),
+  CONSTRAINT "auction_inventory_source_check" CHECK ("source" IN ('GETSAWA_INVENTORY','CUSTOMER_CUSTODY')),
   CONSTRAINT "auction_inventory_commission_check" CHECK ("commission_bps" >= 0 AND "commission_bps" <= 10000),
   CONSTRAINT "auction_inventory_cost_check" CHECK ("acquisition_cost_cents" IS NULL OR "acquisition_cost_cents" >= 0)
 );
