@@ -46,7 +46,8 @@ jobs:
               updated = text.replace(protected_repo, sentinel)
               updated = updated.replace("GETSAWA", "CLOUDSAWA")
               updated = updated.replace("GetSawa", "CloudSawa")
-              updated = updated.replace("getsawa", "cloudsawa")\n              updated = updated.replace("cloudsawa.app", "cloudsawa.com")
+              updated = updated.replace("getsawa", "cloudsawa")
+              updated = updated.replace("cloudsawa.app", "cloudsawa.com")
               updated = updated.replace(sentinel, protected_repo)
 
               if updated != text:
@@ -64,26 +65,26 @@ jobs:
           python - <<'PY'
           from pathlib import Path
 
-          patches = {
-              "src/app/layout.tsx": [
-                  ('const appUrl = process.env.APP_URL || "https://cloudsawa.app";',
-                   'const appUrl = process.env.APP_URL || "http://localhost:3000";'),
-              ],
-              "scripts/ops/deploy-cloudflare.sh": [
-                  ('if [[ "${APP_URL:-}" == "https://cloudsawa.app" ]]; then unset APP_URL; fi',
-                   'if [[ "${APP_URL:-}" == "https://cloudsawa.app" || "${APP_URL:-}" == "https://cloudsawa.com" ]]; then unset APP_URL; fi'),
-                  ('if [[ "${WEBSITE_PLATFORM_HOST:-}" == "cloudsawa.app" ]]; then unset WEBSITE_PLATFORM_HOST; fi',
-                   'if [[ "${WEBSITE_PLATFORM_HOST:-}" == "cloudsawa.app" || "${WEBSITE_PLATFORM_HOST:-}" == "cloudsawa.com" ]]; then unset WEBSITE_PLATFORM_HOST; fi'),
-              ],
-          }
-
-          for filename, replacements in patches.items():
-              path = Path(filename)
-              if not path.exists():
-                  continue
+          path = Path("src/app/layout.tsx")
+          if path.exists():
               text = path.read_text(encoding="utf-8")
-              for old, new in replacements:
-                  text = text.replace(old, new)
+              text = text.replace(
+                  'const appUrl = process.env.APP_URL || "https://cloudsawa.com";',
+                  'const appUrl = process.env.APP_URL || "http://localhost:3000";',
+              )
+              path.write_text(text, encoding="utf-8")
+
+          path = Path("scripts/ops/deploy-cloudflare.sh")
+          if path.exists():
+              text = path.read_text(encoding="utf-8")
+              text = text.replace(
+                  'if [[ "${APP_URL:-}" == "https://cloudsawa.com" || "${APP_URL:-}" == "https://cloudsawa.com" ]]; then unset APP_URL; fi',
+                  'if [[ "${APP_URL:-}" == "https://cloudsawa.com" ]]; then unset APP_URL; fi',
+              )
+              text = text.replace(
+                  'if [[ "${WEBSITE_PLATFORM_HOST:-}" == "cloudsawa.com" || "${WEBSITE_PLATFORM_HOST:-}" == "cloudsawa.com" ]]; then unset WEBSITE_PLATFORM_HOST; fi',
+                  'if [[ "${WEBSITE_PLATFORM_HOST:-}" == "cloudsawa.com" ]]; then unset WEBSITE_PLATFORM_HOST; fi',
+              )
               path.write_text(text, encoding="utf-8")
           PY
 
@@ -97,5 +98,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "refactor: rebrand platform from GetSawa to CloudSawa"
+          git commit -m "fix: align CloudSawa branding with cloudsawa.com"
           git push origin main
