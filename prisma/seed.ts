@@ -10,14 +10,20 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 const STARTER_TLDS = [
-  { extension: "com", markupPercent: 25 },
-  { extension: "net", markupPercent: 25 },
-  { extension: "org", markupPercent: 25 },
-  { extension: "app", markupPercent: 30 },
-  { extension: "dev", markupPercent: 30 },
-  { extension: "co", markupPercent: 30 },
-  { extension: "africa", markupPercent: 20 },
-  { extension: "io", markupPercent: 35 },
+  // Launch-safe with the current NameSilo API: classic registrations do not
+  // depend on an exact registry-premium quote.
+  { extension: "com", markupPercent: 25, supportsPremium: false },
+  { extension: "net", markupPercent: 25, supportsPremium: false },
+  { extension: "org", markupPercent: 25, supportsPremium: false },
+
+  // Keep premium-capable extensions fail-closed until CloudSawa has a
+  // registrar path that can quote the exact registry-premium amount before
+  // payment. They remain seeded but inactive by default.
+  { extension: "app", markupPercent: 30, supportsPremium: true },
+  { extension: "dev", markupPercent: 30, supportsPremium: true },
+  { extension: "co", markupPercent: 30, supportsPremium: true },
+  { extension: "africa", markupPercent: 20, supportsPremium: true },
+  { extension: "io", markupPercent: 35, supportsPremium: true },
 ];
 
 async function main() {
@@ -32,6 +38,7 @@ async function main() {
         isActive: false, // admin must explicitly activate after confirming pricing
         pricingMethod: "WHOLESALE_PLUS_PERCENT",
         markupPercent: t.markupPercent,
+        supportsPremium: t.supportsPremium,
         currency: "USD",
       },
     });
