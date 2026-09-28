@@ -112,7 +112,7 @@ export function computeProtectedTldPrice(
 
 export function generateOrderNumber(sequence: number): string {
   const year = new Date().getFullYear();
-  return `GS-${year}-${String(sequence).padStart(6, "0")}`;
+  return `CS-${year}-${String(sequence).padStart(6, "0")}`;
 }
 
 export function generateInvoiceNumber(sequence: number): string {
