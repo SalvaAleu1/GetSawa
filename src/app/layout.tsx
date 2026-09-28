@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, Inter, Space_Grotesk } from "next/font/google";
 import { Suspense } from "react";
 import { PwaRegister } from "@/components/pwa/PwaRegister";
+import { CLOUDSAWA_PUBLIC_URL, isCloudSawaPublicProduction } from "@/lib/public-site";
 import "./globals.css";
 
 const inter = Inter({
@@ -26,7 +27,8 @@ const ibmPlexMono = IBM_Plex_Mono({
   preload: false,
 });
 
-const appUrl = process.env.APP_URL || "http://localhost:3000";
+const publicProduction = isCloudSawaPublicProduction();
+const appUrl = publicProduction ? CLOUDSAWA_PUBLIC_URL : "http://localhost:3000";
 const normalizedAppUrl = appUrl.replace(/\/$/, "");
 const structuredData = {
   "@context": "https://schema.org",
@@ -70,11 +72,11 @@ export const metadata: Metadata = {
   creator: "CloudSawa",
   publisher: "CloudSawa",
   category: "technology",
-  alternates: { canonical: "/" },
+  alternates: publicProduction ? { canonical: "/" } : undefined,
   openGraph: {
     type: "website",
     siteName: "CloudSawa",
-    url: "/",
+    url: publicProduction ? "/" : undefined,
     title: "CloudSawa — Domains, Hosting & Websites",
     description:
       "Domains, hosting, business email, website security, and website tools managed from one account.",
@@ -85,17 +87,28 @@ export const metadata: Metadata = {
     description:
       "Domains, hosting, business email, website security, and website tools managed from one account.",
   },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-      "max-video-preview": -1,
-    },
-  },
+  robots: publicProduction
+    ? {
+        index: true,
+        follow: true,
+        googleBot: {
+          index: true,
+          follow: true,
+          "max-image-preview": "large",
+          "max-snippet": -1,
+          "max-video-preview": -1,
+        },
+      }
+    : {
+        index: false,
+        follow: false,
+        noarchive: true,
+        googleBot: {
+          index: false,
+          follow: false,
+          noarchive: true,
+        },
+      },
   manifest: "/manifest.webmanifest",
   icons: {
     icon: "/icon.svg",
@@ -123,10 +136,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${inter.variable} ${spaceGrotesk.variable} ${ibmPlexMono.variable}`}
     >
       <body>
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
-        />
+        {publicProduction ? (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
+          />
+        ) : null}
         <a className="skip-link" href="#main-content">
           Skip to main content
         </a>
