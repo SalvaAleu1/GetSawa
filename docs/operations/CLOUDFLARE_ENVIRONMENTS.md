@@ -1,73 +1,67 @@
-# Cloudflare staging and production environments
+# Cloudflare pre-domain and launch environments
 
-Phase 28 introduces explicit Wrangler environments so staging and production cannot accidentally share a Worker identity. Cloudflare's named-environment behavior creates `cloudsawa-staging` and `cloudsawa-production` from the root `cloudsawa` name. The root Worker has no route and `workers_dev` is disabled; do not deploy it.
+CloudSawa now uses a deliberately simple pre-domain topology. Until `cloudsawa.com` is actually purchased and added to the Cloudflare account, both the root Worker and staging remain on `workers.dev`. No custom domain is assumed and no production scheduler is enabled.
 
 ## Environment topology
 
-| Environment | Worker | Public endpoint in Phase 28 | Scheduled jobs |
+| Environment | Worker | Public endpoint before domain purchase | Scheduled jobs |
 | --- | --- | --- | --- |
-| staging | `cloudsawa-staging` | `https://staging.cloudsawa.com` plus workers.dev | enabled only against isolated staging data |
-| production | `cloudsawa-production` | workers.dev/preview verification only | disabled until Phase 29 cutover |
-| root/default | `cloudsawa` | none | none |
+| staging | `cloudsawa-staging` | Cloudflare-assigned workers.dev URL | disabled unless explicitly enabled for isolated test data |
+| pre-domain production candidate | `cloudsawa` | Cloudflare-assigned workers.dev URL | disabled |
+| public production after domain purchase | `cloudsawa` | `https://cloudsawa.com` | one minute-level Cloudflare trigger; Worker dispatches the 12 internal schedules |
 
-`cloudsawa.com` remains on the previous production deployment until Phase 29. This is intentional: a Phase 28 production upload must not become a DNS cutover or create duplicate schedulers.
+The executable source of truth is `wrangler.jsonc`, `scripts/ops/deploy-cloudflare.sh`, `scripts/ops/cloudflare-preflight.sh` and `scripts/ops/activate-custom-domain.mjs`.
 
 ## Cloudflare account prerequisites
 
-1. The `cloudsawa.com` zone must be active in the same Cloudflare account used for the Worker deployment.
-2. The deploying identity must be authorized for Workers Scripts, the staging Custom Domain, logs/observability, and the product-specific Cloudflare zone operations already required by Phase 17/19.
-3. Create a staging PostgreSQL database that is isolated from production. Do not point staging at the production `DATABASE_URL`.
-4. Decide which live providers may safely be exercised from staging. Provider credentials that are absent must leave their dependent products fail-closed.
-5. Configure build-time variables/secrets in Cloudflare Workers Builds if Cloudflare is building the repository. Configure runtime variables/secrets on the corresponding Worker as well; Next.js build-time and Worker runtime configuration are separate concerns.
+1. Before domain purchase, a Cloudflare account with Workers access is sufficient for the workers.dev deployment.
+2. Staging must use an isolated PostgreSQL database and isolated session/cron secrets.
+3. The pre-domain `cloudsawa` Worker may use the intended production database only after migrations and launch-scope provider configuration have been reviewed.
+4. Configure build-time variables/secrets in Cloudflare Workers Builds and runtime Worker secrets separately.
+5. Missing provider credentials must keep their dependent products unavailable/fail-closed.
 
-## Core runtime secrets
+## Core deployment values
 
-Set these independently for `staging` and `production`; never copy a database/session secret between environments merely for convenience:
+For staging:
+- `APP_NAME=CloudSawa`
+- `CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa-staging`
 
-- `DATABASE_URL`
-- `SESSION_SECRET`
-- `CRON_SECRET`
-- `CLOUDFLARE_ACCOUNT_ID`
-- `CLOUDFLARE_API_TOKEN`
+For the pre-domain production candidate:
+- `APP_NAME=CloudSawa`
+- `CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa`
 
-Then configure the provider secrets needed for the products being verified: NameSilo, PayPal, SMTP, WHM, OpenSRS email, AI, storage and any other provider credentials from `.env.example`. Missing provider credentials are allowed only when the corresponding product remains unavailable/fail-closed.
+During workers.dev testing, `APP_URL` and `WEBSITE_PLATFORM_HOST` are intentionally not hard-coded before the first deployment because Cloudflare assigns the exact hostname.
 
-Non-secret environment identity values are defined in `wrangler.jsonc`: `APP_ENV`, `APP_URL`, `APP_NAME`, `WEBSITE_PLATFORM_HOST` and `CLOUDFLARE_WORKER_SERVICE_NAME`.
+## Pre-domain deployment
 
-## Staging deployment gate
-
-The repository deployment wrapper requires the variables above plus this explicit isolation acknowledgement:
+Cloudflare Workers Builds may run:
 
 ```bash
-export APP_URL=https://staging.cloudsawa.com
-export WEBSITE_PLATFORM_HOST=staging.cloudsawa.com
-export CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa-staging
-export CONFIRM_STAGING_ISOLATED=STAGING_IS_ISOLATED
-export APPLY_DATABASE_MIGRATIONS=APPLY_REVIEWED_MIGRATIONS
-npm run deploy:cloudflare:staging
+WORKERS_CI=1 npm run deploy:cloudflare:production
 ```
 
-Do not put secret values into shell history. Prefer the Cloudflare dashboard/Workers Builds secret store or an approved secret manager/environment injection mechanism. The example above shows names and non-secret values only.
+The deployment wrapper verifies the repository, prepares the database, seeds only the safe baseline, synchronizes the core runtime secrets available to the build, builds OpenNext and uploads the `cloudsawa` Worker.
 
-The deployment wrapper runs `prisma migrate status`, applies migrations only after the separate migration acknowledgement, builds with the `staging` Wrangler environment, deploys while preserving dashboard variables, then smoke-checks the staging hostname.
+A successful pre-domain upload must leave:
+- `workers_dev=true`
+- no `routes`
+- no production cron trigger
+- `APP_ENV=preview`
 
-## Production upload in Phase 28
+Record the exact workers.dev hostname and use it for runtime verification.
 
-A production Worker may be built/uploaded for verification, but `wrangler.jsonc` deliberately has no production Custom Domain and no production cron triggers yet. Two explicit acknowledgements are required before the wrapper uploads it. Verify the resulting workers.dev/preview URL via `VERIFY_URL`.
+## Final domain activation
 
-Do not attach `cloudsawa.com` or enable the production cron list until the Phase 29 scheduler/DNS cutover procedure is executing.
-
-## Logs and observability
-
-Wrangler observability is enabled. Use:
+Only after `cloudsawa.com` has actually been purchased and added to the Cloudflare account:
 
 ```bash
-./scripts/ops/cloudflare-tail.sh staging
-./scripts/ops/cloudflare-tail.sh production
+CONFIRM_CLOUDSAWA_DOMAIN_OWNED=cloudsawa.com npm run ops:activate-domain
 ```
 
-For deployment evidence record Worker name, deployment/version ID, commit SHA, migration result, staging hostname, HTTP smoke result and any runtime errors. Do not store secret values.
+That controlled mutation changes the root Worker to public production by binding `cloudsawa.com`, disabling workers.dev, setting `APP_ENV=production` and enabling the consolidated minute-level scheduler.
 
-## Build-system note
+Then set `APP_URL=https://cloudsawa.com`, `WEBSITE_PLATFORM_HOST=cloudsawa.com`, configure final provider webhooks/mail identity, deploy, and run the production cutover verifier.
 
-OpenNext accepts Wrangler options such as `--env`; the repository uses the named environment during build and deploy. Dashboard-managed runtime variables are preserved with `--keep-vars`. If Workers Builds is used, configure the same environment selection in its build/deploy commands and ensure required build secrets exist in that build environment.
+## Evidence
+
+For each deployment record the Worker name, deployment/version ID, commit SHA, migration result, public workers.dev/custom-domain hostname, HTTP smoke result and any runtime errors. Never store secret values in evidence.
