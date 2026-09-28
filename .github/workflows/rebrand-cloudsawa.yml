@@ -26,7 +26,7 @@ jobs:
           from pathlib import Path
 
           root = Path(".")
-          skip_parts = {".git", "node_modules", ".next", ".open-next"}
+          skip_parts = {".git", "node_modules", ".next", ".open-next"}\n          workflow_dir = Path(".github/workflows")
           protected_repo = "SalvaAleu1/GetSawa"
           sentinel = "__CLOUDSAWA_GITHUB_REPO__"
           changed = []
