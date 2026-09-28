@@ -26,13 +26,16 @@ jobs:
           from pathlib import Path
 
           root = Path(".")
-          skip_parts = {".git", "node_modules", ".next", ".open-next"}\n          workflow_dir = Path(".github/workflows")
+          skip_parts = {".git", "node_modules", ".next", ".open-next"}
+          workflow_dir = Path(".github/workflows")
           protected_repo = "SalvaAleu1/GetSawa"
           sentinel = "__CLOUDSAWA_GITHUB_REPO__"
           changed = []
 
           for path in root.rglob("*"):
               if not path.is_file() or any(part in skip_parts for part in path.parts):
+                  continue
+              if workflow_dir in path.parents:
                   continue
               try:
                   raw = path.read_bytes()
