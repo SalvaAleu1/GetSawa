@@ -46,7 +46,7 @@ jobs:
               updated = text.replace(protected_repo, sentinel)
               updated = updated.replace("GETSAWA", "CLOUDSAWA")
               updated = updated.replace("GetSawa", "CloudSawa")
-              updated = updated.replace("getsawa", "cloudsawa")
+              updated = updated.replace("getsawa", "cloudsawa")\n              updated = updated.replace("cloudsawa.app", "cloudsawa.com")
               updated = updated.replace(sentinel, protected_repo)
 
               if updated != text:
