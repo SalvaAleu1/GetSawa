@@ -17,5 +17,16 @@
     "APP_ENV": "preview",
     "APP_NAME": "CloudSawa",
     "CLOUDFLARE_WORKER_SERVICE_NAME": "cloudsawa"
+  },
+  "env": {
+    "staging": {
+      "name": "cloudsawa-staging",
+      "workers_dev": true,
+      "vars": {
+        "APP_ENV": "staging",
+        "APP_NAME": "CloudSawa",
+        "CLOUDFLARE_WORKER_SERVICE_NAME": "cloudsawa-staging"
+      }
+    }
   }
 }

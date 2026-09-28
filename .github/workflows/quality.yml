@@ -1,4 +1,4 @@
-name: GetSawa quality gate
+name: CloudSawa quality gate
 
 on:
   push:
@@ -20,6 +20,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Brand consistency
+        run: npm run ops:brand-consistency
+      - name: Cloudflare deployment configuration
+        run: npm run ops:cutover-config
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Generate Prisma client

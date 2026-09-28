@@ -4,10 +4,11 @@ set -Eeuo pipefail
 environment="${1:-}"
 case "$environment" in
   staging)
-    export APP_URL="${APP_URL:-https://staging.cloudsawa.com}"
+    # Staging remains on workers.dev until the final domain is purchased.
     export APP_NAME="CloudSawa"
-    export WEBSITE_PLATFORM_HOST="${WEBSITE_PLATFORM_HOST:-staging.cloudsawa.com}"
     export CLOUDFLARE_WORKER_SERVICE_NAME="cloudsawa-staging"
+    if [[ "${APP_URL:-}" == "https://staging.cloudsawa.com" ]]; then unset APP_URL; fi
+    if [[ "${WEBSITE_PLATFORM_HOST:-}" == "staging.cloudsawa.com" ]]; then unset WEBSITE_PLATFORM_HOST; fi
     ;;
   production)
     # Pre-domain deployment: publish the root Worker to workers.dev first.
@@ -32,8 +33,15 @@ cd "$repo_root"
 # Interactive/local production deploys keep explicit cutover confirmation.
 # In Cloudflare Workers Builds, selecting the production deploy command is the
 # deployment approval and pushes to the configured production branch may deploy.
-if [[ "${WORKERS_CI:-}" != "1" && "$environment" == "production" && "${CONFIRM_PRODUCTION_CUTOVER:-}" != "SWITCH_CLOUDSAWA_TO_CLOUDFLARE" ]]; then
-  echo "Production deployment is approved only with CONFIRM_PRODUCTION_CUTOVER=SWITCH_CLOUDSAWA_TO_CLOUDFLARE." >&2
+cutover_active="$(node -e 'const fs=require("fs");const w=JSON.parse(fs.readFileSync("wrangler.jsonc","utf8"));const routes=w.routes||[];process.stdout.write(routes.some(r=>r&&r.pattern==="cloudsawa.com"&&r.custom_domain===true)?"1":"0")')"
+
+if [[ "$environment" == "production" && "$cutover_active" == "1" ]]; then
+  export APP_URL="${APP_URL:-https://cloudsawa.com}"
+  export WEBSITE_PLATFORM_HOST="${WEBSITE_PLATFORM_HOST:-cloudsawa.com}"
+fi
+
+if [[ "${WORKERS_CI:-}" != "1" && "$environment" == "production" && "$cutover_active" == "1" && "${CONFIRM_PRODUCTION_CUTOVER:-}" != "SWITCH_CLOUDSAWA_TO_CLOUDFLARE" ]]; then
+  echo "Custom-domain cutover is approved only with CONFIRM_PRODUCTION_CUTOVER=SWITCH_CLOUDSAWA_TO_CLOUDFLARE." >&2
   exit 1
 fi
 
@@ -136,9 +144,18 @@ fi
 printf 'Deploying CloudSawa Cloudflare environment %s...\n' "$environment"
 if [[ "$environment" == "staging" ]]; then
   npx opennextjs-cloudflare deploy --env=staging -- --keep-vars
-  APP_URL="https://staging.cloudsawa.com" ./scripts/ops/verify-deployment-health.sh
+  if [[ -n "${APP_URL:-}" ]]; then
+    ./scripts/ops/verify-deployment-health.sh
+  else
+    echo "CloudSawa staging Worker uploaded. Use the workers.dev URL printed by Wrangler, then set APP_URL to that exact URL for outside-in verification."
+  fi
 else
   npx opennextjs-cloudflare deploy -- --keep-vars
-  echo "CloudSawa Worker uploaded as 'cloudsawa' with workers.dev enabled."
-  echo "Use the workers.dev URL printed by Wrangler for preview/testing. No custom domain is required at this stage."
+  if [[ "$cutover_active" == "1" ]]; then
+    APP_URL="https://cloudsawa.com" ./scripts/ops/verify-production-cutover.sh
+    echo "CloudSawa production custom-domain deployment verified at https://cloudsawa.com."
+  else
+    echo "CloudSawa Worker uploaded as 'cloudsawa' with workers.dev enabled."
+    echo "Use the workers.dev URL printed by Wrangler for preview/testing. No custom domain is required at this stage."
+  fi
 fi

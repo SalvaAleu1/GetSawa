@@ -1,174 +1,124 @@
-# CloudSawa deployment — Cloudflare Workers
+# CloudSawa deployment and launch sequence
 
-CloudSawa targets Cloudflare Workers through `@opennextjs/cloudflare`. The production Wrangler environment is `production`, which deploys the Worker as `cloudsawa-production` and attaches the custom domain `cloudsawa.com`. Staging uses `cloudsawa-staging` and `staging.cloudsawa.com`.
+CloudSawa is intentionally in **pre-domain mode** until `cloudsawa.com` is purchased. The repository can be built, tested, connected to the database and providers, and deployed to Cloudflare `workers.dev` without owning the final domain.
 
-GitHub Actions are not required for deployment. Cloudflare Workers Builds can connect directly to the GitHub repository and build/deploy `main` inside Cloudflare.
+## Current pre-domain architecture
 
-## 1. Production prerequisites
+- Production-preview Worker: `cloudsawa` on `workers.dev`
+- Optional staging Worker: `cloudsawa-staging` on `workers.dev`
+- Final planned domain: `cloudsawa.com`
+- Database: Neon PostgreSQL
+- Registrar: NameSilo
+- Payments: PayPal REST
+- Edge/runtime: Cloudflare Workers via OpenNext
+- Production scheduled jobs: deliberately disabled until final domain activation
 
-Before production cutover, ensure:
+The committed `wrangler.jsonc` must remain free of custom-domain routes before the domain is purchased. `npm run ops:cutover-config` enforces this.
 
-- `cloudsawa.com` is in the Cloudflare account that will own the Worker custom domain.
-- The production PostgreSQL database is reachable from Cloudflare Workers.
-- Reviewed Prisma migrations are ready.
-- Production provider credentials are available for the products being launched.
-- The current repository `main` is the approved release commit.
+## 1. Verify the repository
 
-## 2. Create the Wrangler environment Worker
-
-CloudSawa uses Wrangler environments. Create the environment Worker before connecting Git Builds:
-
-- Staging Worker: `cloudsawa-staging`
-- Production Worker: `cloudsawa-production`
-
-A temporary starter/Hello World Worker is sufficient; the first successful CloudSawa deployment replaces its code. Configure runtime variables/secrets on that Worker before the repository deployment so `--keep-vars` preserves them.
-
-## 3. Connect the GitHub repository through Workers Builds
-
-In the selected Worker:
-
-1. Open **Settings → Builds → Connect**.
-2. Connect GitHub and authorize repository `SalvaAleu1/GetSawa`.
-3. Use branch `main`.
-4. Keep the repository root as `/`.
-5. Leave **Build command** empty. The guarded CloudSawa deployment script performs the OpenNext build itself.
-6. Use the matching deploy command:
-
-### Staging deploy command
+Every push to `main` runs the CloudSawa quality gate:
 
 ```bash
-npm run deploy:cloudflare:staging
+npm run ops:brand-consistency
+npm run ops:cutover-config
+npm run prisma:generate
+npm run typecheck
+npm test
+npm run build
+npm run build:cloudflare
 ```
 
-### Production deploy command
+## 2. Database
+
+Use the existing Neon production database. For Cloudflare builds, configure the pooled URL as `DATABASE_URL` and the direct/admin URL as `DIRECT_URL`.
+
+Before deployment:
+
+```bash
+npx prisma migrate status
+npx prisma migrate deploy
+npm run db:seed
+```
+
+The seed is designed to create safe baseline configuration only; sellable TLDs must still pass pricing/provider readiness before activation.
+
+## 3. Deploy before buying the domain
+
+Create/connect the Cloudflare Worker and use:
 
 ```bash
 npm run deploy:cloudflare:production
 ```
 
-These scripts run Cloudflare preflight, Prisma generation/migration status, the OpenNext build, explicit deployment acknowledgements, Worker upload and post-deploy verification. The `production` Wrangler environment resolves to Worker `cloudsawa-production`; staging resolves to `cloudsawa-staging`.
+During this phase:
 
-## 4. Build variables and secrets
-
-Workers Builds **build variables/secrets** exist only during the deployment job. The guarded deployment script needs the following for the selected environment.
-
-### Production build variables
-
-```text
-NODE_ENV=production
-APP_URL=https://cloudsawa.com
-APP_NAME=CloudSawa
-WEBSITE_PLATFORM_HOST=cloudsawa.com
-CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa-production
-CLOUDFLARE_ACCOUNT_ID=<your account id>
-CONFIRM_PRODUCTION_DEPLOY=DEPLOY_CLOUDSAWA_PRODUCTION
-CONFIRM_PRODUCTION_CUTOVER=SWITCH_CLOUDSAWA_TO_CLOUDFLARE
-CONFIRM_PRODUCTION_WORKER_UPLOAD=UPLOAD_PRODUCTION_WORKER
-```
-
-### Staging build variables
-
-```text
-NODE_ENV=production
-APP_URL=https://staging.cloudsawa.com
-APP_NAME=CloudSawa
-WEBSITE_PLATFORM_HOST=staging.cloudsawa.com
-CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa-staging
-CLOUDFLARE_ACCOUNT_ID=<your account id>
-CONFIRM_STAGING_ISOLATED=STAGING_IS_ISOLATED
-```
-
-### Build secrets required by the guarded script
-
-```text
-DATABASE_URL=<environment database URL>
-SESSION_SECRET=<environment secret>
-CRON_SECRET=<environment secret>
-```
-
-Set `APPLY_DATABASE_MIGRATIONS=APPLY_REVIEWED_MIGRATIONS` only after migration review for that database. Otherwise the deployment script checks migration status without applying migrations.
-
-Cloudflare Workers Builds injects its own deployment identity (`WORKERS_CI=1`), so the application's runtime `CLOUDFLARE_API_TOKEN` does not need to be exposed merely to authenticate the build/deploy step.
-
-## 5. Runtime variables and secrets
-
-Before the repository deployment, open the environment Worker → **Settings → Variables & Secrets** and configure the production/staging runtime values from `.env.example`.
-
-Core runtime secrets:
-
-- `DATABASE_URL`
-- `SESSION_SECRET`
-- `CRON_SECRET`
-- `NAMESILO_API_KEY`
-- `PAYPAL_CLIENT_ID`
-- `PAYPAL_CLIENT_SECRET`
-- `PAYPAL_WEBHOOK_ID`
-- `SMTP_PASSWORD` and the remaining sensitive `SMTP_*` values
-- `CLOUDFLARE_API_TOKEN` for CloudSawa customer DNS/CDN/publishing operations
-- provider credentials for any enabled hosting/email/AI product
-
-Core runtime plain variables include:
-
-- `APP_URL`
 - `APP_NAME=CloudSawa`
-- `WEBSITE_PLATFORM_HOST`
-- `CLOUDFLARE_WORKER_SERVICE_NAME`
-- `CLOUDFLARE_ACCOUNT_ID`
-- provider routing defaults from `.env.example`
+- `CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa`
+- `APP_URL` may remain unset until Wrangler prints the exact `workers.dev` URL
+- `WEBSITE_PLATFORM_HOST` may remain unset for the first upload
+- no custom-domain route is active
+- no production cron trigger is active
 
-Blank optional provider credentials intentionally keep those dependent products fail-closed.
+After the first successful upload, set `APP_URL` to the exact HTTPS `workers.dev` URL for outside-in preview checks.
 
-## 6. Database migration
+## 4. Required launch providers
 
-Do not let a production deployment silently guess whether migrations should run. Review migration state against the selected database, then either run explicitly:
+Before taking money, configure and pass the in-app provider health checks for:
+
+- NameSilo — live API key and funded registrar balance
+- PayPal — live client ID/secret and verified webhook ID
+- SMTP — transactional email
+- Cloudflare — account ID/API token for customer DNS/CDN/publishing functions
+
+Hosting, business email and AI products may remain disabled until their provider credentials and acceptance tests pass. Domain registration can launch first.
+
+## 5. Pricing safety
+
+Do not manually activate a TLD with an unverified wholesale cost. Use the NameSilo-backed pricing path and CloudSawa pricing policy so retail price is calculated from current provider cost plus the configured margin. Premium domains remain protected from ordinary automatic markup assumptions.
+
+## 6. Buy the domain last
+
+Immediately before public launch, purchase `cloudsawa.com` and add it to the Cloudflare account. Then run:
 
 ```bash
-npx prisma migrate status
-npx prisma migrate deploy
+CONFIRM_CLOUDSAWA_DOMAIN_OWNED=cloudsawa.com npm run ops:activate-domain
+npm run ops:cutover-config
 ```
 
-or set the deployment acknowledgement:
+That guarded command changes production from `workers.dev` preview to:
+
+- custom Worker domain `cloudsawa.com`
+- `workers_dev=false`
+- `APP_ENV=production`
+- one `* * * * *` Cloudflare scheduler trigger, which dispatches the 12 internal jobs at their own due times
+
+Set:
 
 ```text
-APPLY_DATABASE_MIGRATIONS=APPLY_REVIEWED_MIGRATIONS
+APP_URL=https://cloudsawa.com
+WEBSITE_PLATFORM_HOST=cloudsawa.com
+SMTP_FROM="CloudSawa <no-reply@cloudsawa.com>"
 ```
 
-The deployment wrapper will then run `prisma migrate deploy` before the OpenNext build.
+Then deploy production.
 
-## 7. Custom domains and crons
+## 7. Final revenue test
 
-`wrangler.jsonc` already defines:
+Before advertising CloudSawa, make one controlled low-cost real domain purchase:
 
-- staging custom domain `staging.cloudsawa.com`
-- production custom domain `cloudsawa.com`
-- staging and production cron triggers
+1. Search an actually available inexpensive domain.
+2. Confirm NameSilo wholesale cost and CloudSawa retail price.
+3. Complete live PayPal/card checkout.
+4. Confirm PayPal capture and verified webhook handling.
+5. Confirm NameSilo registration succeeds.
+6. Confirm the domain appears ACTIVE in the customer dashboard.
+7. Confirm invoice and transactional email.
+8. Test a safe failure/refund/reconciliation path.
+9. Record the evidence required by `npm run ops:launch-readiness`.
 
-A production deployment therefore changes real traffic and activates production scheduled jobs. Keep the previous Vercel deployment available until post-deploy checks pass.
+Only after this passes should public domain sales begin.
 
-## 8. Production verification
+## 8. First launch scope
 
-The guarded production deploy automatically runs:
-
-```bash
-APP_URL=https://cloudsawa.com ./scripts/ops/verify-production-cutover.sh
-```
-
-Then verify in the application/admin portal:
-
-1. Authentication and sessions.
-2. NameSilo provider health and domain search.
-3. PayPal live order creation/capture/webhook handling.
-4. Transactional email.
-5. Cron-triggered reconciliation/jobs.
-6. Customer DNS/CDN/publishing capabilities if enabled.
-7. One controlled real order before public launch.
-
-Run the final evidence gate only after the real operational evidence exists:
-
-```bash
-npm run ops:launch-readiness
-```
-
-## 9. Rollback
-
-Retain the previous Vercel production deployment and DNS state until Cloudflare production verification is complete. Follow `docs/operations/VERCEL_TO_CLOUDFLARE_CUTOVER.md` for rollback/cutover steps and `docs/operations/DISASTER_RECOVERY.md` for recovery procedures.
+Launch **domain search, registration, renewal, transfer and management first**. Keep any provider-dependent hosting/email/AI product unavailable until its own live provider test passes. This lets CloudSawa generate revenue without waiting for every later service.
