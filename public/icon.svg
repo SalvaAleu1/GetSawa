@@ -1,4 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CloudSawa">
   <rect width="512" height="512" rx="112" fill="#101F57"/>
-  <path d="M143 256c0-68 49-119 119-119 42 0 78 16 102 43l-41 38c-16-17-35-25-60-25-40 0-68 26-68 63s29 64 71 64c30 0 51-12 61-34h-74v-51h135c2 10 3 20 3 31 0 78-52 128-129 128-69 0-119-51-119-138Z" fill="#fff"/>
+  <g fill="#fff">
+    <rect x="100" y="172" width="312" height="158" rx="70"/>
+    <circle cx="215" cy="182" r="70"/>
+    <circle cx="305" cy="198" r="60"/>
+  </g>
+  <rect x="156" y="200" width="200" height="116" rx="30" fill="#101F57"/>
+  <text x="256" y="281" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="700" fill="#fff">CS</text>
 </svg>
