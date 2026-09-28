@@ -1,38 +1,45 @@
-# Vercel to Cloudflare production cutover
+# CloudSawa public-domain cutover
 
-This is a controlled scheduler + traffic handoff. Do not treat it as a normal deploy.
+This retained filename is historical. CloudSawa currently has no owned public production domain to migrate from Vercel. The actual launch operation is a workers.dev-to-`cloudsawa.com` Cloudflare cutover after the domain is purchased.
 
-## Current scheduler difference
+## Before domain purchase
 
-The committed Vercel configuration has 8 scheduled jobs. Cloudflare production has 12: the same 8 plus message delivery, developer webhook delivery, security maintenance and analytics snapshots. `node scripts/ops/check-cutover-config.mjs` proves the Vercel schedules are covered and that all 12 Cloudflare expressions have Worker mappings.
+1. Deploy and verify `cloudsawa-staging` on an isolated workers.dev endpoint.
+2. Deploy and verify the root `cloudsawa` Worker on its workers.dev endpoint.
+3. Keep the root Worker in preview mode with no custom-domain route and no production scheduler.
+4. Verify database migrations, backup/restore, NameSilo, PayPal, SMTP and Cloudflare readiness.
+5. Record the approved release commit and the Cloudflare deployment/version ID.
 
-The old Vercel project is not bound to this repository by `.vercel/project.json`, and the connected Vercel account did not expose a project/team during the Phase 29 preparation session. Therefore the operator must identify the real production Vercel project from the Vercel dashboard before scheduler shutdown. Never disable an unrelated project by name guesswork.
+## Preconditions for public launch
 
-## Preconditions — all mandatory
+All are mandatory:
 
-1. Phase 27 has real restore-drill evidence meeting the agreed RPO/RTO target.
-2. Phase 28 staging is live and has passed Cloudflare runtime, migration, cron, observability, Phase 26 accessibility/performance/PWA and representative product tests.
-3. `cloudsawa-production` has been built/uploaded and verified on a non-production endpoint before the production Custom Domain is activated.
-4. Production Cloudflare runtime/build variables and secrets are complete.
-5. PayPal webhook ID/credentials, NameSilo, database, SMTP and every launch-enabled product provider have passed their Phase 30 preflight tests.
-6. The last-known-good Vercel deployment and its DNS configuration are recorded for rollback.
-7. The Cloudflare rollback deployment/version ID is recorded.
-8. A change window is open and a single operator controls scheduler/DNS changes.
+1. `cloudsawa.com` has actually been purchased and is under company control.
+2. The domain is active in the intended Cloudflare account.
+3. The pre-domain Worker and database tests passed.
+4. The production database migration state is reviewed and current.
+5. NameSilo, PayPal, SMTP and Cloudflare have passed launch-provider acceptance.
+6. A real database backup and isolated restore drill has passed.
+7. Final support, legal, security and monitoring launch gates are approved.
+8. The last-known-good Cloudflare workers.dev deployment/version is recorded for rollback.
 
-## Cutover sequence
+## Domain activation
 
-1. Announce/freeze nonessential production changes.
-2. Run `node scripts/ops/check-cutover-config.mjs` from the exact commit to deploy.
-3. Verify Vercel is healthy one final time and record the current production deployment identifier.
-4. Disable the **live production Vercel cron scheduler**. Because the actual legacy Vercel project is not repository-bound, do this on the verified project/dashboard rather than assuming a Git push changed it.
-5. Confirm no Vercel cron execution starts after the recorded handoff timestamp.
-6. If `cloudsawa.com` currently has a DNS record that conflicts with a Cloudflare Worker Custom Domain, record it for rollback and remove it only at this point. Cloudflare Custom Domains require the hostname to be in an active Cloudflare zone and cannot be created over a conflicting CNAME.
-7. Export the production deployment acknowledgements:
+From the exact approved release commit:
+
+```bash
+export CONFIRM_CLOUDSAWA_DOMAIN_OWNED=cloudsawa.com
+npm run ops:activate-domain
+```
+
+Review the resulting `wrangler.jsonc` change. It must bind only `cloudsawa.com`, set the root Worker to production, disable workers.dev and enable the consolidated scheduler.
+
+Set the final public values:
 
 ```bash
 export APP_URL=https://cloudsawa.com
 export WEBSITE_PLATFORM_HOST=cloudsawa.com
-export CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa-production
+export CLOUDFLARE_WORKER_SERVICE_NAME=cloudsawa
 export CONFIRM_PRODUCTION_DEPLOY=DEPLOY_CLOUDSAWA_PRODUCTION
 export CONFIRM_PRODUCTION_WORKER_UPLOAD=UPLOAD_PRODUCTION_WORKER
 export CONFIRM_PRODUCTION_CUTOVER=SWITCH_CLOUDSAWA_TO_CLOUDFLARE
@@ -40,30 +47,28 @@ export APPLY_DATABASE_MIGRATIONS=APPLY_REVIEWED_MIGRATIONS
 npm run deploy:cloudflare:production
 ```
 
-Do not paste actual secret values into shell history; inject them through the approved secret mechanism.
+Never paste provider/database secret values into shell history.
 
-8. The production deploy attaches the `cloudsawa.com` Custom Domain and enables all 12 Cloudflare crons. The deploy wrapper immediately runs `verify-production-cutover.sh`.
-9. Verify TLS, root/login/domains/products/support, `robots.txt`, sitemap, manifest, and the Worker runtime headers.
-10. The verifier sends `{}` to the PayPal webhook endpoint. A configured receiver must return HTTP 400 for that invalid event; 503 blocks launch and means provider/webhook configuration is incomplete. The probe cannot create a payment because it has no event ID/type/signature.
-11. Run `payment-reconciliation`, then `domain-sync`, then `provisioning-recovery` using the Phase 27 manual reconciliation tool. Review results before resuming normal mutations.
-12. Observe at least one scheduled Cloudflare job execution and confirm the job outcome appears in observability.
-13. Verify real checkout only with a controlled approved transaction/domain scenario; reconcile the provider result before any retry.
-14. Leave the prior Vercel deployment available for rollback during the validation window, but keep its scheduler disabled.
+## Final verification
 
-## Webhooks
-
-The public PayPal webhook hostname remains `https://cloudsawa.com/api/webhooks/paypal`, so a hostname change is not required if PayPal already targets that URL. The origin changes from Vercel to Cloudflare. Verify signature validation and event processing after cutover, and make sure no firewall/access policy blocks PayPal.
+1. Verify TLS, root, login, domain search, products, support, robots, sitemap and manifest.
+2. Confirm response headers identify the CloudSawa Cloudflare Worker and production environment.
+3. Configure/verify the PayPal webhook at `https://cloudsawa.com/api/webhooks/paypal`.
+4. Confirm SMTP uses an authorized CloudSawa sender identity.
+5. Run payment reconciliation, domain sync and provisioning recovery.
+6. Observe scheduled Cloudflare execution and persisted job outcomes.
+7. Complete one controlled approved live domain transaction and reconcile it before any retry.
+8. Complete the launch-evidence gate from the exact release commit.
 
 ## Rollback
 
-Rollback is triggered by payment integrity risk, domain/provider divergence, authentication failure, sustained 5xx errors, missing production secrets, migration incompatibility, webhook failure or inability to prove the Cloudflare runtime.
+If the custom-domain launch fails:
 
 1. Freeze customer mutations that could duplicate external side effects.
-2. Disable Cloudflare production cron triggers before re-enabling the previous scheduler.
-3. Restore the previously recorded DNS/route configuration so `cloudsawa.com` reaches the last-known-good Vercel deployment.
-4. Verify Vercel production health.
-5. Re-enable the Vercel scheduler only after Cloudflare schedules are disabled.
-6. Reconcile payments/domains/provisioning; code/DNS rollback does not undo provider side effects.
-7. Preserve logs and perform an incident review before another cutover attempt.
+2. Disable the production scheduler before changing routing.
+3. Restore the last-known-good Cloudflare deployment/version.
+4. If needed, remove the custom-domain route and temporarily re-enable workers.dev for operator verification.
+5. Reconcile payments, domains and provisioning. Code/routing rollback does not undo provider side effects.
+6. Preserve logs and resolve the failure before another launch attempt.
 
-Exactly one production scheduler authority must be active at all times.
+Exactly one production scheduler authority must be active.
