@@ -342,7 +342,7 @@ enum OrderStatus {
 
 model Order {
   id             String      @id @default(cuid())
-  orderNumber    String      @unique // e.g. GS-2026-000001
+  orderNumber    String      @unique // e.g. CS-2026-000001
   userId         String
   user           User        @relation(fields: [userId], references: [id])
   status         OrderStatus @default(PENDING_PAYMENT)
