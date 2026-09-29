@@ -20,7 +20,13 @@
     "APP_NAME": "CloudSawa",
     "CLOUDFLARE_WORKER_SERVICE_NAME": "cloudsawa",
     "APP_URL": "https://cloudsawa.aleuwol12.workers.dev",
-    "WEBSITE_PLATFORM_HOST": "cloudsawa.aleuwol12.workers.dev"
+    "WEBSITE_PLATFORM_HOST": "cloudsawa.aleuwol12.workers.dev",
+    "DOMAIN_PROVIDER": "namesilo",
+    "PAYMENT_PROVIDER": "paypal",
+    "NAMESILO_API_BASE_URL": "https://www.namesilo.com/api",
+    "NAMESILO_SANDBOX": "false",
+    "PAYPAL_MODE": "live",
+    "PAYPAL_BASE_URL": "https://api-m.paypal.com"
   },
   "env": {
     "staging": {
