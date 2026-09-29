@@ -80,6 +80,23 @@ for (const name of names) {
   const value = process.env[name];
   if (typeof value === "string" && value.length > 0) output[name] = value;
 }
+
+const requiredForProduction = [
+  "DATABASE_URL",
+  "SESSION_SECRET",
+  "NAMESILO_API_KEY",
+  "PAYPAL_CLIENT_ID",
+  "PAYPAL_CLIENT_SECRET",
+];
+const missing = requiredForProduction.filter((name) => !output[name]);
+if (missing.length) {
+  console.error(`Missing launch-critical Cloudflare build secret(s): ${missing.join(", ")}. Values were not printed.`);
+  process.exit(1);
+}
+if (!output.PAYPAL_WEBHOOK_ID) {
+  console.warn("PAYPAL_WEBHOOK_ID is not present in the build secret set. Provider authentication can be tested, but PayPal webhook acceptance remains blocked until it is configured.");
+}
+
 fs.writeFileSync(process.env.RUNTIME_SECRETS_FILE, JSON.stringify(output), { mode: 0o600 });
 console.log(`Prepared ${Object.keys(output).length} encrypted build secret(s) for runtime upload; values were not printed.`);
 NODE
