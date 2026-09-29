@@ -4,20 +4,19 @@ set -Eeuo pipefail
 environment="${1:-}"
 case "$environment" in
   staging)
-    # Staging remains on workers.dev until the final domain is purchased.
     export APP_NAME="CloudSawa"
     export CLOUDFLARE_WORKER_SERVICE_NAME="cloudsawa-staging"
-    if [[ "${APP_URL:-}" == "https://staging.cloudsawa.com" ]]; then unset APP_URL; fi
-    if [[ "${WEBSITE_PLATFORM_HOST:-}" == "staging.cloudsawa.com" ]]; then unset WEBSITE_PLATFORM_HOST; fi
+    export APP_URL="https://cloudsawa-staging.aleuwol12.workers.dev"
+    export WEBSITE_PLATFORM_HOST="cloudsawa-staging.aleuwol12.workers.dev"
     ;;
   production)
-    # Pre-domain deployment: publish the root Worker to workers.dev first.
-    # Cloudflare assigns the exact public hostname after upload, so do not bake
-    # a future custom domain into the application during this phase.
+    # The production Worker name and workers.dev hostname are now established.
+    # Set them explicitly so stale build variables cannot generate links for a
+    # retired Worker or former public brand.
     export APP_NAME="CloudSawa"
     export CLOUDFLARE_WORKER_SERVICE_NAME="cloudsawa"
-    if [[ "${APP_URL:-}" == "https://cloudsawa.com" ]]; then unset APP_URL; fi
-    if [[ "${WEBSITE_PLATFORM_HOST:-}" == "cloudsawa.com" ]]; then unset WEBSITE_PLATFORM_HOST; fi
+    export APP_URL="https://cloudsawa.aleuwol12.workers.dev"
+    export WEBSITE_PLATFORM_HOST="cloudsawa.aleuwol12.workers.dev"
     ;;
   *)
     echo "Usage: $0 {staging|production}" >&2
@@ -55,81 +54,6 @@ npm run typecheck -- --pretty false
 printf 'Running unit tests...\n'
 npm test
 
-printf 'Preparing database for %s...\n' "$environment"
-runtime_database_url="${DATABASE_URL:-}"
-if [[ -z "$runtime_database_url" ]]; then
-  echo "Missing DATABASE_URL for database readiness verification." >&2
-  exit 1
-fi
-
-# Routine Cloudflare deployments use the pooled Neon DATABASE_URL for
-# connectivity/readiness checks. The non-pooled DIRECT_URL is reserved for
-# explicitly reviewed migration work because Prisma migrations require session
-# continuity and should not run through the pooler.
-user_table_count="$(DATABASE_URL="$runtime_database_url" node <<'NODE'
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
-(async () => {
-  try {
-    const rows = await prisma.$queryRawUnsafe("SELECT COUNT(*)::int AS count FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'");
-    process.stdout.write(String(rows?.[0]?.count ?? 0));
-  } finally {
-    await prisma.$disconnect();
-  }
-})().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
-NODE
-)"
-
-if [[ "$user_table_count" == "0" ]]; then
-  if [[ "${APPLY_DATABASE_MIGRATIONS:-}" != "APPLY_REVIEWED_MIGRATIONS" ]]; then
-    echo "Fresh PostgreSQL database detected. Refusing automatic production bootstrap without APPLY_DATABASE_MIGRATIONS=APPLY_REVIEWED_MIGRATIONS." >&2
-    exit 1
-  fi
-
-  migration_database_url="${DIRECT_URL:-}"
-  if [[ -z "$migration_database_url" ]]; then
-    echo "DIRECT_URL is required to initialize a fresh database." >&2
-    exit 1
-  fi
-
-  echo "Fresh PostgreSQL database detected. Creating the reviewed CloudSawa Prisma schema..."
-  DATABASE_URL="$migration_database_url" npx prisma db push --skip-generate
-
-  echo "Creating retained raw-SQL operational tables before baselining migrations..."
-  DIRECT_URL="$migration_database_url" DATABASE_URL="$migration_database_url" node scripts/ops/repair-baselined-database.mjs
-
-  echo "Baselining retained Prisma migrations against the complete schema..."
-  for migration_dir in prisma/migrations/*; do
-    [[ -d "$migration_dir" ]] || continue
-    migration_name="$(basename "$migration_dir")"
-    DATABASE_URL="$migration_database_url" npx prisma migrate resolve --applied "$migration_name"
-  done
-else
-  if [[ "${APPLY_DATABASE_MIGRATIONS:-}" == "APPLY_REVIEWED_MIGRATIONS" ]]; then
-    migration_database_url="${DIRECT_URL:-}"
-    if [[ -z "$migration_database_url" ]]; then
-      echo "DIRECT_URL is required when applying reviewed database migrations." >&2
-      exit 1
-    fi
-
-    echo "Applying explicitly reviewed Prisma migrations over the direct Neon connection..."
-    DIRECT_URL="$migration_database_url" DATABASE_URL="$migration_database_url" node scripts/ops/repair-baselined-database.mjs
-    DATABASE_URL="$migration_database_url" npx prisma migrate deploy
-  else
-    echo "Existing database detected. Verifying committed migration parity over pooled DATABASE_URL..."
-    DATABASE_URL="$runtime_database_url" node scripts/ops/check-migration-parity.mjs
-    echo "No database migration will be applied during this deployment."
-  fi
-fi
-
-# Safe/idempotent seed only creates baseline TLD configuration. It never creates
-# customers, orders, payments, domains, provider credentials or admin accounts.
-echo "Seeding safe baseline configuration..."
-DATABASE_URL="$runtime_database_url" npm run db:seed
-
 # Cloudflare Workers Builds and Worker runtime secrets are separate scopes.
 # DATABASE_URL is already available here for migration/build work; copy that
 # pooled URL into the Worker itself so server-rendered routes can reach Neon.
@@ -162,6 +86,90 @@ if [[ "${WORKERS_CI:-}" == "1" ]]; then
       echo "Runtime secret $secret_name is configured."
     fi
   done
+fi
+
+printf 'Preparing database for %s...\n' "$environment"
+runtime_database_url="${DATABASE_URL:-}"
+if [[ -z "$runtime_database_url" ]]; then
+  echo "Missing DATABASE_URL for database readiness verification." >&2
+  exit 1
+fi
+
+if [[ "${WORKERS_CI:-}" == "1" ]]; then
+  # Cloudflare Workers Builds should not open a direct PostgreSQL socket or
+  # mutate production schema. Verify the already-reviewed database over Neon's
+  # HTTPS query path instead. This is compatible with Cloudflare build egress
+  # and still blocks deployment when migrations/schema/baseline are stale.
+  if [[ "${APPLY_DATABASE_MIGRATIONS:-}" == "APPLY_REVIEWED_MIGRATIONS" ]]; then
+    echo "Refusing to apply database migrations from Cloudflare Workers Builds. Apply reviewed migrations from a migration-capable operator environment first, then redeploy." >&2
+    exit 1
+  fi
+  echo "Verifying committed migrations, operational schema and baseline configuration over Neon HTTPS..."
+  DATABASE_URL="$runtime_database_url" node scripts/ops/check-migration-parity.mjs
+  echo "Database readiness verified. Cloudflare deployment will not mutate production schema."
+else
+  # Local/operator deployments retain the explicit migration path because they
+  # can use a direct PostgreSQL connection with session continuity.
+  user_table_count="$(DATABASE_URL="$runtime_database_url" node <<'NODE'
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+(async () => {
+  try {
+    const rows = await prisma.$queryRawUnsafe("SELECT COUNT(*)::int AS count FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'");
+    process.stdout.write(String(rows?.[0]?.count ?? 0));
+  } finally {
+    await prisma.$disconnect();
+  }
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+NODE
+)"
+
+  if [[ "$user_table_count" == "0" ]]; then
+    if [[ "${APPLY_DATABASE_MIGRATIONS:-}" != "APPLY_REVIEWED_MIGRATIONS" ]]; then
+      echo "Fresh PostgreSQL database detected. Refusing automatic production bootstrap without APPLY_DATABASE_MIGRATIONS=APPLY_REVIEWED_MIGRATIONS." >&2
+      exit 1
+    fi
+
+    migration_database_url="${DIRECT_URL:-}"
+    if [[ -z "$migration_database_url" ]]; then
+      echo "DIRECT_URL is required to initialize a fresh database." >&2
+      exit 1
+    fi
+
+    echo "Fresh PostgreSQL database detected. Creating the reviewed CloudSawa Prisma schema..."
+    DATABASE_URL="$migration_database_url" npx prisma db push --skip-generate
+
+    echo "Creating retained raw-SQL operational tables before baselining migrations..."
+    DIRECT_URL="$migration_database_url" DATABASE_URL="$migration_database_url" node scripts/ops/repair-baselined-database.mjs
+
+    echo "Baselining retained Prisma migrations against the complete schema..."
+    for migration_dir in prisma/migrations/*; do
+      [[ -d "$migration_dir" ]] || continue
+      migration_name="$(basename "$migration_dir")"
+      DATABASE_URL="$migration_database_url" npx prisma migrate resolve --applied "$migration_name"
+    done
+  elif [[ "${APPLY_DATABASE_MIGRATIONS:-}" == "APPLY_REVIEWED_MIGRATIONS" ]]; then
+    migration_database_url="${DIRECT_URL:-}"
+    if [[ -z "$migration_database_url" ]]; then
+      echo "DIRECT_URL is required when applying reviewed database migrations." >&2
+      exit 1
+    fi
+
+    echo "Applying explicitly reviewed Prisma migrations over the direct Neon connection..."
+    DIRECT_URL="$migration_database_url" DATABASE_URL="$migration_database_url" node scripts/ops/repair-baselined-database.mjs
+    DATABASE_URL="$migration_database_url" npx prisma migrate deploy
+  fi
+
+  echo "Verifying migration/schema parity after operator database preparation..."
+  DATABASE_URL="$runtime_database_url" node scripts/ops/check-migration-parity.mjs
+
+  # The seed is deliberately kept out of Cloudflare Builds. It is a database
+  # mutation and belongs to the migration-capable operator path.
+  echo "Seeding safe baseline configuration..."
+  DATABASE_URL="$runtime_database_url" npm run db:seed
 fi
 
 printf 'Building CloudSawa for Cloudflare environment %s...\n' "$environment"
