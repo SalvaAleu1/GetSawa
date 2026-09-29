@@ -35,8 +35,8 @@ cd "$repo_root"
 cutover_active="$(node -e 'const fs=require("fs");const w=JSON.parse(fs.readFileSync("wrangler.jsonc","utf8"));const routes=w.routes||[];process.stdout.write(routes.some(r=>r&&r.pattern==="cloudsawa.com"&&r.custom_domain===true)?"1":"0")')"
 
 if [[ "$environment" == "production" && "$cutover_active" == "1" ]]; then
-  export APP_URL="${APP_URL:-https://cloudsawa.com}"
-  export WEBSITE_PLATFORM_HOST="${WEBSITE_PLATFORM_HOST:-cloudsawa.com}"
+  export APP_URL="https://cloudsawa.com"
+  export WEBSITE_PLATFORM_HOST="cloudsawa.com"
 fi
 
 if [[ "${WORKERS_CI:-}" != "1" && "$environment" == "production" && "$cutover_active" == "1" && "${CONFIRM_PRODUCTION_CUTOVER:-}" != "SWITCH_CLOUDSAWA_TO_CLOUDFLARE" ]]; then
