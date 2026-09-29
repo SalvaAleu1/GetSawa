@@ -116,8 +116,8 @@ DATABASE_URL="$migration_database_url" npm run db:seed
 # Cloudflare Workers Builds and Worker runtime secrets are separate scopes.
 # DATABASE_URL is already available here for migration/build work; copy that
 # pooled URL into the Worker itself so server-rendered routes can reach Neon.
-# Optional core secrets are synchronized only when they are present in the build
-# environment; existing dashboard secrets remain untouched otherwise.
+# Launch-provider secrets are synchronized only when they are present in the
+# build environment; existing dashboard secrets remain untouched otherwise.
 if [[ "${WORKERS_CI:-}" == "1" ]]; then
   echo "Synchronizing runtime secrets to Worker '$CLOUDFLARE_WORKER_SERVICE_NAME'..."
   # Build-time and Worker-runtime secret scopes are separate in Cloudflare.
