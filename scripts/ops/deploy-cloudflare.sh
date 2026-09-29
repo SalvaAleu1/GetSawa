@@ -54,38 +54,36 @@ npm run typecheck -- --pretty false
 printf 'Running unit tests...\n'
 npm test
 
-# Cloudflare Workers Builds and Worker runtime secrets are separate scopes.
-# DATABASE_URL is already available here for migration/build work; copy that
-# pooled URL into the Worker itself so server-rendered routes can reach Neon.
-# Launch-provider secrets are synchronized only when they are present in the
-# build environment; existing dashboard secrets remain untouched otherwise.
+# Cloudflare build secrets and Worker runtime secrets are separate scopes.
+# Workers Builds can read the existing encrypted build values but Cloudflare
+# will never reveal them in the dashboard. Package the available values into an
+# ephemeral JSON secrets file and upload it alongside the Worker version.
+# Wrangler preserves existing runtime secrets that are not present in the file.
+runtime_secrets_file=""
 if [[ "${WORKERS_CI:-}" == "1" ]]; then
-  echo "Synchronizing runtime secrets to Worker '$CLOUDFLARE_WORKER_SERVICE_NAME'..."
-  # Build-time and Worker-runtime secret scopes are separate in Cloudflare.
-  # Copy every launch-critical credential that is present in the build
-  # environment so a successful build cannot silently deploy a Worker that
-  # has database access but no registrar/payment/email/security credentials.
-  runtime_secrets=(
-    DATABASE_URL
-    SESSION_SECRET
-    CRON_SECRET
-    NAMESILO_API_KEY
-    PAYPAL_CLIENT_ID
-    PAYPAL_CLIENT_SECRET
-    PAYPAL_WEBHOOK_ID
-    SMTP_HOST
-    SMTP_USER
-    SMTP_PASSWORD
-    CLOUDFLARE_ACCOUNT_ID
-    CLOUDFLARE_API_TOKEN
-  )
-  for secret_name in "${runtime_secrets[@]}"; do
-    secret_value="${!secret_name:-}"
-    if [[ -n "$secret_value" ]]; then
-      printf '%s' "$secret_value" | npx wrangler secret put "$secret_name" --name "$CLOUDFLARE_WORKER_SERVICE_NAME" >/dev/null
-      echo "Runtime secret $secret_name is configured."
-    fi
-  done
+  runtime_secrets_file="$repo_root/.cloudsawa-runtime-secrets.json"
+  RUNTIME_SECRETS_FILE="$runtime_secrets_file" node <<'NODE'
+const fs = require("fs");
+const names = [
+  "DATABASE_URL",
+  "SESSION_SECRET",
+  "CRON_SECRET",
+  "NAMESILO_API_KEY",
+  "PAYPAL_CLIENT_ID",
+  "PAYPAL_CLIENT_SECRET",
+  "PAYPAL_WEBHOOK_ID",
+  "SMTP_USER",
+  "SMTP_PASSWORD",
+];
+const output = {};
+for (const name of names) {
+  const value = process.env[name];
+  if (typeof value === "string" && value.length > 0) output[name] = value;
+}
+fs.writeFileSync(process.env.RUNTIME_SECRETS_FILE, JSON.stringify(output), { mode: 0o600 });
+console.log(`Prepared ${Object.keys(output).length} encrypted build secret(s) for runtime upload; values were not printed.`);
+NODE
+  trap 'rm -f "${runtime_secrets_file:-}"' EXIT
 fi
 
 printf 'Preparing database for %s...\n' "$environment"
@@ -186,14 +184,22 @@ fi
 
 printf 'Deploying CloudSawa Cloudflare environment %s...\n' "$environment"
 if [[ "$environment" == "staging" ]]; then
-  npx opennextjs-cloudflare deploy --env=staging -- --keep-vars
+  if [[ -n "$runtime_secrets_file" ]]; then
+    npx opennextjs-cloudflare deploy --env=staging -- --keep-vars --secrets-file "$runtime_secrets_file"
+  else
+    npx opennextjs-cloudflare deploy --env=staging -- --keep-vars
+  fi
   if [[ -n "${APP_URL:-}" ]]; then
     ./scripts/ops/verify-deployment-health.sh
   else
     echo "CloudSawa staging Worker uploaded. Use the workers.dev URL printed by Wrangler, then set APP_URL to that exact URL for outside-in verification."
   fi
 else
-  npx opennextjs-cloudflare deploy -- --keep-vars
+  if [[ -n "$runtime_secrets_file" ]]; then
+    npx opennextjs-cloudflare deploy -- --keep-vars --secrets-file "$runtime_secrets_file"
+  else
+    npx opennextjs-cloudflare deploy -- --keep-vars
+  fi
   if [[ "$cutover_active" == "1" ]]; then
     APP_URL="https://cloudsawa.com" ./scripts/ops/verify-production-cutover.sh
     echo "CloudSawa production custom-domain deployment verified at https://cloudsawa.com."
