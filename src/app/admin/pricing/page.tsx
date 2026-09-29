@@ -83,7 +83,7 @@ export default function AdminPricingPage() {
     try {
       const res = await fetch("/api/admin/pricing-sync", { method: "POST" });
       const data = await readJsonResponse<{ result: { updated: number; requested: number; provider: string } }>(res, "Wholesale sync failed");
-      setMessage(`Wholesale sync complete: ${data.result.updated}/${data.result.requested} active TLDs updated from ${data.result.provider}.`);
+      setMessage(`Wholesale sync complete: ${data.result.updated}/${data.result.requested} configured TLDs updated from ${data.result.provider}.`);
       await load();
     } catch (e: any) {
       setError(e.message);
