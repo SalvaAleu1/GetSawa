@@ -23,10 +23,12 @@ wrangler.vars = {
   ...(wrangler.vars || {}),
   APP_ENV: "production",
   APP_NAME: "CloudSawa",
+  APP_URL: `https://${expected}`,
+  WEBSITE_PLATFORM_HOST: expected,
   CLOUDFLARE_WORKER_SERVICE_NAME: "cloudsawa",
 };
 
 fs.writeFileSync(file, JSON.stringify(wrangler, null, 2) + "\n");
 
 console.log(`Prepared CloudSawa for final cutover to https://${expected}.`);
-console.log("Next: set APP_URL and WEBSITE_PLATFORM_HOST to cloudsawa.com, run npm run ops:cutover-config, deploy, then complete the controlled live purchase.");
+console.log("APP_URL and WEBSITE_PLATFORM_HOST were switched to cloudsawa.com. Next: run npm run ops:cutover-config, deploy, then complete the controlled live purchase.");
