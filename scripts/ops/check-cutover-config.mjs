@@ -16,6 +16,8 @@ const staging = wrangler.env?.staging;
 assert(staging, "wrangler.jsonc must retain a pre-domain staging environment.");
 assert(staging.name === "cloudsawa-staging", "Staging Worker name must be cloudsawa-staging.");
 assert(staging.workers_dev === true, "Staging must remain on workers.dev.");
+assert(staging.vars?.APP_URL === "https://cloudsawa-staging.aleuwol12.workers.dev", "Staging APP_URL must match the CloudSawa staging workers.dev hostname.");
+assert(staging.vars?.WEBSITE_PLATFORM_HOST === "cloudsawa-staging.aleuwol12.workers.dev", "Staging WEBSITE_PLATFORM_HOST must match the CloudSawa staging workers.dev hostname.");
 assert((staging.routes || []).length === 0, "Staging must not bind a custom domain before launch.");
 assert((staging.triggers?.crons || []).length === 0, "Staging must not schedule production jobs.");
 
@@ -38,12 +40,16 @@ const ownsApex = routes.some((route) => route?.pattern === "cloudsawa.com" && ro
 if (!routes.length) {
   assert(wrangler.workers_dev === true, "Pre-domain CloudSawa must keep workers.dev enabled.");
   assert(wrangler.vars?.APP_ENV === "preview", "Pre-domain APP_ENV must be preview.");
+  assert(wrangler.vars?.APP_URL === "https://cloudsawa.aleuwol12.workers.dev", "Pre-domain APP_URL must match the live CloudSawa workers.dev hostname.");
+  assert(wrangler.vars?.WEBSITE_PLATFORM_HOST === "cloudsawa.aleuwol12.workers.dev", "Pre-domain WEBSITE_PLATFORM_HOST must match the live CloudSawa workers.dev hostname.");
   assert(crons.length === 0, "Pre-domain preview must not run production scheduled jobs.");
   console.log("CloudSawa pre-domain configuration valid: workers.dev enabled, custom domain absent, production scheduler disabled.");
 } else {
   assert(ownsApex, "Production cutover must bind cloudsawa.com as the Cloudflare Worker custom domain.");
   assert(wrangler.workers_dev === false, "Production cutover must disable workers.dev.");
   assert(wrangler.vars?.APP_ENV === "production", "Production cutover APP_ENV must be production.");
+  assert(wrangler.vars?.APP_URL === "https://cloudsawa.com", "Production APP_URL must be https://cloudsawa.com.");
+  assert(wrangler.vars?.WEBSITE_PLATFORM_HOST === "cloudsawa.com", "Production WEBSITE_PLATFORM_HOST must be cloudsawa.com.");
   assert(crons.length === 1 && crons[0] === "* * * * *", "Production must use one minute-level Cloudflare trigger; the Worker dispatches all 12 jobs internally.");
   console.log("CloudSawa production cutover configuration valid: cloudsawa.com bound and the consolidated scheduler enabled.");
 }
