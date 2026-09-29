@@ -198,7 +198,7 @@ else
     APP_URL="https://cloudsawa.com" ./scripts/ops/verify-production-cutover.sh
     echo "CloudSawa production custom-domain deployment verified at https://cloudsawa.com."
   else
-    echo "CloudSawa Worker uploaded as 'cloudsawa' with workers.dev enabled."
-    echo "Use the workers.dev URL printed by Wrangler for preview/testing. No custom domain is required at this stage."
+    APP_URL="https://cloudsawa.aleuwol12.workers.dev" ./scripts/ops/verify-deployment-health.sh
+    echo "CloudSawa Worker uploaded and verified at https://cloudsawa.aleuwol12.workers.dev."
   fi
 fi
