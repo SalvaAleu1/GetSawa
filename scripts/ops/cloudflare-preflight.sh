@@ -31,8 +31,11 @@ done
 required=(APP_NAME DATABASE_URL CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_WORKER_SERVICE_NAME)
 
 if [[ "${WORKERS_CI:-}" == "1" ]]; then
-  # DIRECT_URL is used for Prisma schema/migration administration on Neon.
-  required+=(DIRECT_URL)
+  # Ordinary Worker builds verify schema parity over the pooled DATABASE_URL.
+  # DIRECT_URL is required only when an explicitly reviewed migration is being applied.
+  if [[ "${APPLY_DATABASE_MIGRATIONS:-}" == "APPLY_REVIEWED_MIGRATIONS" ]]; then
+    required+=(DIRECT_URL)
+  fi
 else
   # Local/third-party CI deployments authenticate Wrangler explicitly.
   required+=(SESSION_SECRET CRON_SECRET CLOUDFLARE_API_TOKEN)
