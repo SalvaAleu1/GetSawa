@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatCents } from "@/lib/money";
 import { computeSafeRetailPrice, PricingSafetyPolicy } from "@/lib/pricing-safety";
+import { readJsonResponse } from "@/lib/client-response";
 
 interface TldRow {
   id: string;
@@ -37,13 +38,14 @@ export default function AdminPricingPage() {
 
   async function load() {
     setError(null);
-    const [policyRes, tldRes] = await Promise.all([
-      fetch("/api/admin/pricing-policy"),
-      fetch("/api/admin/tlds"),
-    ]);
-    const [policyData, tldData] = await Promise.all([policyRes.json(), tldRes.json()]);
-    if (!policyRes.ok) throw new Error(policyData.error || "Could not load pricing policy.");
-    if (!tldRes.ok) throw new Error(tldData.error || "Could not load TLD pricing.");
+    // Load protected admin resources sequentially. This avoids a burst of
+    // parallel Neon connections from a single mobile admin page.
+    const policyRes = await fetch("/api/admin/pricing-policy", { cache: "no-store" });
+    const policyData = await readJsonResponse<{ policy: PricingSafetyPolicy }>(policyRes, "Could not load pricing policy");
+
+    const tldRes = await fetch("/api/admin/tlds", { cache: "no-store" });
+    const tldData = await readJsonResponse<{ tlds?: TldRow[] }>(tldRes, "Could not load TLD pricing");
+
     setPolicy(policyData.policy);
     setTlds(tldData.tlds || []);
   }
@@ -63,8 +65,7 @@ export default function AdminPricingPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(policy),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not save pricing policy.");
+      const data = await readJsonResponse<{ policy: PricingSafetyPolicy }>(res, "Could not save pricing policy");
       setPolicy(data.policy);
       setMessage("Pricing policy saved. New searches and checkouts will use it immediately.");
       await load();
@@ -81,8 +82,7 @@ export default function AdminPricingPage() {
     setError(null);
     try {
       const res = await fetch("/api/admin/pricing-sync", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Wholesale sync failed.");
+      const data = await readJsonResponse<{ result: { updated: number; requested: number; provider: string } }>(res, "Wholesale sync failed");
       setMessage(`Wholesale sync complete: ${data.result.updated}/${data.result.requested} active TLDs updated from ${data.result.provider}.`);
       await load();
     } catch (e: any) {
