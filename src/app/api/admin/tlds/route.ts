@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { jsonOk, handleError } from "@/lib/api";
+import { jsonError, jsonOk, handleError } from "@/lib/api";
 import { logAudit } from "@/lib/audit";
 import { computeProtectedTldPrice } from "@/lib/pricing";
 import { getPricingSafetyPolicy } from "@/lib/pricing-policy";
@@ -33,10 +33,11 @@ const createSchema = z.object({
 export async function GET() {
   try {
     await requireAdmin();
-    const [tlds, policy] = await Promise.all([
-      prisma.tld.findMany({ orderBy: { extension: "asc" } }),
-      getPricingSafetyPolicy(),
-    ]);
+    // Keep these sequential on the Worker. The admin page can fan out several
+    // protected requests at once, and serial database work is more resilient
+    // with the Neon serverless adapter under low-concurrency admin traffic.
+    const tlds = await prisma.tld.findMany({ orderBy: { extension: "asc" } });
+    const policy = await getPricingSafetyPolicy();
     return jsonOk({
       tlds: tlds.map((t) => ({
         ...t,
@@ -52,6 +53,10 @@ export async function POST(req: NextRequest) {
   try {
     const admin = await requireAdmin(["SUPER_ADMIN", "ADMIN", "PRODUCT_MANAGER"]);
     const input = createSchema.parse(await req.json());
+    const existing = await prisma.tld.findUnique({ where: { extension: input.extension } });
+    if (existing) {
+      return jsonError(`.${input.extension} already exists. Edit the existing TLD instead of creating a duplicate.`, 409, { existingId: existing.id });
+    }
     const tld = await prisma.tld.create({ data: input });
     await logAudit({ actorId: admin.id, action: "tld.created", resource: "tld", resourceId: tld.id, metadata: input });
     return jsonOk({ tld }, 201);

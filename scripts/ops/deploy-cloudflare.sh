@@ -116,11 +116,29 @@ DATABASE_URL="$migration_database_url" npm run db:seed
 # Cloudflare Workers Builds and Worker runtime secrets are separate scopes.
 # DATABASE_URL is already available here for migration/build work; copy that
 # pooled URL into the Worker itself so server-rendered routes can reach Neon.
-# Optional core secrets are synchronized only when they are present in the build
-# environment; existing dashboard secrets remain untouched otherwise.
+# Launch-provider secrets are synchronized only when they are present in the
+# build environment; existing dashboard secrets remain untouched otherwise.
 if [[ "${WORKERS_CI:-}" == "1" ]]; then
-  echo "Synchronizing core runtime secrets to Worker '$CLOUDFLARE_WORKER_SERVICE_NAME'..."
-  for secret_name in DATABASE_URL SESSION_SECRET CRON_SECRET; do
+  echo "Synchronizing runtime secrets to Worker '$CLOUDFLARE_WORKER_SERVICE_NAME'..."
+  # Build-time and Worker-runtime secret scopes are separate in Cloudflare.
+  # Copy every launch-critical credential that is present in the build
+  # environment so a successful build cannot silently deploy a Worker that
+  # has database access but no registrar/payment/email/security credentials.
+  runtime_secrets=(
+    DATABASE_URL
+    SESSION_SECRET
+    CRON_SECRET
+    NAMESILO_API_KEY
+    PAYPAL_CLIENT_ID
+    PAYPAL_CLIENT_SECRET
+    PAYPAL_WEBHOOK_ID
+    SMTP_HOST
+    SMTP_USER
+    SMTP_PASSWORD
+    CLOUDFLARE_ACCOUNT_ID
+    CLOUDFLARE_API_TOKEN
+  )
+  for secret_name in "${runtime_secrets[@]}"; do
     secret_value="${!secret_name:-}"
     if [[ -n "$secret_value" ]]; then
       printf '%s' "$secret_value" | npx wrangler secret put "$secret_name" --name "$CLOUDFLARE_WORKER_SERVICE_NAME" >/dev/null

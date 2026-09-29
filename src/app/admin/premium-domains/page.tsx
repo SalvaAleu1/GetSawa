@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { readJsonResponse } from "@/lib/client-response";
 
 interface Metrics { listed: number; reserved: number; sold: number; unverified: number; activeOffers: number; fulfillmentQueue: number; platformRevenueCents: number; sellerPayableCents: number; }
 interface Inventory { id: string; domainName: string; retailPriceCents: number; renewalPriceCents: number; currency: string; category: string | null; isFeatured: boolean; status: string; source: string | null; acquisitionCostCents: number | null; commissionBps: number | null; ownershipVerifiedAt: string | null; reservedUntil: string | null; sellerEmail: string | null; }
@@ -32,18 +33,26 @@ export default function AdminPremiumDomainsPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [inventoryRes, requestRes, offerRes, fulfillmentRes, salesRes] = await Promise.all([
-        fetch("/api/admin/premium-domains", { cache: "no-store" }),
-        fetch("/api/admin/premium-domains/requests", { cache: "no-store" }),
-        fetch("/api/admin/premium-domains/offers", { cache: "no-store" }),
-        fetch("/api/admin/premium-domains/fulfillment", { cache: "no-store" }),
-        fetch("/api/admin/premium-domains/sales", { cache: "no-store" }),
-      ]);
-      const payloads = await Promise.all([inventoryRes.json(), requestRes.json(), offerRes.json(), fulfillmentRes.json(), salesRes.json()]);
-      const failed = [inventoryRes, requestRes, offerRes, fulfillmentRes, salesRes].findIndex((response) => !response.ok);
-      if (failed >= 0) throw new Error(payloads[failed]?.error || "Could not load premium marketplace operations.");
-      setInventory(payloads[0].listings || []); setMetrics(payloads[0].metrics || metrics);
-      setRequests(payloads[1].requests || []); setOffers(payloads[2].offers || []); setFulfillment(payloads[3].queue || []); setSales(payloads[4].sales || []);
+      // Keep the admin workload sequential. This page used to open five
+      // authenticated database-backed requests at once, which can amplify
+      // transient Neon connection failures in a Worker isolate.
+      const inventoryRes = await fetch("/api/admin/premium-domains", { cache: "no-store" });
+      const inventoryData = await readJsonResponse<{ listings?: Inventory[]; metrics?: Metrics }>(inventoryRes, "Could not load premium inventory");
+
+      const requestRes = await fetch("/api/admin/premium-domains/requests", { cache: "no-store" });
+      const requestData = await readJsonResponse<{ requests?: RequestRow[] }>(requestRes, "Could not load premium seller requests");
+
+      const offerRes = await fetch("/api/admin/premium-domains/offers", { cache: "no-store" });
+      const offerData = await readJsonResponse<{ offers?: OfferRow[] }>(offerRes, "Could not load premium offers");
+
+      const fulfillmentRes = await fetch("/api/admin/premium-domains/fulfillment", { cache: "no-store" });
+      const fulfillmentData = await readJsonResponse<{ queue?: FulfillmentRow[] }>(fulfillmentRes, "Could not load premium fulfillment queue");
+
+      const salesRes = await fetch("/api/admin/premium-domains/sales", { cache: "no-store" });
+      const salesData = await readJsonResponse<{ sales?: SaleRow[] }>(salesRes, "Could not load premium settlements");
+
+      setInventory(inventoryData.listings || []); setMetrics(inventoryData.metrics || metrics);
+      setRequests(requestData.requests || []); setOffers(offerData.offers || []); setFulfillment(fulfillmentData.queue || []); setSales(salesData.sales || []);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load premium marketplace operations."); }
     finally { setLoading(false); }
   }, []);
@@ -54,7 +63,7 @@ export default function AdminPremiumDomainsPage() {
     setBusy(key); setError(null); setNotice(null);
     try {
       const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const data = await response.json(); if (!response.ok) throw new Error(data.error || "Operation failed.");
+      await readJsonResponse(response, "Operation failed");
       setNotice(success); await load();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Operation failed."); }
     finally { setBusy(null); }
@@ -67,7 +76,7 @@ export default function AdminPremiumDomainsPage() {
     setBusy("create"); setError(null); setNotice(null);
     try {
       const response = await fetch("/api/admin/premium-domains", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domainName: form.domainName.trim(), acquisitionCostCents: Math.round(acquisition * 100), retailPriceCents: Math.round(retail * 100), category: form.category.trim() || undefined, isFeatured: form.featured, autoBuyEnabled: true }) });
-      const data = await response.json(); if (!response.ok) throw new Error(data.error || "Could not verify and list this inventory.");
+      await readJsonResponse(response, "Could not verify and list this inventory");
       setForm({ domainName: "", acquisitionCost: "", retailPrice: "", category: "", featured: false }); setNotice("Inventory custody was verified and the listing was saved."); await load();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not create inventory."); }
     finally { setBusy(null); }

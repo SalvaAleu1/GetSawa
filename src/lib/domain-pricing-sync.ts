@@ -37,7 +37,9 @@ export interface PricingSyncResult {
  * fetches a fresh provider snapshot before allowing a domain transaction.
  */
 export async function syncWholesalePricing(): Promise<PricingSyncResult> {
-  const tlds = await prisma.tld.findMany({ where: { isActive: true } });
+  // Sync every configured TLD, including inactive ones. Operators must be able
+  // to review verified registrar cost before making an extension sellable.
+  const tlds = await prisma.tld.findMany({ orderBy: { extension: "asc" } });
   const snapshot = await fetchLiveWholesalePricing(tlds);
   const missing: string[] = [];
   const currencyMismatches: Array<{ tld: string; expected: string; received: string }> = [];
