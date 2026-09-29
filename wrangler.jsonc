@@ -3,7 +3,9 @@
   "name": "cloudsawa",
   "main": "./cloudflare-worker.ts",
   "compatibility_date": "2026-09-12",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "workers_dev": true,
   "keep_vars": true,
   "assets": {
@@ -16,7 +18,9 @@
   "vars": {
     "APP_ENV": "preview",
     "APP_NAME": "CloudSawa",
-    "CLOUDFLARE_WORKER_SERVICE_NAME": "cloudsawa"
+    "CLOUDFLARE_WORKER_SERVICE_NAME": "cloudsawa",
+    "APP_URL": "https://cloudsawa.aleuwol12.workers.dev",
+    "WEBSITE_PLATFORM_HOST": "cloudsawa.aleuwol12.workers.dev"
   },
   "env": {
     "staging": {
@@ -25,7 +29,9 @@
       "vars": {
         "APP_ENV": "staging",
         "APP_NAME": "CloudSawa",
-        "CLOUDFLARE_WORKER_SERVICE_NAME": "cloudsawa-staging"
+        "CLOUDFLARE_WORKER_SERVICE_NAME": "cloudsawa-staging",
+        "APP_URL": "https://cloudsawa-staging.aleuwol12.workers.dev",
+        "WEBSITE_PLATFORM_HOST": "cloudsawa-staging.aleuwol12.workers.dev"
       }
     }
   }
